@@ -1,25 +1,20 @@
 import os
 import flet as ft
 import calendar
-import json 
-from datetime import datetime
 
-# [에러 원천 차단] Flet 세션 메서드 이름 꼬임 문제를 해결하기 위한 전역 장부 선언
+# --- [개인화] 동료 기사에게 영향을 주지 않는 순정 파이썬 메모리 장부 ---
 USER_SCHEDULES = {}
 MANGEUN_TARGETS = {}
 
 def main(page: ft.Page):
-    # 브라우저 바 공간 확보를 위해 전체 패딩을 최소화(4px)
     page.title = "버스기사도우미"
     page.theme_mode = "light"
     page.padding = 4
 
     current = {"year": 2026, "month": 7, "selected_date": ""}
-    
-    # 다이얼에서 선택된 시/분을 임시로 담아둘 공간 (기본값 오전 5시 0분)
     selected_time_state = {"hour": 5, "minute": 0}
 
-    # UI 컴포넌트 슬림화 (글자 크기 및 높이 축소)
+    # 1. 컴포넌트들을 최상단에 미리 선언 (순서 꼬임 방지)
     month_title = ft.Text("", size=20, weight="bold", text_align="center")
     stats_text = ft.Text("", size=13, weight="bold", color="#1E3A8A")
     mangeun_text = ft.Text("", size=13, weight="bold", color="#1E3A8A")
@@ -27,39 +22,43 @@ def main(page: ft.Page):
 
     popup_date_title = ft.Text("", size=16, weight="bold", color="black", text_align="center")
     
-    # 안전한 문자열 "center" 적용
+    mangeun_setting_field = ft.TextField(
+        value="22", 
+        text_size=12, 
+        content_padding=2, 
+        text_align="center"
+    )
+
     time_label_header = ft.Row(
         [
-            ft.Container(content=ft.Text("시", size=14, weight="bold", color="#1E3A8A"), expand=1, alignment="center"),
-            ft.Container(content=ft.Text("분", size=14, weight="bold", color="#1E3A8A"), expand=1, alignment="center"),
+            ft.Container(content=ft.Text("시", size=14, weight="bold", color="#1E3A8A"), expand=1, alignment=ft.alignment.center),
+            ft.Container(content=ft.Text("분", size=14, weight="bold", color="#1E3A8A"), expand=1, alignment=ft.alignment.center),
         ],
         alignment="spaceAround"
     )
 
-    # 다이얼이 굴러갈 때 실시간으로 정수형 초 단위를 시/분 변수에 정확히 각인
+    # 다이얼 굴러갈 때 시간 저장 함수
     def on_picker_change(e):
         total_seconds = int(e.control.value) if e.control.value is not None else (5 * 3600)
         total_minutes = total_seconds // 60
         selected_time_state["hour"] = total_minutes // 60
         selected_time_state["minute"] = total_minutes % 60
 
-    # 영문 라벨 오류 옵션을 완전히 제거한 24시간제 위아래 회전식 토글 다이얼
     time_picker_dial = ft.CupertinoTimerPicker(
         mode=ft.CupertinoTimerPickerMode.HOUR_MINUTE,
         on_change=on_picker_change,
-        value=5 * 3600,         # 기본 시작 위치를 5시간(새벽 5시)으로 세팅
-        height=120,             # 팝업창 크기에 맞게 높이 최적화
+        value=5 * 3600,
+        height=120,
     )
 
-    # 안전한 문자열 "center" 적용
     popup_layer = ft.Container(
         visible=False,
         bgcolor="#AA000000",  
-        alignment="center",  
+        alignment=ft.alignment.center,  
         expand=True
     )
 
-    # --- [수정] 에러를 유발하는 page.session을 완전히 배제한 순정 파이썬 로직 ---
+    # 2. 데이터 제어 함수들 정의
     def load_user_schedules():
         global USER_SCHEDULES
         return USER_SCHEDULES
@@ -70,13 +69,15 @@ def main(page: ft.Page):
 
     def get_mangeun_target():
         global MANGEUN_TARGETS
-        key = f"{current['year']}_{current['month']}"
-        if key in MANGEUN_TARGETS:
-            return MANGEUN_TARGETS[key]
-            
-        # 기본값 계산기
-        days_in_month = calendar.monthrange(current['year'], current['month'])[1]
-        return 22 if days_in_month == 31 else (20 if current['month'] == 2 else 21)
+        try:
+            y, m = int(current['year']), int(current['month'])
+            key = f"{y}_{m}"
+            if key in MANGEUN_TARGETS:
+                return int(MANGEUN_TARGETS[key])
+            days_in_month = calendar.monthrange(y, m)[1]
+            return 22 if days_in_month == 31 else (20 if m == 2 else 21)
+        except:
+            return 22
 
     def save_mangeun_target(e):
         global MANGEUN_TARGETS
@@ -87,24 +88,20 @@ def main(page: ft.Page):
             rebuild_interface() 
         except ValueError:
             pass
-    # -----------------------------------------------------------------
 
+    # 3. 화면을 갱신하는 핵심 리빌드 함수
     def rebuild_interface():
         month_title.value = f"{current['year']}년 {current['month']}월"
-        
         month_prefix = f"{current['year']}-{current['month']:02d}"
         
         all_data = load_user_schedules()
-        month_data = {
-            k: v for k, v in all_data.items() 
-            if k.startswith(month_prefix)
-        }
+        month_data = {k: v for k, v in all_data.items() if k.startswith(month_prefix)}
         
         work_days = sum(1 for d in month_data.values() if d.get("status") in ["오전", "오후"])
         off_days = sum(1 for d in month_data.values() if d.get("status") == "휴무")
         
         m_target = get_mangeun_target()
-        mangeun_setting_field.value = str(m_target)
+        mangeun_setting_field.value = str(m_target) # 이제 에러 안 남!
         
         stats_text.value = f"근무 {work_days}일   휴무 {off_days}일"
         
@@ -164,6 +161,7 @@ def main(page: ft.Page):
             calendar_grid.controls.append(week_row)
         page.update()
 
+    # 4. 팝업 오픈 및 저장 함수
     def open_input_popup(date_key):
         current["selected_date"] = date_key
         popup_date_title.value = f"{date_key}\n시간을 맞추거나 근무를 누르세요"
@@ -198,16 +196,13 @@ def main(page: ft.Page):
             return
 
         final_time = ""
-
         if status_value == "자동":
             h = selected_time_state["hour"]
             m = selected_time_state["minute"]
-            
             if h >= 12:
                 status_value = "오후"
             else:
                 status_value = "오전"
-                
             final_time = f"{h:02d}:{m:02d}"
         else:
             final_time = ""
@@ -218,6 +213,7 @@ def main(page: ft.Page):
         popup_layer.visible = False  
         rebuild_interface()          
 
+    # 5. 나머지 UI 레이아웃 배치
     popup_card = ft.Container(
         content=ft.Column(
             [
@@ -227,26 +223,26 @@ def main(page: ft.Page):
                 time_picker_dial,   
                 ft.Container(
                     content=ft.Text("선택한 시간으로 저장", size=15, weight="bold", color="white"),
-                    bgcolor="#2563EB", alignment="center", height=44, border_radius=6,
+                    bgcolor="#2563EB", alignment=ft.alignment.center, height=44, border_radius=6,
                     on_click=lambda e: select_status_and_save("자동")
                 ),
                 ft.Divider(height=2),
                 ft.Text("시간 없이 근무만 등록할 때:", size=11, weight="bold", color="grey"),
                 ft.Container(
                     content=ft.Text("휴무 지정", size=15, weight="bold", color="white"),
-                    bgcolor="#D93025", alignment="center", height=40, border_radius=6,
+                    bgcolor="#D93025", alignment=ft.alignment.center, height=40, border_radius=6,
                     on_click=lambda e: select_status_and_save("휴무")
                 ),
                 ft.Row(
                     [
                         ft.Container(
                             content=ft.Text("오전", size=14, weight="bold", color="white"),
-                            bgcolor="#5C93E6", alignment="center", height=38, border_radius=6, expand=1,
+                            bgcolor="#5C93E6", alignment=ft.alignment.center, height=38, border_radius=6, expand=1,
                             on_click=lambda e: select_status_and_save("오전")
                         ),
                         ft.Container(
                             content=ft.Text("오후", size=14, weight="bold", color="white"),
-                            bgcolor="#E39430", alignment="center", height=38, border_radius=6, expand=1,
+                            bgcolor="#E39430", alignment=ft.alignment.center, height=38, border_radius=6, expand=1,
                             on_click=lambda e: select_status_and_save("오후")
                         ),
                     ],
@@ -287,20 +283,10 @@ def main(page: ft.Page):
         alignment="spaceBetween"
     )
 
-    mangeun_setting_field = ft.TextField(
-        value="22", 
-        text_size=12, 
-        content_padding=2, 
-        text_align="center"
-    )
-
     mangeun_setting_row = ft.Row(
         [
             ft.Text("만근 기준", size=13, color="black"),
-            ft.Container(
-                content=mangeun_setting_field,
-                width=38, height=24
-            ),
+            ft.Container(content=mangeun_setting_field, width=38, height=24),
             ft.FilledButton(
                 "저장", 
                 height=24, 
@@ -315,8 +301,8 @@ def main(page: ft.Page):
     weeks_header = ft.Row(
         [
             ft.Container(
-                content=ft.Text(d, size=13, weight=ft.FontWeight.BOLD, color="#D93025" if d=="일" else ("#1A73E8" if d=="토" else "black")), 
-                expand=1, alignment="center"
+                content=ft.Text(d, size=13, weight="bold", color="#D93025" if d=="일" else ("#1A73E8" if d=="토" else "black")), 
+                expand=1, alignment=ft.alignment.center
             ) for d in days_letters
         ],
         alignment="spaceAround"
