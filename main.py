@@ -36,7 +36,7 @@ def main(page: ft.Page):
         selected_index=5,
         on_change=lambda e: update_hour(int(e.control.selected_index)),
         height=100,
-        expand=1
+        expand=1,
         looping=True,
     )
     
@@ -45,7 +45,7 @@ def main(page: ft.Page):
         selected_index=0,
         on_change=lambda e: update_minute(int(e.control.selected_index)),
         height=100,
-        expand=1
+        expand=1,
         looping=True,
     )
 
