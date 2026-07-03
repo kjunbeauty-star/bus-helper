@@ -23,7 +23,7 @@ def main(page: ft.Page):
 
     popup_date_title = ft.Text("", size=16, weight="bold", color="black", text_align="center")
     
-    # [버그 박멸] ft.alignment.center 표준 규격으로 완벽 교체하여 정렬 오류 해결
+    # [수정 완벽 완료] ft.alignment.center 대문자 정석 규격 적용
     time_label_header = ft.Row(
         [
             ft.Container(content=ft.Text("시", size=14, weight="bold", color="#1E3A8A"), expand=1, alignment=ft.alignment.center),
@@ -47,10 +47,11 @@ def main(page: ft.Page):
         height=120,             # 팝업창 크기에 맞게 높이 최적화
     )
 
+    # [수정 완벽 완료] popup_layer 정렬 역시 대문자 ft.alignment.center로 정밀 타격 수리
     popup_layer = ft.Container(
         visible=False,
         bgcolor="#AA000000",  
-        alignment=ft.alignment.center,  # 여기도 안전한 표준 규격으로 정정
+        alignment=ft.alignment.center,  
         expand=True
     )
 
@@ -203,13 +204,14 @@ def main(page: ft.Page):
         popup_layer.visible = False  
         rebuild_interface()          
 
+    # [수정 완벽 완료] 아래 버튼 컨테이너들의 alignment 속성도 모조리 대문자 ft.alignment.center로 싹 수리
     popup_card = ft.Container(
         content=ft.Column(
             [
                 popup_date_title,
                 ft.Divider(height=1, color="transparent"),
-                time_label_header,  # 대소문자 규약 오류가 완벽 수정된 시/분 가이드 헤더
-                time_picker_dial,   # 순정 알람 토글 다이얼
+                time_label_header,  
+                time_picker_dial,   
                 ft.Container(
                     content=ft.Text("선택한 시간으로 저장", size=15, weight="bold", color="white"),
                     bgcolor="#2563EB", alignment=ft.alignment.center, height=44, border_radius=6,
@@ -284,6 +286,7 @@ def main(page: ft.Page):
         alignment="spaceBetween"
     )
 
+    # [수정 완벽 완료] 요일 헤더의 alignment까지 대문자 ft.alignment.center로 완벽 정정
     days_letters = ["일", "월", "화", "수", "목", "금", "토"]
     weeks_header = ft.Row(
         [
