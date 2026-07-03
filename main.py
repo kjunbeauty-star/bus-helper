@@ -160,7 +160,7 @@ def main(page: ft.Page):
 
                     # 📌 [구글 캘린더 감성] 스마트폰 실제 오늘 날짜와 일치하면 파란색 굵은 테두리(박스) 추가!
                     is_today = (current['year'] == today_y and current['month'] == today_m and day == today_d)
-                    day_border = ft.border.all(2, "#2563EB") if is_today else None
+                    day_border = ft.Border.all(2, "#2563EB") if is_today else None
 
                     day_box = ft.Container(
                         content=ft.Column(
