@@ -29,10 +29,11 @@ def main(page: ft.Page):
         text_align="center"
     )
 
+    # 에러가 나지 않도록 ft.Alignment(0, 0) 구조로 완벽 수정[cite: 1]
     time_label_header = ft.Row(
         [
-            ft.Container(content=ft.Text("시", size=14, weight="bold", color="#1E3A8A"), expand=1, alignment=ft.alignment.center),
-            ft.Container(content=ft.Text("분", size=14, weight="bold", color="#1E3A8A"), expand=1, alignment=ft.alignment.center),
+            ft.Container(content=ft.Text("시", size=14, weight="bold", color="#1E3A8A"), expand=1, alignment=ft.Alignment(0, 0)),
+            ft.Container(content=ft.Text("분", size=14, weight="bold", color="#1E3A8A"), expand=1, alignment=ft.Alignment(0, 0)),
         ],
         alignment="spaceAround"
     )
@@ -51,10 +52,11 @@ def main(page: ft.Page):
         height=120,
     )
 
+    # 에러가 나지 않도록 ft.Alignment(0, 0) 구조로 완벽 수정[cite: 1]
     popup_layer = ft.Container(
         visible=False,
         bgcolor="#AA000000",  
-        alignment=ft.alignment.center,  
+        alignment=ft.Alignment(0, 0),  
         expand=True
     )
 
@@ -101,7 +103,7 @@ def main(page: ft.Page):
         off_days = sum(1 for d in month_data.values() if d.get("status") == "휴무")
         
         m_target = get_mangeun_target()
-        mangeun_setting_field.value = str(m_target) # 이제 에러 안 남!
+        mangeun_setting_field.value = str(m_target)
         
         stats_text.value = f"근무 {work_days}일   휴무 {off_days}일"
         
@@ -223,26 +225,26 @@ def main(page: ft.Page):
                 time_picker_dial,   
                 ft.Container(
                     content=ft.Text("선택한 시간으로 저장", size=15, weight="bold", color="white"),
-                    bgcolor="#2563EB", alignment=ft.alignment.center, height=44, border_radius=6,
+                    bgcolor="#2563EB", alignment=ft.Alignment(0, 0), height=44, border_radius=6, # 원본 스타일 복구[cite: 1]
                     on_click=lambda e: select_status_and_save("자동")
                 ),
                 ft.Divider(height=2),
                 ft.Text("시간 없이 근무만 등록할 때:", size=11, weight="bold", color="grey"),
                 ft.Container(
                     content=ft.Text("휴무 지정", size=15, weight="bold", color="white"),
-                    bgcolor="#D93025", alignment=ft.alignment.center, height=40, border_radius=6,
+                    bgcolor="#D93025", alignment=ft.Alignment(0, 0), height=40, border_radius=6, # 원본 스타일 복구[cite: 1]
                     on_click=lambda e: select_status_and_save("휴무")
                 ),
                 ft.Row(
                     [
                         ft.Container(
                             content=ft.Text("오전", size=14, weight="bold", color="white"),
-                            bgcolor="#5C93E6", alignment=ft.alignment.center, height=38, border_radius=6, expand=1,
+                            bgcolor="#5C93E6", alignment=ft.Alignment(0, 0), height=38, border_radius=6, expand=1, # 원본 스타일 복구[cite: 1]
                             on_click=lambda e: select_status_and_save("오전")
                         ),
                         ft.Container(
                             content=ft.Text("오후", size=14, weight="bold", color="white"),
-                            bgcolor="#E39430", alignment=ft.alignment.center, height=38, border_radius=6, expand=1,
+                            bgcolor="#E39430", alignment=ft.Alignment(0, 0), height=38, border_radius=6, expand=1, # 원본 스타일 복구[cite: 1]
                             on_click=lambda e: select_status_and_save("오후")
                         ),
                     ],
@@ -302,7 +304,7 @@ def main(page: ft.Page):
         [
             ft.Container(
                 content=ft.Text(d, size=13, weight="bold", color="#D93025" if d=="일" else ("#1A73E8" if d=="토" else "black")), 
-                expand=1, alignment=ft.alignment.center
+                expand=1, alignment=ft.Alignment(0, 0) # 원본 스타일 복구[cite: 1]
             ) for d in days_letters
         ],
         alignment="spaceAround"
