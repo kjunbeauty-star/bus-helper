@@ -1,23 +1,8 @@
 import os
 import flet as ft
 import calendar
-import sqlite3
+import json  # 세션에 데이터를 안전하게 문자열로 저장하기 위해 추가
 from datetime import datetime
-
-# 1. 데이터베이스 연결
-conn = sqlite3.connect('bus_helper.db', check_same_thread=False)
-cursor = conn.cursor()
-cursor.execute('''
-    CREATE TABLE IF NOT EXISTS schedules (
-        date TEXT PRIMARY KEY,
-        status TEXT,
-        route TEXT,
-        start_time TEXT,
-        vehicle TEXT,
-        memo TEXT
-    )
-''')
-conn.commit()
 
 def main(page: ft.Page):
     # 브라우저 바 공간 확보를 위해 전체 패딩을 최소화(4px)
@@ -50,15 +35,37 @@ def main(page: ft.Page):
         expand=True
     )
 
+    # [수정] 공용 DB 대신 이 기사님 핸드폰 세션에서만 장부를 읽어오는 함수
+    def load_user_schedules():
+        try:
+            raw_data = page.session.get("user_schedules")
+            if raw_data:
+                return json.loads(raw_data)
+            return {}
+        except:
+            return {}
+
+    # [수정] 공용 DB 대신 이 기사님 핸드폰 세션에만 장부를 저장하는 함수
+    def save_user_schedules(data):
+        try:
+            page.session.set("user_schedules", json.dumps(data))
+        except:
+            pass
+
     def rebuild_interface():
         month_title.value = f"{current['year']}년 {current['month']}월"
         
         month_prefix = f"{current['year']}-{current['month']:02d}"
-        cursor.execute("SELECT date, status, start_time FROM schedules WHERE date LIKE ?", (f"{month_prefix}%",))
-        month_data = {row[0]: {"status": row[1], "start_time": row[2] if row[2] else ""} for row in cursor.fetchall()}
         
-        work_days = sum(1 for d in month_data.values() if d["status"] in ["오전", "오후"])
-        off_days = sum(1 for d in month_data.values() if d["status"] == "휴무")
+        # [수정] DB 조회 대신 기사님 개인 세션 장부에서 이번 달 데이터만 필터링
+        all_data = load_user_schedules()
+        month_data = {
+            k: v for k, v in all_data.items() 
+            if k.startswith(month_prefix)
+        }
+        
+        work_days = sum(1 for d in month_data.values() if d.get("status") in ["오전", "오후"])
+        off_days = sum(1 for d in month_data.values() if d.get("status") == "휴무")
         
         days_in_month = calendar.monthrange(current['year'], current['month'])[1]
         m_target = 22 if days_in_month == 31 else (20 if current['month'] == 2 else 21)
@@ -85,8 +92,8 @@ def main(page: ft.Page):
                     date_key = f"{current['year']}-{current['month']:02d}-{day:02d}"
                     day_info = month_data.get(date_key, {"status": "", "start_time": ""})
                     
-                    status = day_info["status"]
-                    start_time = day_info["start_time"]
+                    status = day_info.get("status", "")
+                    start_time = day_info.get("start_time", "")
                     
                     bg_color = "#FFFFFF"
                     text_color = "#000000"
@@ -127,9 +134,10 @@ def main(page: ft.Page):
         current["selected_date"] = date_key
         popup_date_title.value = f"{date_key}\n시간을 적거나 근무를 누르세요"
         
-        cursor.execute("SELECT start_time FROM schedules WHERE date = ?", (date_key,))
-        row = cursor.fetchone()
-        current_time = row[0] if row and row[0] else ""
+        # [수정] DB 조회 대신 개인 세션 장부에서 해당 날짜 시간 가져오기
+        all_data = load_user_schedules()
+        day_info = all_data.get(date_key, {})
+        current_time = day_info.get("start_time", "")
         
         start_time_input.value = current_time.replace(":", "")
         popup_layer.visible = True
@@ -137,10 +145,13 @@ def main(page: ft.Page):
 
     def select_status_and_save(status_value):
         target_date = current["selected_date"]
+        all_data = load_user_schedules()
         
         if status_value == "선택취소":
-            cursor.execute("DELETE FROM schedules WHERE date = ?", (target_date,))
-            conn.commit()
+            # [수정] DB 삭제 대신 개인 세션 장부에서 해당 날짜 삭제
+            if target_date in all_data:
+                del all_data[target_date]
+            save_user_schedules(all_data)
             popup_layer.visible = False  
             rebuild_interface()
             return
@@ -164,12 +175,10 @@ def main(page: ft.Page):
                 return
             final_time = ""
 
-        cursor.execute('''
-            INSERT OR REPLACE INTO schedules (date, status, start_time) 
-            VALUES (?, ?, ?)
-        ''', (target_date, status_value, final_time))
+        # [수정] DB 저장 대신 개인 세션 장부에 데이터 기록 및 저장
+        all_data[target_date] = {"status": status_value, "start_time": final_time}
+        save_user_schedules(all_data)
         
-        conn.commit()
         popup_layer.visible = False  
         rebuild_interface()          
 
@@ -257,7 +266,7 @@ def main(page: ft.Page):
     weeks_header = ft.Row(
         [
             ft.Container(
-                content=ft.Text(d, size=13, weight="bold", color="#D93025" if d=="일" else ("#1A73E8" if d=="토" else "black")), 
+                content=ft.Text(d, size=13, weight=ft.FontWeight.BOLD, color="#D93025" if d=="일" else ("#1A73E8" if d=="토" else "black")), 
                 expand=1, alignment=ft.Alignment(0, 0)
             ) for d in days_letters
         ],
@@ -303,5 +312,4 @@ def main(page: ft.Page):
 
     rebuild_interface()
 
-# main.py 맨 아랫줄을 기존 것 대신 이걸로 덮어씌우세요!
 ft.app(target=main, host="0.0.0.0", port=int(os.environ.get("PORT", 8080)), view=ft.AppView.WEB_BROWSER)
