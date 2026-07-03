@@ -23,21 +23,19 @@ def main(page: ft.Page):
 
     popup_date_title = ft.Text("", size=16, weight="bold", color="black", text_align="center")
     
-    # [최종 버그 수정] e.control.value로 정석 접근하여 초 단위를 시/분으로 완벽 분해
+    # e.control.value로 정석 접근하여 초 단위를 시/분으로 완벽 분해
     def on_picker_change(e):
         total_seconds = int(e.control.value) if e.control.value is not None else (5 * 3600)
         total_minutes = total_seconds // 60
         selected_time_state["hour"] = total_minutes // 60
         selected_time_state["minute"] = total_minutes % 60
 
-    # [최종 마무리] 24시간 표기 및 영어(hour, min)를 한글 '시', '분'으로 완벽 변경
+    # [에러 해결] 에러를 일으키던 hour_label, minute_label 옵션을 완전히 제거한 순정 다이얼
     time_picker_dial = ft.CupertinoTimerPicker(
         mode=ft.CupertinoTimerPickerMode.HOUR_MINUTE,
         on_change=on_picker_change,
         value=5 * 3600,         # 기본 시작 위치를 5시간(새벽 5시)으로 세팅
         height=120,             # 팝업창 크기에 맞게 높이 최적화
-        hour_label="시",        # hour -> 시 변경
-        minute_label="분"       # min -> 분 변경
     )
 
     popup_layer = ft.Container(
@@ -276,7 +274,7 @@ def main(page: ft.Page):
         alignment="spaceBetween"
     )
 
-    days_letters = ["일", "월", "화", "수", "목", "금", "토"]
+    days_letters = ["일", "월", "화", "수", "목", "금", "top_labels" if False else "토"]
     weeks_header = ft.Row(
         [
             ft.Container(
