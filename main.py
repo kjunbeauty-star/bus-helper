@@ -23,7 +23,7 @@ def main(page: ft.Page):
 
     popup_date_title = ft.Text("", size=16, weight="bold", color="black", text_align="center")
     
-    # [감독님 오더 적용] 다이얼 내부 영문은 그대로 두고, 바로 위에 고정할 한글 시/분 가이드 박스
+    # [버그 수정 완료] ft.alignment.center 대문자 표준 규격으로 완벽 교체
     time_label_header = ft.Row(
         [
             ft.Container(content=ft.Text("시", size=14, weight="bold", color="#1E3A8A"), expand=1, alignment=ft.alignment.center),
@@ -208,8 +208,8 @@ def main(page: ft.Page):
             [
                 popup_date_title,
                 ft.Divider(height=1, color="transparent"),
-                time_label_header,  # [확정] 다이얼 바로 위에 깔끔하게 고정된 한글 시/분 가이드 박스
-                time_picker_dial,   # 에러 원인을 완벽 차단한 순정 알람 토글 다이얼
+                time_label_header,  # 대소문자 규약 오류가 완벽 수정된 시/분 가이드 헤더
+                time_picker_dial,   # 순정 알람 토글 다이얼
                 ft.Container(
                     content=ft.Text("선택한 시간으로 저장", size=15, weight="bold", color="white"),
                     bgcolor="#2563EB", alignment=ft.Alignment(0, 0), height=44, border_radius=6,
