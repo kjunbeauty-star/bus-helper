@@ -171,6 +171,7 @@ def main(page: ft.Page):
                 
             final_time = f"{input_time[:2]}:{input_time[2:]}"
         else:
+            # [버그 수정] 시간이 올바르지 않은데 '입력한 시간으로 저장(자동)'을 누른 경우만 튕겨내도록 원본 로직 원상복구
             if status_value == "자동":
                 return
             final_time = ""
