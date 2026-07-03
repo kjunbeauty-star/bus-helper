@@ -23,7 +23,7 @@ def main(page: ft.Page):
 
     popup_date_title = ft.Text("", size=16, weight="bold", color="black", text_align="center")
     
-    # [수정 완료] 복잡한 객체 대신 절대 에러 안 나는 안전한 문자열 "center" 적용
+    # [수정 완료] 안전한 문자열 "center" 적용
     time_label_header = ft.Row(
         [
             ft.Container(content=ft.Text("시", size=14, weight="bold", color="#1E3A8A"), expand=1, alignment="center"),
@@ -72,6 +72,26 @@ def main(page: ft.Page):
         except:
             pass
 
+    # [추가] 만근 기준 일수를 세션에서 로드하거나 월별 기본값을 반환하는 함수
+    def get_mangeun_target():
+        # 세션에 저장된 기사님 맞춤 만근 기준이 있는지 확인
+        session_target = page.session.get(f"mangeun_target_{current['year']}_{current['month']}")
+        if session_target is not None:
+            return int(session_target)
+            
+        # 기본값 계산기
+        days_in_month = calendar.monthrange(current['year'], current['month'])[1]
+        return 22 if days_in_month == 31 else (20 if current['month'] == 2 else 21)
+
+    # [추가] 기사님이 입력한 만근 기준 일수를 세션에 저장하는 함수
+    def save_mangeun_target(e):
+        try:
+            val = int(mangeun_setting_field.value)
+            page.session.set(f"mangeun_target_{current['year']}_{current['month']}", val)
+            rebuild_interface() # 데이터 갱신 후 화면 다시 그리기
+        except ValueError:
+            pass
+
     def rebuild_interface():
         month_title.value = f"{current['year']}년 {current['month']}월"
         
@@ -87,8 +107,9 @@ def main(page: ft.Page):
         work_days = sum(1 for d in month_data.values() if d.get("status") in ["오전", "오후"])
         off_days = sum(1 for d in month_data.values() if d.get("status") == "휴무")
         
-        days_in_month = calendar.monthrange(current['year'], current['month'])[1]
-        m_target = 22 if days_in_month == 31 else (20 if current['month'] == 2 else 21)
+        # [수정] 하드코딩 대신 세션/기본값 함수를 호출하고 입력 필드 값 동기화
+        m_target = get_mangeun_target()
+        mangeun_setting_field.value = str(m_target)
         
         stats_text.value = f"근무 {work_days}일   휴무 {off_days}일"
         
@@ -106,7 +127,6 @@ def main(page: ft.Page):
             week_row = ft.Row(alignment="spaceAround", spacing=2)
             for day in week:
                 if day == 0:
-                    # 날짜 박스 높이를 46으로 대폭 압축하여 세로 공간 확보
                     week_row.controls.append(ft.Container(expand=1, height=46))
                 else:
                     date_key = f"{current['year']}-{current['month']:02d}-{day:02d}"
@@ -128,7 +148,6 @@ def main(page: ft.Page):
 
                     time_display = ft.Text(start_time, size=9, weight="bold", color=text_color) if start_time and status != "휴무" else ft.Container()
 
-                    # 세로 공간 확보를 위한 핵심 다이어트 (height 55 -> 46)
                     day_box = ft.Container(
                         content=ft.Column(
                             [
@@ -204,7 +223,6 @@ def main(page: ft.Page):
         popup_layer.visible = False  
         rebuild_interface()          
 
-    # [원상복구 완료] 팝업 카드 레이아웃 정렬 속성 전부 문자열 "center"로 안전하게 정정
     popup_card = ft.Container(
         content=ft.Column(
             [
@@ -274,19 +292,32 @@ def main(page: ft.Page):
         alignment="spaceBetween"
     )
 
+    # [수정] TextField 컴포넌트를 미리 분리 선언하여 값을 쉽게 가져오고 세팅할 수 있도록 분리
+    mangeun_setting_field = ft.TextField(
+        value="22", 
+        text_size=12, 
+        content_padding=2, 
+        text_align="center"
+    )
+
+    # [수정] 만근 기준 저장 버튼에 'save_mangeun_target' 이벤트를 바인딩했습니다.
     mangeun_setting_row = ft.Row(
         [
             ft.Text("만근 기준", size=13, color="black"),
             ft.Container(
-                content=ft.TextField(value="22", text_size=12, content_padding=2, text_align="center"),
+                content=mangeun_setting_field,
                 width=38, height=24
             ),
-            ft.FilledButton("저장", height=24, style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=4)))
+            ft.FilledButton(
+                "저장", 
+                height=24, 
+                style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=4)),
+                on_click=save_mangeun_target
+            )
         ],
         alignment="spaceBetween"
     )
 
-    # [원상복구 완료] 요일 헤더의 alignment "center" 문자열 적용
     days_letters = ["일", "월", "화", "수", "목", "금", "토"]
     weeks_header = ft.Row(
         [
@@ -298,7 +329,6 @@ def main(page: ft.Page):
         alignment="spaceAround"
     )
 
-    # [원상복구 완료] 삭제되었던 하단 메뉴 탭 바 완벽 복원
     bottom_navigation_bar = ft.Row(
         [
             ft.TextButton("달력", style=ft.ButtonStyle(color="#2563EB"), expand=1, height=36),
@@ -309,7 +339,6 @@ def main(page: ft.Page):
         alignment="spaceAround"
     )
 
-    # [원상복구 완료] 메인 레이아웃의 완전한 원래 뼈대 구조로 복구
     main_layout = ft.Column(
         [
             header_nav,
@@ -317,11 +346,11 @@ def main(page: ft.Page):
             mangeun_text,
             mangeun_setting_row,
             ft.Divider(height=1),
-            weeks_header,
+            weeks_header,        
             ft.Divider(height=1),
-            calendar_grid,
+            calendar_grid,       
             ft.Divider(height=2),
-            bottom_navigation_bar  # 빼먹었던 메뉴바 복구 안착
+            bottom_navigation_bar 
         ],
         expand=True
     )
