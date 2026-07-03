@@ -7,36 +7,28 @@ def main(page: ft.Page):
     page.theme_mode = ft.ThemeMode.LIGHT
     page.padding = 10
     
-    # -------------------------------------------------------------
-    # [핵심 변경] 개인 스마트폰 내부 금고(client_storage) 이용하도록 변경
-    # -------------------------------------------------------------
+    # [핵심 변경 1] 에러가 나던 session 대신 안전한 일반 변수로 현재 연월 관리
+    now = datetime.datetime.now()
+    state = {
+        "year": now.year,
+        "month": now.month
+    }
+    
+    # 개인 스마트폰 내부 금고(client_storage) 이용
     def load_data():
-        # 핸드폰 내부에 저장된 데이터를 가져옵니다. 없으면 빈 딕셔너리{} 반환
         data = page.client_storage.get("bus_schedule")
         return data if data else {}
 
     def save_data(data):
-        # 핸드폰 내부 금고에 데이터를 안전하게 저장합니다.
         page.client_storage.set("bus_schedule", data)
 
-    # 오늘 날짜 기준 세팅
-    now = datetime.datetime.now()
-    current_year = page.session.get("year") or now.year
-    current_month = page.session.get("month") or now.month
-    
-    page.session.set("year", current_year)
-    page.session.set("month", current_month)
-
-    # -------------------------------------------------------------
-    # 달력 그리기 및 이벤트 함수들
-    # -------------------------------------------------------------
     calendar_container = ft.Column()
 
     def build_calendar():
         calendar_container.controls.clear()
         
-        yr = page.session.get("year")
-        mo = page.session.get("month")
+        yr = state["year"]
+        mo = state["month"]
         
         # 상단 네비게이션 (이전 / 현재 연월 / 다음)
         nav_row = ft.Row(
@@ -135,23 +127,19 @@ def main(page: ft.Page):
         page.update()
 
     def prev_month(e):
-        yr = page.session.get("year")
-        mo = page.session.get("month")
-        if mo == 1:
-            page.session.set("year", yr - 1)
-            page.session.set("month", 12)
+        if state["month"] == 1:
+            state["year"] -= 1
+            state["month"] = 12
         else:
-            page.session.set("month", mo - 1)
+            state["month"] -= 1
         build_calendar()
 
     def next_month(e):
-        yr = page.session.get("year")
-        mo = page.session.get("month")
-        if mo == 12:
-            page.session.set("year", yr + 1)
-            page.session.set("month", 1)
+        if state["month"] == 12:
+            state["year"] += 1
+            state["month"] = 1
         else:
-            page.session.set("month", mo + 1)
+            state["month"] += 1
         build_calendar()
 
     page.add(calendar_container)
