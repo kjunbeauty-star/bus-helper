@@ -7,24 +7,15 @@ def main(page: ft.Page):
     page.theme_mode = ft.ThemeMode.LIGHT
     page.padding = 10
     
-    # 각 사용자의 개인 세션 메모리에 안전하게 저장 (서로 절대 안 섞임)
     user_schedule = {}
-    
     now = datetime.datetime.now()
-    state = {
-        "year": now.year,
-        "month": now.month
-    }
-
+    state = {"year": now.year, "month": now.month}
     calendar_container = ft.Column()
 
     def build_calendar():
         calendar_container.controls.clear()
+        yr, mo = state["year"], state["month"]
         
-        yr = state["year"]
-        mo = state["month"]
-        
-        # 상단 네비게이션
         nav_row = ft.Row(
             controls=[
                 ft.TextButton("◀ 이전", on_click=prev_month),
@@ -35,14 +26,12 @@ def main(page: ft.Page):
         )
         calendar_container.controls.append(nav_row)
         
-        # 요일 헤더
         days_row = ft.Row(
             controls=[ft.Container(ft.Text(d, weight=ft.FontWeight.BOLD, text_align=ft.TextAlign.CENTER), expand=1) for d in ["일", "월", "화", "수", "목", "금", "토"]],
             alignment=ft.MainAxisAlignment.SPACE_AROUND
         )
         calendar_container.controls.append(days_row)
         
-        # 달력 날짜 생성
         cal = calendar.TextCalendar(calendar.SUNDAY)
         month_days = cal.monthdayscalendar(yr, mo)
         
@@ -55,14 +44,10 @@ def main(page: ft.Page):
                     date_key = f"{yr}-{mo:02d}-{day:02d}"
                     current_status = user_schedule.get(date_key, "")
                     
-                    # 상태에 따른 색상 지정
                     bg_color = ft.Colors.WHITE
-                    if current_status == "오전":
-                        bg_color = ft.Colors.BLUE_50
-                    elif current_status == "오후":
-                        bg_color = ft.Colors.ORANGE_50
-                    elif current_status == "휴무":
-                        bg_color = ft.Colors.RED_50
+                    if current_status == "오전": bg_color = ft.Colors.BLUE_50
+                    elif current_status == "오후": bg_color = ft.Colors.ORANGE_50
+                    elif current_status == "휴무": bg_color = ft.Colors.RED_50
                         
                     day_card = ft.Container(
                         content=ft.Column(
@@ -74,7 +59,6 @@ def main(page: ft.Page):
                             horizontal_alignment=ft.CrossAxisAlignment.CENTER
                         ),
                         bgcolor=bg_color,
-                        border=ft.border.all(1, ft.Colors.BLACK12),
                         border_radius=5,
                         aspect_ratio=1.0,
                         expand=1,
@@ -82,16 +66,13 @@ def main(page: ft.Page):
                     )
                     week_row.controls.append(day_card)
             calendar_container.controls.append(week_row)
-            
         page.update()
 
     def show_status_picker(date_key):
         def set_status(status_value):
             if status_value == "삭제":
-                if date_key in user_schedule:
-                    del user_schedule[date_key]
-            else:
-                user_schedule[date_key] = status_value
+                if date_key in user_schedule: del user_schedule[date_key]
+            else: user_schedule[date_key] = status_value
             dialog.open = False
             build_calendar()
 
@@ -111,23 +92,16 @@ def main(page: ft.Page):
         page.update()
 
     def prev_month(e):
-        if state["month"] == 1:
-            state["year"] -= 1
-            state["month"] = 12
-        else:
-            state["month"] -= 1
+        if state["month"] == 1: state["year"] -= 1; state["month"] = 12
+        else: state["month"] -= 1
         build_calendar()
 
     def next_month(e):
-        if state["month"] == 12:
-            state["year"] += 1
-            state["month"] = 1
-        else:
-            state["month"] += 1
+        if state["month"] == 12: state["year"] += 1; state["month"] = 1
+        else: state["month"] += 1
         build_calendar()
 
     page.add(calendar_container)
     build_calendar()
 
-# [수정 완료] 원래 잘 되던 형태로 원상복구!
 ft.app(target=main)
