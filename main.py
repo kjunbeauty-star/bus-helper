@@ -23,10 +23,9 @@ def main(page: ft.Page):
 
     popup_date_title = ft.Text("", size=16, weight="bold", color="black", text_align="center")
     
-    # [부품 수정] 스펠링 교체: CupertinoTimePicker -> CupertinoTimerPicker
+    # [버그 수정] e.data 대신 정석대로 e.value(초 단위)를 읽어서 시/분으로 완벽 분해
     def on_picker_change(e):
-        # CupertinoTimerPicker는 e.seconds 형태로 초 단위 값을 반환하므로 시/분으로 계산
-        total_seconds = int(e.data) if e.data else 0
+        total_seconds = int(e.value) if e.value is not None else (5 * 3600)
         total_minutes = total_seconds // 60
         selected_time_state["hour"] = total_minutes // 60
         selected_time_state["minute"] = total_minutes % 60
@@ -199,7 +198,7 @@ def main(page: ft.Page):
             [
                 popup_date_title,
                 ft.Divider(height=1, color="transparent"),
-                time_picker_dial,  # 정수형 초 단위를 다루는 올바른 다이얼 부품 재배치
+                time_picker_dial,
                 ft.Container(
                     content=ft.Text("선택한 시간으로 저장", size=15, weight="bold", color="white"),
                     bgcolor="#2563EB", alignment=ft.Alignment(0, 0), height=44, border_radius=6,
