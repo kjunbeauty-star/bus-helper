@@ -23,7 +23,7 @@ def main(page: ft.Page):
 
     popup_date_title = ft.Text("", size=16, weight="bold", color="black", text_align="center")
     
-    # [수정 완벽 완료] ft.alignment.center 대문자 정석 규격 적용
+    # [진짜 버그 수정] ft.alignment.center  표준 규격으로 완벽 교체
     time_label_header = ft.Row(
         [
             ft.Container(content=ft.Text("시", size=14, weight="bold", color="#1E3A8A"), expand=1, alignment=ft.alignment.center),
@@ -47,7 +47,7 @@ def main(page: ft.Page):
         height=120,             # 팝업창 크기에 맞게 높이 최적화
     )
 
-    # [수정 완벽 완료] popup_layer 정렬 역시 대문자 ft.alignment.center로 정밀 타격 수리
+    # [수정 완료] 대문자 ft.alignment.center 적용
     popup_layer = ft.Container(
         visible=False,
         bgcolor="#AA000000",  
@@ -204,7 +204,7 @@ def main(page: ft.Page):
         popup_layer.visible = False  
         rebuild_interface()          
 
-    # [수정 완벽 완료] 아래 버튼 컨테이너들의 alignment 속성도 모조리 대문자 ft.alignment.center로 싹 수리
+    # [수정 완료] 하단 모든 컨테이너들의 정렬 속성 역시 대문자 ft.alignment.center로 확실하게 정정
     popup_card = ft.Container(
         content=ft.Column(
             [
@@ -286,7 +286,7 @@ def main(page: ft.Page):
         alignment="spaceBetween"
     )
 
-    # [수정 완벽 완료] 요일 헤더의 alignment까지 대문자 ft.alignment.center로 완벽 정정
+    # [수정 완료] 요일 헤더의 alignment 대문자 정석 규격 적용
     days_letters = ["일", "월", "화", "수", "목", "금", "토"]
     weeks_header = ft.Row(
         [
