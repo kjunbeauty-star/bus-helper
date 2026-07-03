@@ -232,7 +232,7 @@ def main(page: ft.Page):
     popup_card = ft.Container(
         content=ft.Column(
             [
-                popup_date_title,
+                ft.Row([popup_date_title], alignment="center"),
                 ft.Divider(height=1, color="transparent"),
                 dial_row,   # 영문 자리에 순수 숫자 24시간제 다이얼 장착
                 ft.Container(
