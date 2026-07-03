@@ -7,20 +7,26 @@ def main(page: ft.Page):
     page.theme_mode = ft.ThemeMode.LIGHT
     page.padding = 10
     
-    # [핵심 변경 1] 에러가 나던 session 대신 안전한 일반 변수로 현재 연월 관리
+    # 안전한 일반 변수로 현재 연월 관리
     now = datetime.datetime.now()
     state = {
         "year": now.year,
         "month": now.month
     }
     
-    # 개인 스마트폰 내부 금고(client_storage) 이용
+    # [수정] local_storage 안전하게 호출
     def load_data():
-        data = page.client_storage.get("bus_schedule")
-        return data if data else {}
+        try:
+            data = page.local_storage.get("bus_schedule")
+            return data if data else {}
+        except:
+            return {}
 
     def save_data(data):
-        page.client_storage.set("bus_schedule", data)
+        try:
+            page.local_storage.set("bus_schedule", data)
+        except:
+            pass
 
     calendar_container = ft.Column()
 
@@ -30,7 +36,7 @@ def main(page: ft.Page):
         yr = state["year"]
         mo = state["month"]
         
-        # 상단 네비게이션 (이전 / 현재 연월 / 다음)
+        # 상단 네비게이션
         nav_row = ft.Row(
             controls=[
                 ft.TextButton("◀ 이전", on_click=prev_month),
@@ -52,7 +58,6 @@ def main(page: ft.Page):
         cal = calendar.TextCalendar(calendar.SUNDAY)
         month_days = cal.monthdayscalendar(yr, mo)
         
-        # 현재 저장된 개인 데이터 로드
         user_data = load_data()
         
         for week in month_days:
@@ -64,18 +69,13 @@ def main(page: ft.Page):
                     date_key = f"{yr}-{mo:02d}-{day:02d}"
                     current_status = user_data.get(date_key, "")
                     
-                    # 상태에 따른 색상 지정
                     bg_color = ft.Colors.WHITE
-                    text_color = ft.Colors.BLACK
                     if current_status == "오전":
                         bg_color = ft.Colors.BLUE_50
-                        text_color = ft.Colors.BLUE_700
                     elif current_status == "오후":
                         bg_color = ft.Colors.ORANGE_50
-                        text_color = ft.Colors.ORANGE_700
                     elif current_status == "휴무":
                         bg_color = ft.Colors.RED_50
-                        text_color = ft.Colors.RED_700
                         
                     day_card = ft.Container(
                         content=ft.Column(
@@ -87,7 +87,6 @@ def main(page: ft.Page):
                             horizontal_alignment=ft.CrossAxisAlignment.CENTER
                         ),
                         bgcolor=bg_color,
-                        theme_mode=ft.ThemeMode.LIGHT,
                         border=ft.border.all(1, ft.Colors.BLACK12),
                         border_radius=5,
                         aspect_ratio=1.0,
