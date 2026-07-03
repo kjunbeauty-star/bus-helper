@@ -1,81 +1,76 @@
-import os
 import flet as ft
 import datetime
 import calendar
+import os  # [엔진 복원] 감독님이 찾아주신 필수 서버 모듈
 
 def main(page: ft.Page):
     page.title = "근무 달력"
     page.theme_mode = ft.ThemeMode.LIGHT
     page.padding = 10
-    
-    # -------------------------------------------------------------
-    # [핵심 변경] 개인 스마트폰 내부 금고(client_storage) 이용하도록 변경
-    # -------------------------------------------------------------
-    def load_data():
-        # 핸드폰 내부에 저장된 데이터를 가져옵니다. 없으면 빈 딕셔너리{} 반환
-        data = page.client_storage.get("bus_schedule")
-        return data if data else {}
+    page.update()
 
-    def save_data(data):
-        # 핸드폰 내부 금고에 데이터를 안전하게 저장합니다.
-        page.client_storage.set("bus_schedule", data)
+    # [디자인 옵션] 상단 바 및 배경 테마 상세 설정 복원
+    page.vertical_alignment = ft.MainAxisAlignment.START
+    page.horizontal_alignment = ft.CrossAxisAlignment.CENTER
 
-    # 오늘 날짜 기준 세팅
+    # 기사님들 세션별로 장부가 절대 안 섞이도록 안전하게 분리된 메모리 보관함
+    user_schedule = {}
+
     now = datetime.datetime.now()
-    current_year = page.session.get("year") or now.year
-    current_month = page.session.get("month") or now.month
-    
-    page.session.set("year", current_year)
-    page.session.set("month", current_month)
+    state = {
+        "year": now.year,
+        "month": now.month
+    }
 
-    # -------------------------------------------------------------
-    # 달력 그리기 및 이벤트 함수들
-    # -------------------------------------------------------------
     calendar_container = ft.Column()
 
     def build_calendar():
         calendar_container.controls.clear()
         
-        yr = page.session.get("year")
-        mo = page.session.get("month")
+        yr = state["year"]
+        mo = state["month"]
         
-        # 상단 네비게이션 (이전 / 현재 연월 / 다음)
+        # [복원] 상단 내비게이션 바 디자인 디테일 설정
         nav_row = ft.Row(
             controls=[
-                ft.TextButton("◀ 이전", on_click=prev_month),
-                ft.Text(f"{yr}년 {mo}월", size=24, weight=ft.FontWeight.BOLD),
-                ft.TextButton("다음 ▶", on_click=next_month)
+                ft.TextButton("◀ 이전", on_click=prev_month, style=ft.ButtonStyle(color=ft.Colors.BLUE_700)),
+                ft.Text(f"{yr}년 {mo}월", size=24, weight=ft.FontWeight.BOLD, color=ft.Colors.BLACK),
+                ft.TextButton("다음 ▶", on_click=next_month, style=ft.ButtonStyle(color=ft.Colors.BLUE_700))
             ],
-            alignment=ft.MainAxisAlignment.SPACE_BETWEEN
+            alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+            width=360
         )
         calendar_container.controls.append(nav_row)
         
-        # 요일 헤더
+        # [복원] 요일 헤더의 폰트 크기 및 색상 디테일 설정
         days_row = ft.Row(
-            controls=[ft.Container(ft.Text(d, weight=ft.FontWeight.BOLD, text_align=ft.TextAlign.CENTER), expand=1) for d in ["일", "월", "화", "수", "목", "금", "토"]],
-            alignment=ft.MainAxisAlignment.SPACE_AROUND
+            controls=[
+                ft.Container(
+                    content=ft.Text(d, size=14, weight=ft.FontWeight.BOLD, text_align=ft.TextAlign.CENTER, color=ft.Colors.BLACK54),
+                    expand=1
+                ) for d in ["일", "월", "화", "수", "목", "금", "토"]
+            ],
+            alignment=ft.MainAxisAlignment.SPACE_AROUND,
+            width=360
         )
         calendar_container.controls.append(days_row)
         
-        # 달력 날짜 생성
+        # 달력 날짜 생성 구조 복원
         cal = calendar.TextCalendar(calendar.SUNDAY)
         month_days = cal.monthdayscalendar(yr, mo)
         
-        # 현재 저장된 개인 데이터 로드
-        user_data = load_data()
-        
         for week in month_days:
-            week_row = ft.Row(alignment=ft.MainAxisAlignment.SPACE_AROUND)
+            week_row = ft.Row(alignment=ft.MainAxisAlignment.SPACE_AROUND, width=360)
             for day in week:
                 if day == 0:
                     week_row.controls.append(ft.Container(expand=1))
                 else:
                     date_key = f"{yr}-{mo:02d}-{day:02d}"
-                    current_status = user_data.get(date_key, "")
+                    current_status = user_schedule.get(date_key, "")
                     
-                    # 상태에 따른 색상 지정
+                    # [디자인 복원] 각 근무별 글자 색상과 부드러운 배경색 매칭 로직 완벽 복원
                     bg_color = ft.Colors.WHITE
-                    text_color = ft.Colors.BLACK
+                    text_color = ft.Colors.BLACK87
                     if current_status == "오전":
                         bg_color = ft.Colors.BLUE_50
                         text_color = ft.Colors.BLUE_700
@@ -89,18 +84,19 @@ def main(page: ft.Page):
                     day_card = ft.Container(
                         content=ft.Column(
                             controls=[
-                                ft.Text(str(day), weight=ft.FontWeight.BOLD),
-                                ft.Text(current_status, size=10)
+                                ft.Text(str(day), size=14, weight=ft.FontWeight.BOLD, color=ft.Colors.BLACK),
+                                ft.Text(current_status, size=11, weight=ft.FontWeight.BOLD, color=text_color)
                             ],
                             alignment=ft.MainAxisAlignment.CENTER,
-                            horizontal_alignment=ft.CrossAxisAlignment.CENTER
+                            horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+                            spacing=4
                         ),
                         bgcolor=bg_color,
-                        theme_mode=ft.ThemeMode.LIGHT,
-                        border=ft.border.all(1, ft.Colors.BLACK12),
-                        border_radius=5,
+                        border=ft.border.all(0.5, ft.Colors.BLACK12),
+                        border_radius=8,
                         aspect_ratio=1.0,
                         expand=1,
+                        padding=4,
                         on_click=lambda e, dk=date_key: show_status_picker(dk)
                     )
                     week_row.controls.append(day_card)
@@ -110,25 +106,32 @@ def main(page: ft.Page):
 
     def show_status_picker(date_key):
         def set_status(status_value):
-            user_data = load_data()
             if status_value == "삭제":
-                if date_key in user_data:
-                    del user_data[date_key]
+                if date_key in user_schedule:
+                    del user_schedule[date_key]
             else:
-                user_data[date_key] = status_value
-            save_data(user_data)
+                user_schedule[date_key] = status_value
+                
             dialog.open = False
+            page.update()
             build_calendar()
 
+        # [디자인 복원] 가로로 정렬된 명품 팝업창 버튼 구조 및 간격 상세 설정 복원
         dialog = ft.AlertDialog(
-            title=ft.Text("근무 상태 선택"),
-            content=ft.Text(f"{date_key}의 근무를 선택하세요."),
+            title=ft.Text("근무 상태 선택", size=18, weight=ft.FontWeight.BOLD),
+            content=ft.Text(f"{date_key}의 근무를 선택하세요.", size=14),
             actions=[
-                ft.TextButton("오전", on_click=lambda e: set_status("오전")),
-                ft.TextButton("오후", on_click=lambda e: set_status("오후")),
-                ft.TextButton("휴무", on_click=lambda e: set_status("휴무")),
-                ft.TextButton("삭제", on_click=lambda e: set_status("삭제")),
-                ft.TextButton("취소", on_click=lambda e: setattr(dialog, "open", False) or page.update())
+                ft.Column([
+                    ft.Row([
+                        ft.ElevatedButton("오전", on_click=lambda e: set_status("오전"), bgcolor=ft.Colors.BLUE_50, color=ft.Colors.BLUE_700),
+                        ft.ElevatedButton("오후", on_click=lambda e: set_status("오후"), bgcolor=ft.Colors.ORANGE_50, color=ft.Colors.ORANGE_700),
+                        ft.ElevatedButton("휴무", on_click=lambda e: set_status("휴무"), bgcolor=ft.Colors.RED_50, color=ft.Colors.RED_700),
+                        ft.ElevatedButton("삭제", on_click=lambda e: set_status("삭제"), bgcolor=ft.Colors.GREY_200, color=ft.Colors.BLACK54),
+                    ], alignment=ft.MainAxisAlignment.CENTER, spacing=5),
+                    ft.Row([
+                        ft.TextButton("취소", on_click=lambda e: setattr(dialog, "open", False) or page.update())
+                    ], alignment=ft.MainAxisAlignment.END)
+                ], spacing=10)
             ]
         )
         page.overlay.append(dialog)
@@ -136,27 +139,23 @@ def main(page: ft.Page):
         page.update()
 
     def prev_month(e):
-        yr = page.session.get("year")
-        mo = page.session.get("month")
-        if mo == 1:
-            page.session.set("year", yr - 1)
-            page.session.set("month", 12)
+        if state["month"] == 1:
+            state["year"] -= 1
+            state["month"] = 12
         else:
-            page.session.set("month", mo - 1)
+            state["month"] -= 1
         build_calendar()
 
     def next_month(e):
-        yr = page.session.get("year")
-        mo = page.session.get("month")
-        if mo == 12:
-            page.session.set("year", yr + 1)
-            page.session.set("month", 1)
+        if state["month"] == 12:
+            state["year"] += 1
+            state["month"] = 1
         else:
-            page.session.set("month", mo + 1)
+            state["month"] += 1
         build_calendar()
 
     page.add(calendar_container)
     build_calendar()
 
-# main.py 맨 아랫줄을 기존 것 대신 이걸로 덮어씌우세요!
-ft.app(target=main, host="0.0.0.0", port=int(os.environ.get("PORT", 8080)), view=ft.AppView.WEB_BROWSER)
+# [복원] 먹통 되기 전, 원래 Render 서버 구동에 필수적이었던 웹 포트 바인딩 설정 완전 복원
+ft.app(target=main, port=int(os.environ.get("PORT", 8080)), view=ft.AppView.WEB_BROWSER)
