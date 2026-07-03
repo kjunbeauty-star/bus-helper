@@ -2,7 +2,7 @@ import os
 import flet as ft
 import calendar
 import json  # 세션에 데이터를 안전하게 문자열로 저장하기 위해 추가
-from datetime import datetime, time
+from datetime import datetime
 
 def main(page: ft.Page):
     # 브라우저 바 공간 확보를 위해 전체 패딩을 최소화(4px)
@@ -12,7 +12,7 @@ def main(page: ft.Page):
 
     current = {"year": 2026, "month": 7, "selected_date": ""}
     
-    # 선택된 시/분을 안전하게 담아둘 공간 (기본값 오전 5시 0분)
+    # 다이얼에서 선택된 시/분을 임시로 담아둘 공간 (기본값 오전 5시 0분)
     selected_time_state = {"hour": 5, "minute": 0}
 
     # UI 컴포넌트 슬림화 (글자 크기 및 높이 축소)
@@ -23,31 +23,29 @@ def main(page: ft.Page):
 
     popup_date_title = ft.Text("", size=16, weight="bold", color="black", text_align="center")
     
-    # [새 기능 장착] 기사님이 고른 시간을 에러 없이 완벽하게 메모리에 가두는 함수
-    def on_time_picked(e):
-        if time_picker.value:
-            selected_time_state["hour"] = time_picker.value.hour
-            selected_time_state["minute"] = time_picker.value.minute
-            # 기사님이 시간을 고르면 화면 안내 텍스트를 실시간으로 업데이트
-            popup_time_display.value = f"선택된 시간: {time_picker.value.hour:02d}시 {time_picker.value.minute:02d}분"
-            page.update()
-
-    # 데이터 유실 버그가 전혀 없는 Flet 표준 24시간제 타임피커 장착
-    time_picker = ft.TimePicker(
-        confirm_text="확인",
-        cancel_text="취소",
-        error_invalid_text="올바른 시간을 입력하세요",
-        hour_label="시",
-        minute_label="분",
-        time_picker_entry_mode=ft.TimePickerEntryMode.DIAL, # 둥근 다이얼 토글 방식 지정
-        value=time(5, 0),
-        on_change=on_time_picked
+    # [감독님 오더 적용] 다이얼 내부 영문은 그대로 두고, 바로 위에 고정할 한글 시/분 가이드 박스
+    time_label_header = ft.Row(
+        [
+            ft.Container(content=ft.Text("시", size=14, weight="bold", color="#1E3A8A"), expand=1, alignment=ft.alignment.center),
+            ft.Container(content=ft.Text("분", size=14, weight="bold", color="#1E3A8A"), expand=1, alignment=ft.alignment.center),
+        ],
+        alignment="spaceAround"
     )
-    # 페이지 전역 오버레이에 타임피커 부품 등록
-    page.overlay.append(time_picker)
 
-    # 팝업창 안에서 현재 선택된 시간을 보여줄 텍스트 상자
-    popup_time_display = ft.Text("시간을 선택해 주세요 (기본값 05:00)", size=13, weight="bold", color="blue")
+    # 다이얼이 굴러갈 때 실시간으로 정수형 초 단위를 시/분 변수에 정확히 각인
+    def on_picker_change(e):
+        total_seconds = int(e.control.value) if e.control.value is not None else (5 * 3600)
+        total_minutes = total_seconds // 60
+        selected_time_state["hour"] = total_minutes // 60
+        selected_time_state["minute"] = total_minutes % 60
+
+    # 영문 라벨 오류 옵션을 완전히 제거한 24시간제 위아래 회전식 토글 다이얼
+    time_picker_dial = ft.CupertinoTimerPicker(
+        mode=ft.CupertinoTimerPickerMode.HOUR_MINUTE,
+        on_change=on_picker_change,
+        value=5 * 3600,         # 기본 시작 위치를 5시간(새벽 5시)으로 세팅
+        height=120,             # 팝업창 크기에 맞게 높이 최적화
+    )
 
     popup_layer = ft.Container(
         visible=False,
@@ -153,7 +151,7 @@ def main(page: ft.Page):
 
     def open_input_popup(date_key):
         current["selected_date"] = date_key
-        popup_date_title.value = f"{date_key}\n근무를 등록하거나 시간을 바꾸세요"
+        popup_date_title.value = f"{date_key}\n시간을 맞추거나 근무를 누르세요"
         
         all_data = load_user_schedules()
         day_info = all_data.get(date_key, {})
@@ -163,13 +161,11 @@ def main(page: ft.Page):
             h, m = map(int, current_time.split(":"))
             selected_time_state["hour"] = h
             selected_time_state["minute"] = m
-            time_picker.value = time(h, m)
-            popup_time_display.value = f"선택된 시간: {h:02d}시 {m:02d}분"
+            time_picker_dial.value = (h * 3600) + (m * 60)
         else:
             selected_time_state["hour"] = 5
             selected_time_state["minute"] = 0
-            time_picker.value = time(5, 0)
-            popup_time_display.value = "시간을 선택해 주세요 (기본값 05:00)"
+            time_picker_dial.value = 5 * 3600
             
         popup_layer.visible = True
         page.update()
@@ -212,24 +208,10 @@ def main(page: ft.Page):
             [
                 popup_date_title,
                 ft.Divider(height=1, color="transparent"),
-                
-                # [부품 대수리] 시간 선택을 위한 원터치 알람창 호출 버튼 및 안내판 배치
+                time_label_header,  # [확정] 다이얼 바로 위에 깔끔하게 고정된 한글 시/분 가이드 박스
+                time_picker_dial,   # 에러 원인을 완벽 차단한 순정 알람 토글 다이얼
                 ft.Container(
-                    content=ft.Row(
-                        [
-                            ft.Icon(ft.icons.ACCESS_TIME, color="white", size=16),
-                            ft.Text("시·분 알람창 열기", size=14, weight="bold", color="white")
-                        ],
-                        alignment="center",
-                        spacing=6
-                    ),
-                    bgcolor="#10B981", alignment=ft.Alignment(0, 0), height=40, border_radius=6,
-                    on_click=lambda e: time_picker.pick_time()
-                ),
-                ft.Container(content=popup_time_display, alignment=ft.Alignment(0, 0), padding=4),
-                
-                ft.Container(
-                    content=ft.Text("위 선택한 시간으로 저장", size=15, weight="bold", color="white"),
+                    content=ft.Text("선택한 시간으로 저장", size=15, weight="bold", color="white"),
                     bgcolor="#2563EB", alignment=ft.Alignment(0, 0), height=44, border_radius=6,
                     on_click=lambda e: select_status_and_save("자동")
                 ),
