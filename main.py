@@ -23,7 +23,7 @@ def main(page: ft.Page):
 
     popup_date_title = ft.Text("", size=16, weight="bold", color="black", text_align="center")
     
-    # [버그 수정 완료] ft.alignment.center 대문자 표준 규격으로 완벽 교체
+    # [버그 박멸] ft.alignment.center 표준 규격으로 완벽 교체하여 정렬 오류 해결
     time_label_header = ft.Row(
         [
             ft.Container(content=ft.Text("시", size=14, weight="bold", color="#1E3A8A"), expand=1, alignment=ft.alignment.center),
@@ -50,7 +50,7 @@ def main(page: ft.Page):
     popup_layer = ft.Container(
         visible=False,
         bgcolor="#AA000000",  
-        alignment=ft.Alignment(0, 0),
+        alignment=ft.alignment.center,  # 여기도 안전한 표준 규격으로 정정
         expand=True
     )
 
@@ -212,26 +212,26 @@ def main(page: ft.Page):
                 time_picker_dial,   # 순정 알람 토글 다이얼
                 ft.Container(
                     content=ft.Text("선택한 시간으로 저장", size=15, weight="bold", color="white"),
-                    bgcolor="#2563EB", alignment=ft.Alignment(0, 0), height=44, border_radius=6,
+                    bgcolor="#2563EB", alignment=ft.alignment.center, height=44, border_radius=6,
                     on_click=lambda e: select_status_and_save("자동")
                 ),
                 ft.Divider(height=2),
                 ft.Text("시간 없이 근무만 등록할 때:", size=11, weight="bold", color="grey"),
                 ft.Container(
                     content=ft.Text("휴무 지정", size=15, weight="bold", color="white"),
-                    bgcolor="#D93025", alignment=ft.Alignment(0, 0), height=40, border_radius=6,
+                    bgcolor="#D93025", alignment=ft.alignment.center, height=40, border_radius=6,
                     on_click=lambda e: select_status_and_save("휴무")
                 ),
                 ft.Row(
                     [
                         ft.Container(
                             content=ft.Text("오전", size=14, weight="bold", color="white"),
-                            bgcolor="#5C93E6", alignment=ft.Alignment(0, 0), height=38, border_radius=6, expand=1,
+                            bgcolor="#5C93E6", alignment=ft.alignment.center, height=38, border_radius=6, expand=1,
                             on_click=lambda e: select_status_and_save("오전")
                         ),
                         ft.Container(
                             content=ft.Text("오후", size=14, weight="bold", color="white"),
-                            bgcolor="#E39430", alignment=ft.Alignment(0, 0), height=38, border_radius=6, expand=1,
+                            bgcolor="#E39430", alignment=ft.alignment.center, height=38, border_radius=6, expand=1,
                             on_click=lambda e: select_status_and_save("오후")
                         ),
                     ],
@@ -289,7 +289,7 @@ def main(page: ft.Page):
         [
             ft.Container(
                 content=ft.Text(d, size=13, weight=ft.FontWeight.BOLD, color="#D93025" if d=="일" else ("#1A73E8" if d=="토" else "black")), 
-                expand=1, alignment=ft.Alignment(0, 0)
+                expand=1, alignment=ft.alignment.center
             ) for d in days_letters
         ],
         alignment="spaceAround"
