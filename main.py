@@ -1,21 +1,17 @@
 import os
 import flet as ft
 import calendar
-import json  # 세션에 데이터를 안전하게 문자열로 저장하기 위해 추가
+import json 
 from datetime import datetime
 
 def main(page: ft.Page):
-    # 브라우저 바 공간 확보를 위해 전체 패딩을 최소화(4px)
     page.title = "버스기사도우미"
     page.theme_mode = "light"
     page.padding = 4
 
     current = {"year": 2026, "month": 7, "selected_date": ""}
-    
-    # 다이얼에서 선택된 시/분을 임시로 담아둘 공간 (기본값 오전 5시 0분)
     selected_time_state = {"hour": 5, "minute": 0}
 
-    # UI 컴포넌트 슬림화 (글자 크기 및 높이 축소)
     month_title = ft.Text("", size=20, weight="bold", text_align="center")
     stats_text = ft.Text("", size=13, weight="bold", color="#1E3A8A")
     mangeun_text = ft.Text("", size=13, weight="bold", color="#1E3A8A")
@@ -23,7 +19,6 @@ def main(page: ft.Page):
 
     popup_date_title = ft.Text("", size=16, weight="bold", color="black", text_align="center")
     
-    # [수정 완료] 안전한 문자열 "center" 적용
     time_label_header = ft.Row(
         [
             ft.Container(content=ft.Text("시", size=14, weight="bold", color="#1E3A8A"), expand=1, alignment="center"),
@@ -32,22 +27,19 @@ def main(page: ft.Page):
         alignment="spaceAround"
     )
 
-    # 다이얼이 굴러갈 때 실시간으로 정수형 초 단위를 시/분 변수에 정확히 각인
     def on_picker_change(e):
         total_seconds = int(e.control.value) if e.control.value is not None else (5 * 3600)
         total_minutes = total_seconds // 60
         selected_time_state["hour"] = total_minutes // 60
         selected_time_state["minute"] = total_minutes % 60
 
-    # 영문 라벨 오류 옵션을 완전히 제거한 24시간제 위아래 회전식 토글 다이얼
     time_picker_dial = ft.CupertinoTimerPicker(
         mode=ft.CupertinoTimerPickerMode.HOUR_MINUTE,
         on_change=on_picker_change,
-        value=5 * 3600,         # 기본 시작 위치를 5시간(새벽 5시)으로 세팅
-        height=120,             # 팝업창 크기에 맞게 높이 최적화
+        value=5 * 3600,         
+        height=120,             
     )
 
-    # [수정 완료] 안전한 문자열 "center" 적용
     popup_layer = ft.Container(
         visible=False,
         bgcolor="#AA000000",  
@@ -55,49 +47,43 @@ def main(page: ft.Page):
         expand=True
     )
 
-    # [수정] 공용 DB 대신 이 기사님 핸드폰 세션에서만 장부를 읽어오는 함수
+    # --- [수정 완료 및 검증] Flet 세션 전용 메서드로 변경 ---
     def load_user_schedules():
         try:
-            raw_data = page.session.get("user_schedules")
+            raw_data = page.session.get_item("user_schedules")
             if raw_data:
                 return json.loads(raw_data)
             return {}
         except:
             return {}
 
-    # [수정] 공용 DB 대신 이 기사님 핸드폰 세션에만 장부를 저장하는 함수
     def save_user_schedules(data):
         try:
-            page.session.set("user_schedules", json.dumps(data))
+            page.session.set_item("user_schedules", json.dumps(data))
         except:
             pass
 
-    # [추가] 만근 기준 일수를 세션에서 로드하거나 월별 기본값을 반환하는 함수
     def get_mangeun_target():
-        # 세션에 저장된 기사님 맞춤 만근 기준이 있는지 확인
-        session_target = page.session.get(f"mangeun_target_{current['year']}_{current['month']}")
+        session_target = page.session.get_item(f"mangeun_target_{current['year']}_{current['month']}")
         if session_target is not None:
             return int(session_target)
             
-        # 기본값 계산기
         days_in_month = calendar.monthrange(current['year'], current['month'])[1]
         return 22 if days_in_month == 31 else (20 if current['month'] == 2 else 21)
 
-    # [추가] 기사님이 입력한 만근 기준 일수를 세션에 저장하는 함수
     def save_mangeun_target(e):
         try:
             val = int(mangeun_setting_field.value)
-            page.session.set(f"mangeun_target_{current['year']}_{current['month']}", val)
-            rebuild_interface() # 데이터 갱신 후 화면 다시 그리기
+            page.session.set_item(f"mangeun_target_{current['year']}_{current['month']}", val)
+            rebuild_interface() 
         except ValueError:
             pass
+    # --------------------------------------------------
 
     def rebuild_interface():
         month_title.value = f"{current['year']}년 {current['month']}월"
-        
         month_prefix = f"{current['year']}-{current['month']:02d}"
         
-        # [수정] DB 조회 대신 기사님 개인 세션 장부에서 이번 달 데이터만 필터링
         all_data = load_user_schedules()
         month_data = {
             k: v for k, v in all_data.items() 
@@ -107,7 +93,6 @@ def main(page: ft.Page):
         work_days = sum(1 for d in month_data.values() if d.get("status") in ["오전", "오후"])
         off_days = sum(1 for d in month_data.values() if d.get("status") == "휴무")
         
-        # [수정] 하드코딩 대신 세션/기본값 함수를 호출하고 입력 필드 값 동기화
         m_target = get_mangeun_target()
         mangeun_setting_field.value = str(m_target)
         
@@ -292,7 +277,6 @@ def main(page: ft.Page):
         alignment="spaceBetween"
     )
 
-    # [수정] TextField 컴포넌트를 미리 분리 선언하여 값을 쉽게 가져오고 세팅할 수 있도록 분리
     mangeun_setting_field = ft.TextField(
         value="22", 
         text_size=12, 
@@ -300,7 +284,6 @@ def main(page: ft.Page):
         text_align="center"
     )
 
-    # [수정] 만근 기준 저장 버튼에 'save_mangeun_target' 이벤트를 바인딩했습니다.
     mangeun_setting_row = ft.Row(
         [
             ft.Text("만근 기준", size=13, color="black"),
