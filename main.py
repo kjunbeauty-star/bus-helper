@@ -4,6 +4,10 @@ import calendar
 import json 
 from datetime import datetime
 
+# [에러 원천 차단] Flet 세션 메서드 이름 꼬임 문제를 해결하기 위한 전역 장부 선언
+USER_SCHEDULES = {}
+MANGEUN_TARGETS = {}
+
 def main(page: ft.Page):
     # 브라우저 바 공간 확보를 위해 전체 패딩을 최소화(4px)
     page.title = "버스기사도우미"
@@ -55,34 +59,31 @@ def main(page: ft.Page):
         expand=True
     )
 
-    # --- [진짜 수정 완료 및 검증] Flet 정식 세션 딕셔너리 규격 적용 ---
+    # --- [수정] 에러를 유발하는 page.session을 완전히 배제한 순정 파이썬 로직 ---
     def load_user_schedules():
-        try:
-            raw_data = page.session.get("user_schedules", None)
-            if raw_data:
-                return json.loads(raw_data)
-            return {}
-        except:
-            return {}
+        global USER_SCHEDULES
+        return USER_SCHEDULES
 
     def save_user_schedules(data):
-        try:
-            page.session.set("user_schedules", json.dumps(data))
-        except:
-            pass
+        global USER_SCHEDULES
+        USER_SCHEDULES = data
 
     def get_mangeun_target():
-        session_target = page.session.get(f"mangeun_target_{current['year']}_{current['month']}", None)
-        if session_target is not None:
-            return int(session_target)
+        global MANGEUN_TARGETS
+        key = f"{current['year']}_{current['month']}"
+        if key in MANGEUN_TARGETS:
+            return MANGEUN_TARGETS[key]
             
+        # 기본값 계산기
         days_in_month = calendar.monthrange(current['year'], current['month'])[1]
         return 22 if days_in_month == 31 else (20 if current['month'] == 2 else 21)
 
     def save_mangeun_target(e):
+        global MANGEUN_TARGETS
         try:
             val = int(mangeun_setting_field.value)
-            page.session.set(f"mangeun_target_{current['year']}_{current['month']}", val)
+            key = f"{current['year']}_{current['month']}"
+            MANGEUN_TARGETS[key] = val
             rebuild_interface() 
         except ValueError:
             pass
@@ -121,7 +122,6 @@ def main(page: ft.Page):
             week_row = ft.Row(alignment="spaceAround", spacing=2)
             for day in week:
                 if day == 0:
-                    # 날짜 박스 높이를 46으로 대폭 압축하여 세로 공간 확보
                     week_row.controls.append(ft.Container(expand=1, height=46))
                 else:
                     date_key = f"{current['year']}-{current['month']:02d}-{day:02d}"
@@ -143,7 +143,6 @@ def main(page: ft.Page):
 
                     time_display = ft.Text(start_time, size=9, weight="bold", color=text_color) if start_time and status != "휴무" else ft.Container()
 
-                    # 세로 공간 확보를 위한 핵심 다이어트 (height 55 -> 46)
                     day_box = ft.Container(
                         content=ft.Column(
                             [
@@ -219,7 +218,6 @@ def main(page: ft.Page):
         popup_layer.visible = False  
         rebuild_interface()          
 
-    # 팝업 내부 정렬 레이아웃 완료
     popup_card = ft.Container(
         content=ft.Column(
             [
@@ -313,7 +311,6 @@ def main(page: ft.Page):
         alignment="spaceBetween"
     )
 
-    # 요일 헤더 "center" 문자열 적용
     days_letters = ["일", "월", "화", "수", "목", "금", "토"]
     weeks_header = ft.Row(
         [
@@ -325,7 +322,6 @@ def main(page: ft.Page):
         alignment="spaceAround"
     )
 
-    # 하단 네비게이션 탭 메뉴 바
     bottom_navigation_bar = ft.Row(
         [
             ft.TextButton("달력", style=ft.ButtonStyle(color="#2563EB"), expand=1, height=36),
@@ -336,7 +332,6 @@ def main(page: ft.Page):
         alignment="spaceAround"
     )
 
-    # 누락되었던 weeks_header와 calendar_grid를 완벽하게 레이아웃에 재배치
     main_layout = ft.Column(
         [
             header_nav,
