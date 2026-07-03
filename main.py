@@ -1,3 +1,4 @@
+import os
 import flet as ft
 import datetime
 import calendar
@@ -7,20 +8,38 @@ def main(page: ft.Page):
     page.theme_mode = ft.ThemeMode.LIGHT
     page.padding = 10
     
-    # 기사님들 세션별로 데이터가 완벽히 독립되는 보관함
-    user_schedule = {}
-    
+    # -------------------------------------------------------------
+    # [핵심 변경] 개인 스마트폰 내부 금고(client_storage) 이용하도록 변경
+    # -------------------------------------------------------------
+    def load_data():
+        # 핸드폰 내부에 저장된 데이터를 가져옵니다. 없으면 빈 딕셔너리{} 반환
+        data = page.client_storage.get("bus_schedule")
+        return data if data else {}
+
+    def save_data(data):
+        # 핸드폰 내부 금고에 데이터를 안전하게 저장합니다.
+        page.client_storage.set("bus_schedule", data)
+
+    # 오늘 날짜 기준 세팅
     now = datetime.datetime.now()
-    state = {"year": now.year, "month": now.month}
+    current_year = page.session.get("year") or now.year
+    current_month = page.session.get("month") or now.month
     
-    # 달력을 담을 껍데기
+    page.session.set("year", current_year)
+    page.session.set("month", current_month)
+
+    # -------------------------------------------------------------
+    # 달력 그리기 및 이벤트 함수들
+    # -------------------------------------------------------------
     calendar_container = ft.Column()
 
     def build_calendar():
         calendar_container.controls.clear()
-        yr, mo = state["year"], state["month"]
         
-        # 상단 연월 이동 바
+        yr = page.session.get("year")
+        mo = page.session.get("month")
+        
+        # 상단 네비게이션 (이전 / 현재 연월 / 다음)
         nav_row = ft.Row(
             controls=[
                 ft.TextButton("◀ 이전", on_click=prev_month),
@@ -31,16 +50,19 @@ def main(page: ft.Page):
         )
         calendar_container.controls.append(nav_row)
         
-        # 요일 라벨
+        # 요일 헤더
         days_row = ft.Row(
             controls=[ft.Container(ft.Text(d, weight=ft.FontWeight.BOLD, text_align=ft.TextAlign.CENTER), expand=1) for d in ["일", "월", "화", "수", "목", "금", "토"]],
             alignment=ft.MainAxisAlignment.SPACE_AROUND
         )
         calendar_container.controls.append(days_row)
         
-        # 날짜 채우기
+        # 달력 날짜 생성
         cal = calendar.TextCalendar(calendar.SUNDAY)
         month_days = cal.monthdayscalendar(yr, mo)
+        
+        # 현재 저장된 개인 데이터 로드
+        user_data = load_data()
         
         for week in month_days:
             week_row = ft.Row(alignment=ft.MainAxisAlignment.SPACE_AROUND)
@@ -49,49 +71,54 @@ def main(page: ft.Page):
                     week_row.controls.append(ft.Container(expand=1))
                 else:
                     date_key = f"{yr}-{mo:02d}-{day:02d}"
-                    current_status = user_schedule.get(date_key, "")
+                    current_status = user_data.get(date_key, "")
                     
-                    # 선택된 근무에 따라 색상 칠하기
+                    # 상태에 따른 색상 지정
                     bg_color = ft.Colors.WHITE
+                    text_color = ft.Colors.BLACK
                     if current_status == "오전":
                         bg_color = ft.Colors.BLUE_50
+                        text_color = ft.Colors.BLUE_700
                     elif current_status == "오후":
                         bg_color = ft.Colors.ORANGE_50
+                        text_color = ft.Colors.ORANGE_700
                     elif current_status == "휴무":
                         bg_color = ft.Colors.RED_50
+                        text_color = ft.Colors.RED_700
                         
                     day_card = ft.Container(
                         content=ft.Column(
                             controls=[
                                 ft.Text(str(day), weight=ft.FontWeight.BOLD),
-                                ft.Text(current_status, size=12, weight=ft.FontWeight.BOLD, color=ft.Colors.BLACK87)
+                                ft.Text(current_status, size=10)
                             ],
                             alignment=ft.MainAxisAlignment.CENTER,
                             horizontal_alignment=ft.CrossAxisAlignment.CENTER
                         ),
                         bgcolor=bg_color,
-                        border_radius=8,
+                        theme_mode=ft.ThemeMode.LIGHT,
+                        border=ft.border.all(1, ft.Colors.BLACK12),
+                        border_radius=5,
                         aspect_ratio=1.0,
                         expand=1,
                         on_click=lambda e, dk=date_key: show_status_picker(dk)
                     )
                     week_row.controls.append(day_card)
             calendar_container.controls.append(week_row)
-        
-        # [핵심] 페이지 전체를 새로고침 해줘야 글자가 뿜어져 나옵니다.
+            
         page.update()
 
     def show_status_picker(date_key):
         def set_status(status_value):
+            user_data = load_data()
             if status_value == "삭제":
-                if date_key in user_schedule:
-                    del user_schedule[date_key]
+                if date_key in user_data:
+                    del user_data[date_key]
             else:
-                user_schedule[date_key] = status_value
-            
+                user_data[date_key] = status_value
+            save_data(user_data)
             dialog.open = False
-            page.update() # 팝업창 닫기 먼저 적용
-            build_calendar() # 달력 글자 지우고 새로 그리기
+            build_calendar()
 
         dialog = ft.AlertDialog(
             title=ft.Text("근무 상태 선택"),
@@ -109,23 +136,27 @@ def main(page: ft.Page):
         page.update()
 
     def prev_month(e):
-        if state["month"] == 1:
-            state["year"] -= 1
-            state["month"] = 12
+        yr = page.session.get("year")
+        mo = page.session.get("month")
+        if mo == 1:
+            page.session.set("year", yr - 1)
+            page.session.set("month", 12)
         else:
-            state["month"] -= 1
+            page.session.set("month", mo - 1)
         build_calendar()
 
     def next_month(e):
-        if state["month"] == 12:
-            state["year"] += 1
-            state["month"] = 1
+        yr = page.session.get("year")
+        mo = page.session.get("month")
+        if mo == 12:
+            page.session.set("year", yr + 1)
+            page.session.set("month", 1)
         else:
-            state["month"] -= 1 # 앗, 여기가 버그였습니다! 아래 줄로 수정!
-            state["month"] += 1
+            page.session.set("month", mo + 1)
         build_calendar()
 
     page.add(calendar_container)
     build_calendar()
 
-ft.app(target=main)
+# main.py 맨 아랫줄을 기존 것 대신 이걸로 덮어씌우세요!
+ft.app(target=main, host="0.0.0.0", port=int(os.environ.get("PORT", 8080)), view=ft.AppView.WEB_BROWSER)
