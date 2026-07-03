@@ -11,6 +11,9 @@ def main(page: ft.Page):
     page.padding = 4
 
     current = {"year": 2026, "month": 7, "selected_date": ""}
+    
+    # [새 기능] 다이얼에서 선택된 시/분을 임시로 담아둘 공간 (기본값 오전 5시 0분)
+    selected_time_state = {"hour": 5, "minute": 0}
 
     # UI 컴포넌트 슬림화 (글자 크기 및 높이 축소)
     month_title = ft.Text("", size=20, weight="bold", text_align="center")
@@ -20,12 +23,15 @@ def main(page: ft.Page):
 
     popup_date_title = ft.Text("", size=16, weight="bold", color="black", text_align="center")
     
-    start_time_input = ft.TextField(
-        label="24시간제 숫자 4자리 입력",
-        hint_text="예: 0535 또는 1420",
-        text_size=15,
-        text_align="center",
-        content_padding=8
+    # [변경] 핸드폰 알람처럼 위아래로 슥슥 밀어서 선택하는 바퀴형 다이얼 컴포넌트
+    def on_picker_change(e):
+        selected_time_state["hour"] = e.hour
+        selected_time_state["minute"] = e.minute
+
+    time_picker_dial = ft.CupertinoTimePicker(
+        on_change=on_picker_change,
+        value=datetime(2026, 1, 1, 5, 0),  # 기본 시작 위치를 오전 5시 0분으로 세팅
+        height=120,                        # 팝업창 크기에 맞게 높이 최적화
     )
 
     popup_layer = ft.Container(
@@ -132,14 +138,24 @@ def main(page: ft.Page):
 
     def open_input_popup(date_key):
         current["selected_date"] = date_key
-        popup_date_title.value = f"{date_key}\n시간을 적거나 근무를 누르세요"
+        popup_date_title.value = f"{date_key}\n시간을 맞추거나 근무를 누르세요"
         
         # [수정] DB 조회 대신 개인 세션 장부에서 해당 날짜 시간 가져오기
         all_data = load_user_schedules()
         day_info = all_data.get(date_key, {})
         current_time = day_info.get("start_time", "")
         
-        start_time_input.value = current_time.replace(":", "")
+        # 기존 저장된 시간이 있으면 다이어트 초기값을 그 시간으로 맞추고, 없으면 새벽 5시로 세팅
+        if current_time and ":" in current_time:
+            h, m = map(int, current_time.split(":"))
+            selected_time_state["hour"] = h
+            selected_time_state["minute"] = m
+            time_picker_dial.value = datetime(2026, 1, 1, h, m)
+        else:
+            selected_time_state["hour"] = 5
+            selected_time_state["minute"] = 0
+            time_picker_dial.value = datetime(2026, 1, 1, 5, 0)
+            
         popup_layer.visible = True
         page.update()
 
@@ -156,24 +172,21 @@ def main(page: ft.Page):
             rebuild_interface()
             return
 
-        input_time = start_time_input.value.strip()
         final_time = ""
 
-        if input_time.isdigit() and len(input_time) in [3, 4]:
-            if len(input_time) == 3:  
-                input_time = f"0{input_time}"
+        # [변경] 다이얼 저장 버튼을 눌렀을 때의 메커니즘
+        if status_value == "자동":
+            h = selected_time_state["hour"]
+            m = selected_time_state["minute"]
             
-            hour = int(input_time[:2])
-            if hour >= 12:
+            # 원본 로직 그대로 12시 기점으로 오전/오후 자동 판별
+            if h >= 12:
                 status_value = "오후"
             else:
                 status_value = "오전"
                 
-            final_time = f"{input_time[:2]}:{input_time[2:]}"
+            final_time = f"{h:02d}:{m:02d}"
         else:
-            # [버그 수정] 시간이 올바르지 않은데 '입력한 시간으로 저장(자동)'을 누른 경우만 튕겨내도록 원본 로직 원상복구
-            if status_value == "자동":
-                return
             final_time = ""
 
         # [수정] DB 저장 대신 개인 세션 장부에 데이터 기록 및 저장
@@ -188,7 +201,7 @@ def main(page: ft.Page):
             [
                 popup_date_title,
                 ft.Divider(height=1, color="transparent"),
-                start_time_input,  
+                time_picker_dial,  # [교체] 텍스트 입력창 대신 알람형 회전 다이얼 배치
                 ft.Container(
                     content=ft.Text("입력한 시간으로 저장", size=15, weight="bold", color="white"),
                     bgcolor="#2563EB", alignment=ft.Alignment(0, 0), height=44, border_radius=6,
