@@ -1,6 +1,7 @@
 import os
 import flet as ft
 import calendar
+from datetime import datetime
 
 # --- [개인화] 동료 기사에게 영향을 주지 않는 순정 파이썬 메모리 장부 ---
 USER_SCHEDULES = {}
@@ -14,7 +15,7 @@ def main(page: ft.Page):
     current = {"year": 2026, "month": 7, "selected_date": ""}
     selected_time_state = {"hour": 5, "minute": 0}
 
-    # 1. 컴포넌트들을 최상단에 미리 선언 (순서 꼬임 에러 방지)
+    # 1. 컴포넌트 선언
     month_title = ft.Text("", size=20, weight="bold", text_align="center")
     stats_text = ft.Text("", size=13, weight="bold", color="#1E3A8A")
     mangeun_text = ft.Text("", size=13, weight="bold", color="#1E3A8A")
@@ -29,41 +30,39 @@ def main(page: ft.Page):
         text_align="center"
     )
 
-    # 📱 [핵심 수정] 영문(hour, min)을 완벽하게 제거한 순정 숫자 바퀴 (24시간제)
+    # 영문 없이 숫자만 깔끔하게 돌아가는 24시간제 다이얼
     hour_picker = ft.CupertinoPicker(
-        controls=[ft.Text(f"{i:02d}", size=18) for i in range(24)],
+        controls=[ft.Text(f"{i:02d}", size=20) for i in range(24)],
         selected_index=5,
-        on_change=lambda e: update_hour(int(e.data)),
+        on_change=lambda e: update_hour(int(e.control.selected_index)),
         height=100,
         expand=1
     )
     
     minute_picker = ft.CupertinoPicker(
-        controls=[ft.Text(f"{i:02d}", size=18) for i in range(60)],
+        controls=[ft.Text(f"{i:02d}", size=20) for i in range(60)],
         selected_index=0,
-        on_change=lambda e: update_minute(int(e.data)),
+        on_change=lambda e: update_minute(int(e.control.selected_index)),
         height=100,
         expand=1
     )
 
-    def update_hour(index):
-        selected_time_state["hour"] = index
+    def update_hour(val):
+        selected_time_state["hour"] = val
 
-    def update_minute(index):
-        selected_time_state["minute"] = index
+    def update_minute(val):
+        selected_time_state["minute"] = val
 
-    # 영문 없이 시/분 글자 헤더와 숫자 바퀴 정렬[cite: 1]
     dial_row = ft.Row(
         [
-            ft.Column([ft.Text("시", size=12, weight="bold", color="grey"), hour_picker], alignment="center", horizontal_alignment="center", expand=1),
-            ft.Text(":", size=20, weight="bold", color="grey"),
-            ft.Column([ft.Text("분", size=12, weight="bold", color="grey"), minute_picker], alignment="center", horizontal_alignment="center", expand=1),
+            hour_picker,
+            ft.Text(":", size=20, weight="bold", color="black"),
+            minute_picker,
         ],
-        spacing=0,
-        height=130
+        alignment="center",
+        height=100
     )
 
-    # 밤샘 에러 원인이었던 alignment를 검증된 대문자 구조로 통일[cite: 1]
     popup_layer = ft.Container(
         visible=False,
         bgcolor="#AA000000",  
@@ -71,7 +70,7 @@ def main(page: ft.Page):
         expand=True
     )
 
-    # 2. 데이터 제어 함수들 정의
+    # 2. 데이터 제어 함수
     def load_user_schedules():
         global USER_SCHEDULES
         return USER_SCHEDULES
@@ -102,8 +101,14 @@ def main(page: ft.Page):
         except ValueError:
             pass
 
-    # 3. 화면을 갱신하는 리빌드 함수
+    # 3. 화면 리빌드 함수 (오늘 날짜 구글 캘린더식 테두리 하이라이트 추가)
     def rebuild_interface():
+        # 시스템의 실제 오늘 날짜 가져오기 (2026년 7월 4일 기준)
+        today = datetime.now()
+        today_y = today.year
+        today_m = today.month
+        today_d = today.day
+
         month_title.value = f"{current['year']}년 {current['month']}월"
         month_prefix = f"{current['year']}-{current['month']:02d}"
         
@@ -153,6 +158,10 @@ def main(page: ft.Page):
 
                     time_display = ft.Text(start_time, size=9, weight="bold", color=text_color) if start_time and status != "휴무" else ft.Container()
 
+                    # 📌 [구글 캘린더 감성] 스마트폰 실제 오늘 날짜와 일치하면 파란색 굵은 테두리(박스) 추가!
+                    is_today = (current['year'] == today_y and current['month'] == today_m and day == today_d)
+                    day_border = ft.border.all(2, "#2563EB") if is_today else None
+
                     day_box = ft.Container(
                         content=ft.Column(
                             [
@@ -165,6 +174,7 @@ def main(page: ft.Page):
                             spacing=0
                         ),
                         bgcolor=bg_color,
+                        border=day_border, # 테두리 적용
                         border_radius=4,
                         height=46,
                         expand=1,
@@ -228,35 +238,35 @@ def main(page: ft.Page):
         popup_layer.visible = False  
         rebuild_interface()          
 
-    # 5. 팝업창 디자인 구성 (기사님 원본 버튼 완벽 유지 + 영문 없는 24시간 다이얼 탑재)[cite: 1]
+    # 5. 팝업창 디자인 구성
     popup_card = ft.Container(
         content=ft.Column(
             [
                 ft.Row([popup_date_title], alignment="center"),
                 ft.Divider(height=1, color="transparent"),
-                dial_row,   # 영문 자리에 순수 숫자 24시간제 다이얼 장착
+                dial_row, 
                 ft.Container(
                     content=ft.Text("선택한 시간으로 저장", size=15, weight="bold", color="white"),
-                    bgcolor="#2563EB", alignment=ft.Alignment(0, 0), height=44, border_radius=6, #[cite: 1]
+                    bgcolor="#2563EB", alignment=ft.Alignment(0, 0), height=44, border_radius=6,
                     on_click=lambda e: select_status_and_save("자동")
                 ),
                 ft.Divider(height=2),
                 ft.Text("시간 없이 근무만 등록할 때:", size=11, weight="bold", color="grey"),
                 ft.Container(
                     content=ft.Text("휴무 지정", size=15, weight="bold", color="white"),
-                    bgcolor="#D93025", alignment=ft.Alignment(0, 0), height=40, border_radius=6, #[cite: 1]
+                    bgcolor="#D93025", alignment=ft.Alignment(0, 0), height=40, border_radius=6,
                     on_click=lambda e: select_status_and_save("휴무")
                 ),
                 ft.Row(
                     [
                         ft.Container(
                             content=ft.Text("오전조 등록", size=14, weight="bold", color="white"),
-                            bgcolor="#5C93E6", alignment=ft.Alignment(0, 0), height=38, border_radius=6, expand=1, #[cite: 1]
+                            bgcolor="#5C93E6", alignment=ft.Alignment(0, 0), height=38, border_radius=6, expand=1,
                             on_click=lambda e: select_status_and_save("오전")
                         ),
                         ft.Container(
                             content=ft.Text("오후조 등록", size=14, weight="bold", color="white"),
-                            bgcolor="#E39430", alignment=ft.Alignment(0, 0), height=38, border_radius=6, expand=1, #[cite: 1]
+                            bgcolor="#E39430", alignment=ft.Alignment(0, 0), height=38, border_radius=6, expand=1,
                             on_click=lambda e: select_status_and_save("오후")
                         ),
                     ],
@@ -278,7 +288,7 @@ def main(page: ft.Page):
     )
     popup_layer.content = popup_card
 
-    # 메인 화면 월 내비게이션
+    # 상하단 내비게이션 레이아웃
     def move_prev(e):
         current["month"] -= 1
         if current["month"] == 0: current["month"] = 12; current["year"] -= 1
@@ -317,7 +327,7 @@ def main(page: ft.Page):
         [
             ft.Container(
                 content=ft.Text(d, size=13, weight="bold", color="#D93025" if d=="일" else ("#1A73E8" if d=="토" else "black")), 
-                expand=1, alignment=ft.Alignment(0, 0) #[cite: 1]
+                expand=1, alignment=ft.Alignment(0, 0)
             ) for d in days_letters
         ],
         alignment="spaceAround"
