@@ -7,26 +7,14 @@ def main(page: ft.Page):
     page.theme_mode = ft.ThemeMode.LIGHT
     page.padding = 10
     
-    # 안전한 일반 변수로 현재 연월 관리
+    # 각 사용자의 개인 세션 메모리에 안전하게 저장 (서로 절대 안 섞임)
+    user_schedule = {}
+    
     now = datetime.datetime.now()
     state = {
         "year": now.year,
         "month": now.month
     }
-    
-    # [수정] local_storage 안전하게 호출
-    def load_data():
-        try:
-            data = page.local_storage.get("bus_schedule")
-            return data if data else {}
-        except:
-            return {}
-
-    def save_data(data):
-        try:
-            page.local_storage.set("bus_schedule", data)
-        except:
-            pass
 
     calendar_container = ft.Column()
 
@@ -58,8 +46,6 @@ def main(page: ft.Page):
         cal = calendar.TextCalendar(calendar.SUNDAY)
         month_days = cal.monthdayscalendar(yr, mo)
         
-        user_data = load_data()
-        
         for week in month_days:
             week_row = ft.Row(alignment=ft.MainAxisAlignment.SPACE_AROUND)
             for day in week:
@@ -67,8 +53,9 @@ def main(page: ft.Page):
                     week_row.controls.append(ft.Container(expand=1))
                 else:
                     date_key = f"{yr}-{mo:02d}-{day:02d}"
-                    current_status = user_data.get(date_key, "")
+                    current_status = user_schedule.get(date_key, "")
                     
+                    # 상태에 따른 색상 지정
                     bg_color = ft.Colors.WHITE
                     if current_status == "오전":
                         bg_color = ft.Colors.BLUE_50
@@ -100,13 +87,11 @@ def main(page: ft.Page):
 
     def show_status_picker(date_key):
         def set_status(status_value):
-            user_data = load_data()
             if status_value == "삭제":
-                if date_key in user_data:
-                    del user_data[date_key]
+                if date_key in user_schedule:
+                    del user_schedule[date_key]
             else:
-                user_data[date_key] = status_value
-            save_data(user_data)
+                user_schedule[date_key] = status_value
             dialog.open = False
             build_calendar()
 
@@ -144,4 +129,5 @@ def main(page: ft.Page):
     page.add(calendar_container)
     build_calendar()
 
-ft.app(target=main, view=ft.AppView.WEB_BROWSER)
+# [수정 완료] 원래 잘 되던 형태로 원상복구!
+ft.app(target=main)
