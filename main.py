@@ -12,7 +12,7 @@ def main(page: ft.Page):
 
     current = {"year": 2026, "month": 7, "selected_date": ""}
     
-    # [새 기능] 다이얼에서 선택된 시/분을 임시로 담아둘 공간 (기본값 오전 5시 0분)
+    # 다이얼에서 선택된 시/분을 임시로 담아둘 공간 (기본값 오전 5시 0분)
     selected_time_state = {"hour": 5, "minute": 0}
 
     # UI 컴포넌트 슬림화 (글자 크기 및 높이 축소)
@@ -23,15 +23,19 @@ def main(page: ft.Page):
 
     popup_date_title = ft.Text("", size=16, weight="bold", color="black", text_align="center")
     
-    # [변경] 핸드폰 알람처럼 위아래로 슥슥 밀어서 선택하는 바퀴형 다이얼 컴포넌트
+    # [부품 수정] 스펠링 교체: CupertinoTimePicker -> CupertinoTimerPicker
     def on_picker_change(e):
-        selected_time_state["hour"] = e.hour
-        selected_time_state["minute"] = e.minute
+        # CupertinoTimerPicker는 e.seconds 형태로 초 단위 값을 반환하므로 시/분으로 계산
+        total_seconds = int(e.data) if e.data else 0
+        total_minutes = total_seconds // 60
+        selected_time_state["hour"] = total_minutes // 60
+        selected_time_state["minute"] = total_minutes % 60
 
-    time_picker_dial = ft.CupertinoTimePicker(
+    time_picker_dial = ft.CupertinoTimerPicker(
+        mode=ft.CupertinoTimerPickerMode.HOUR_MINUTE,  # 24시간 표기 형식 지정
         on_change=on_picker_change,
-        value=datetime(2026, 1, 1, 5, 0),  # 기본 시작 위치를 오전 5시 0분으로 세팅
-        height=120,                        # 팝업창 크기에 맞게 높이 최적화
+        value=5 * 3600,  # 기본 시작 위치를 5시간(새벽 5시)으로 세팅
+        height=120,      # 팝업창 크기에 맞게 높이 최적화
     )
 
     popup_layer = ft.Container(
@@ -140,21 +144,19 @@ def main(page: ft.Page):
         current["selected_date"] = date_key
         popup_date_title.value = f"{date_key}\n시간을 맞추거나 근무를 누르세요"
         
-        # [수정] DB 조회 대신 개인 세션 장부에서 해당 날짜 시간 가져오기
         all_data = load_user_schedules()
         day_info = all_data.get(date_key, {})
         current_time = day_info.get("start_time", "")
         
-        # 기존 저장된 시간이 있으면 다이어트 초기값을 그 시간으로 맞추고, 없으면 새벽 5시로 세팅
         if current_time and ":" in current_time:
             h, m = map(int, current_time.split(":"))
             selected_time_state["hour"] = h
             selected_time_state["minute"] = m
-            time_picker_dial.value = datetime(2026, 1, 1, h, m)
+            time_picker_dial.value = (h * 3600) + (m * 60)
         else:
             selected_time_state["hour"] = 5
             selected_time_state["minute"] = 0
-            time_picker_dial.value = datetime(2026, 1, 1, 5, 0)
+            time_picker_dial.value = 5 * 3600
             
         popup_layer.visible = True
         page.update()
@@ -164,7 +166,6 @@ def main(page: ft.Page):
         all_data = load_user_schedules()
         
         if status_value == "선택취소":
-            # [수정] DB 삭제 대신 개인 세션 장부에서 해당 날짜 삭제
             if target_date in all_data:
                 del all_data[target_date]
             save_user_schedules(all_data)
@@ -174,12 +175,10 @@ def main(page: ft.Page):
 
         final_time = ""
 
-        # [변경] 다이얼 저장 버튼을 눌렀을 때의 메커니즘
         if status_value == "자동":
             h = selected_time_state["hour"]
             m = selected_time_state["minute"]
             
-            # 원본 로직 그대로 12시 기점으로 오전/오후 자동 판별
             if h >= 12:
                 status_value = "오후"
             else:
@@ -189,7 +188,6 @@ def main(page: ft.Page):
         else:
             final_time = ""
 
-        # [수정] DB 저장 대신 개인 세션 장부에 데이터 기록 및 저장
         all_data[target_date] = {"status": status_value, "start_time": final_time}
         save_user_schedules(all_data)
         
@@ -201,9 +199,9 @@ def main(page: ft.Page):
             [
                 popup_date_title,
                 ft.Divider(height=1, color="transparent"),
-                time_picker_dial,  # [교체] 텍스트 입력창 대신 알람형 회전 다이얼 배치
+                time_picker_dial,  # 정수형 초 단위를 다루는 올바른 다이얼 부품 재배치
                 ft.Container(
-                    content=ft.Text("입력한 시간으로 저장", size=15, weight="bold", color="white"),
+                    content=ft.Text("선택한 시간으로 저장", size=15, weight="bold", color="white"),
                     bgcolor="#2563EB", alignment=ft.Alignment(0, 0), height=44, border_radius=6,
                     on_click=lambda e: select_status_and_save("자동")
                 ),
@@ -297,7 +295,6 @@ def main(page: ft.Page):
         alignment="spaceAround"
     )
 
-    # 전체 화면 컴포넌트 마진 최소화 배치
     main_layout = ft.Column(
         [
             header_nav,
