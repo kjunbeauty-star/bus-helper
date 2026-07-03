@@ -37,6 +37,7 @@ def main(page: ft.Page):
         on_change=lambda e: update_hour(int(e.control.selected_index)),
         height=100,
         expand=1
+        looping=True,
     )
     
     minute_picker = ft.CupertinoPicker(
@@ -45,6 +46,7 @@ def main(page: ft.Page):
         on_change=lambda e: update_minute(int(e.control.selected_index)),
         height=100,
         expand=1
+        looping=True,
     )
 
     def update_hour(val):
