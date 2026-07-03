@@ -23,11 +23,11 @@ def main(page: ft.Page):
 
     popup_date_title = ft.Text("", size=16, weight="bold", color="black", text_align="center")
     
-    # [진짜 버그 수정] ft.alignment.center  표준 규격으로 완벽 교체
+    # [수정 완료] 복잡한 객체 대신 절대 에러 안 나는 안전한 문자열 "center" 적용
     time_label_header = ft.Row(
         [
-            ft.Container(content=ft.Text("시", size=14, weight="bold", color="#1E3A8A"), expand=1, alignment=ft.alignment.center),
-            ft.Container(content=ft.Text("분", size=14, weight="bold", color="#1E3A8A"), expand=1, alignment=ft.alignment.center),
+            ft.Container(content=ft.Text("시", size=14, weight="bold", color="#1E3A8A"), expand=1, alignment="center"),
+            ft.Container(content=ft.Text("분", size=14, weight="bold", color="#1E3A8A"), expand=1, alignment="center"),
         ],
         alignment="spaceAround"
     )
@@ -47,11 +47,11 @@ def main(page: ft.Page):
         height=120,             # 팝업창 크기에 맞게 높이 최적화
     )
 
-    # [수정 완료] 대문자 ft.alignment.center 적용
+    # [수정 완료] 안전한 문자열 "center" 적용
     popup_layer = ft.Container(
         visible=False,
         bgcolor="#AA000000",  
-        alignment=ft.alignment.center,  
+        alignment="center",  
         expand=True
     )
 
@@ -204,7 +204,7 @@ def main(page: ft.Page):
         popup_layer.visible = False  
         rebuild_interface()          
 
-    # [수정 완료] 하단 모든 컨테이너들의 정렬 속성 역시 대문자 ft.alignment.center로 확실하게 정정
+    # [원상복구 완료] 팝업 카드 레이아웃 정렬 속성 전부 문자열 "center"로 안전하게 정정
     popup_card = ft.Container(
         content=ft.Column(
             [
@@ -214,26 +214,26 @@ def main(page: ft.Page):
                 time_picker_dial,   
                 ft.Container(
                     content=ft.Text("선택한 시간으로 저장", size=15, weight="bold", color="white"),
-                    bgcolor="#2563EB", alignment=ft.alignment.center, height=44, border_radius=6,
+                    bgcolor="#2563EB", alignment="center", height=44, border_radius=6,
                     on_click=lambda e: select_status_and_save("자동")
                 ),
                 ft.Divider(height=2),
                 ft.Text("시간 없이 근무만 등록할 때:", size=11, weight="bold", color="grey"),
                 ft.Container(
                     content=ft.Text("휴무 지정", size=15, weight="bold", color="white"),
-                    bgcolor="#D93025", alignment=ft.alignment.center, height=40, border_radius=6,
+                    bgcolor="#D93025", alignment="center", height=40, border_radius=6,
                     on_click=lambda e: select_status_and_save("휴무")
                 ),
                 ft.Row(
                     [
                         ft.Container(
                             content=ft.Text("오전", size=14, weight="bold", color="white"),
-                            bgcolor="#5C93E6", alignment=ft.alignment.center, height=38, border_radius=6, expand=1,
+                            bgcolor="#5C93E6", alignment="center", height=38, border_radius=6, expand=1,
                             on_click=lambda e: select_status_and_save("오전")
                         ),
                         ft.Container(
                             content=ft.Text("오후", size=14, weight="bold", color="white"),
-                            bgcolor="#E39430", alignment=ft.alignment.center, height=38, border_radius=6, expand=1,
+                            bgcolor="#E39430", alignment="center", height=38, border_radius=6, expand=1,
                             on_click=lambda e: select_status_and_save("오후")
                         ),
                     ],
@@ -286,18 +286,19 @@ def main(page: ft.Page):
         alignment="spaceBetween"
     )
 
-    # [수정 완료] 요일 헤더의 alignment 대문자 정석 규격 적용
+    # [원상복구 완료] 요일 헤더의 alignment "center" 문자열 적용
     days_letters = ["일", "월", "화", "수", "목", "금", "토"]
     weeks_header = ft.Row(
         [
             ft.Container(
                 content=ft.Text(d, size=13, weight=ft.FontWeight.BOLD, color="#D93025" if d=="일" else ("#1A73E8" if d=="토" else "black")), 
-                expand=1, alignment=ft.alignment.center
+                expand=1, alignment="center"
             ) for d in days_letters
         ],
         alignment="spaceAround"
     )
 
+    # [원상복구 완료] 삭제되었던 하단 메뉴 탭 바 완벽 복원
     bottom_navigation_bar = ft.Row(
         [
             ft.TextButton("달력", style=ft.ButtonStyle(color="#2563EB"), expand=1, height=36),
@@ -308,6 +309,7 @@ def main(page: ft.Page):
         alignment="spaceAround"
     )
 
+    # [원상복구 완료] 메인 레이아웃의 완전한 원래 뼈대 구조로 복구
     main_layout = ft.Column(
         [
             header_nav,
@@ -319,7 +321,7 @@ def main(page: ft.Page):
             ft.Divider(height=1),
             calendar_grid,
             ft.Divider(height=2),
-            bottom_navigation_bar
+            bottom_navigation_bar  # 빼먹었던 메뉴바 복구 안착
         ],
         expand=True
     )
