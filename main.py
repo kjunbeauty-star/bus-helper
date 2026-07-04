@@ -1,6 +1,7 @@
 import os  # Render 배포 환경의 PORT 값을 읽기 위해 사용
 import json  # 브라우저 저장소에 딕셔너리 데이터를 저장하기 위해 사용
 import calendar
+import re  # 전화번호 숫자 추출 및 정규식 활용을 위해 사용
 from datetime import datetime, timedelta, timezone
 
 import flet as ft
@@ -171,6 +172,165 @@ def main(page: ft.Page):
         popup_layer.visible = False
         page.update()
 
+    # --- [전화번호 자동 하이픈 포맷 함수] ---
+    def format_phone_number(raw_string):
+        """숫자가 아닌 문자를 제거하고 한국 유선/무선 전화번호 체계에 맞춰 하이픈을 넣어줍니다."""
+        try:
+            clean_num = re.sub(r"[^\d]", "", raw_string)
+            length = len(clean_num)
+            
+            if length == 0:
+                return ""
+            
+            # 서울 지역 번호 (02) 기준 처리
+            if clean_num.startswith("02"):
+                if length < 3:
+                    return clean_num
+                elif length <= 5:
+                    return f"{clean_num[:2]}-{clean_num[2:]}"
+                elif length <= 9:
+                    return f"{clean_num[:2]}-{clean_num[2:5]}-{clean_num[5:]}"
+                else:
+                    return f"{clean_num[:2]}-{clean_num[2:6]}-{clean_num[6:10]}"
+            
+            # 일반 휴대폰 및 타 지역 번호 체계 처리
+            if length < 4:
+                return clean_num
+            elif length <= 6:
+                return f"{clean_num[:3]}-{clean_num[3:]}"
+            elif length <= 10:
+                return f"{clean_num[:3]}-{clean_num[3:6]}-{clean_num[6:]}"
+            else:
+                return f"{clean_num[:3]}-{clean_num[3:7]}-{clean_num[7:11]}"
+        except Exception:
+            return raw_string
+
+    # --- [공통 전화번호부 관리 팝업 레이어 선언 구역] ---
+    popup_phonebook_layer = ft.Container(
+        visible=False,
+        bgcolor=COLOR_OVERLAY,
+        alignment=ft.Alignment(0, 0),
+        expand=True,
+    )
+
+    pb_name_input = ft.TextField(label="이름", hint_text="예: 홍길동")
+    pb_phone_input = ft.TextField(label="전화번호", hint_text="하이픈 없이 입력 가능")
+    pb_memo_input = ft.TextField(label="메모 (선택)", hint_text="예: 오전조")
+    pb_feedback_text = ft.Text("", size=12, color=COLOR_SUCCESS, weight="bold")
+    pb_list_layout = ft.Column(spacing=4, scroll=ft.ScrollMode.AUTO, max_height=200)
+
+    def open_phonebook_popup(e):
+        """버튼 클릭 시 통합 전화번호부 팝업창을 엽니다."""
+        try:
+            pb_name_input.value = ""
+            pb_phone_input.value = ""
+            pb_memo_input.value = ""
+            pb_feedback_text.value = ""
+            redraw_popup_driver_list()
+            popup_phonebook_layer.visible = True
+            page.update()
+        except Exception as ex:
+            print(f"전화번호부 팝업 오픈 에러: {ex}")
+
+    def close_phonebook_popup(e):
+        """전화번호부 팝업창을 닫습니다."""
+        popup_phonebook_layer.visible = False
+        page.update()
+
+    def redraw_popup_driver_list():
+        """팝업창 내에 동료 기사 명단을 새로 고침합니다."""
+        try:
+            pb_list_layout.controls.clear()
+            current_items = load_json_from_storage(STORAGE_DRIVER_CONTACTS, [])
+            for idx, item in enumerate(current_items):
+                def create_pb_delete_handler(target_idx):
+                    return lambda e: remove_pb_driver_item(target_idx)
+                
+                memo_info = f" ({item['memo']})" if item['memo'] else ""
+                pb_list_layout.controls.append(
+                    ft.Row([
+                        ft.Text(f"👤 {item['name']} | {item['phone']}{memo_info}", size=13, expand=True),
+                        ft.IconButton(icon=ft.icons.DELETE, icon_color=COLOR_OFF_TEXT, icon_size=16, on_click=create_pb_delete_handler(idx))
+                    ], alignment="spaceBetween")
+                )
+        except Exception as ex:
+            pb_feedback_text.value = f"목록 갱신 실패: {ex}"
+            pb_feedback_text.color = COLOR_OFF_TEXT
+
+    def add_pb_driver_item(e):
+        """팝업창에서 신규 동료를 검증 및 포맷 완료 후 스토리지에 저장합니다."""
+        try:
+            n_val = pb_name_input.value.strip()
+            p_val = pb_phone_input.value.strip()
+            m_val = pb_memo_input.value.strip()
+
+            if not n_val or not p_val:
+                pb_feedback_text.value = "이름과 전화번호를 입력해주세요."
+                pb_feedback_text.color = COLOR_OFF_TEXT
+                page.update()
+                return
+
+            formatted_phone = format_phone_number(p_val)
+
+            current_items = load_json_from_storage(STORAGE_DRIVER_CONTACTS, [])
+            current_items.append({"name": n_val, "phone": formatted_phone, "memo": m_val})
+            page.client_storage.set(STORAGE_DRIVER_CONTACTS, json.dumps(current_items, ensure_ascii=False))
+
+            pb_name_input.value = ""
+            pb_phone_input.value = ""
+            pb_memo_input.value = ""
+
+            redraw_popup_driver_list()
+            pb_feedback_text.value = "동료가 추가되었습니다."
+            pb_feedback_text.color = COLOR_SUCCESS
+            page.update()
+        except Exception as ex:
+            pb_feedback_text.value = f"추가 실패 오류: {ex}"
+            pb_feedback_text.color = COLOR_OFF_TEXT
+            page.update()
+
+    def remove_pb_driver_item(index):
+        """팝업창 내에서 특정 동료 데이터를 삭제합니다."""
+        try:
+            current_items = load_json_from_storage(STORAGE_DRIVER_CONTACTS, [])
+            if 0 <= index < len(current_items):
+                current_items.pop(index)
+            page.client_storage.set(STORAGE_DRIVER_CONTACTS, json.dumps(current_items, ensure_ascii=False))
+            redraw_popup_driver_list()
+            pb_feedback_text.value = "선택한 동료가 삭제되었습니다."
+            pb_feedback_text.color = COLOR_SUCCESS
+            page.update()
+        except Exception as ex:
+            pb_feedback_text.value = f"삭제 실패 오류: {ex}"
+            pb_feedback_text.color = COLOR_OFF_TEXT
+            page.update()
+
+    popup_phonebook_card = ft.Container(
+        content=ft.Column(
+            [
+                ft.Text("📞 전화번호부 통합 관리", size=16, weight="bold", color=COLOR_DARK_BLUE),
+                ft.Divider(height=1),
+                pb_name_input,
+                pb_phone_input,
+                pb_memo_input,
+                ft.ElevatedButton("동료 저장하기", bgcolor=COLOR_SUCCESS, color="white", on_click=add_pb_driver_item, width=280),
+                pb_feedback_text,
+                ft.Divider(height=2),
+                ft.Text("📋 등록된 동료 명단", size=12, color=COLOR_GREY, weight="bold"),
+                pb_list_layout,
+                ft.Divider(height=1),
+                ft.Row([ft.TextButton("팝업 닫기", on_click=close_phonebook_popup)], alignment="end")
+            ],
+            spacing=6,
+            tight=True,
+        ),
+        bgcolor="white",
+        padding=14,
+        border_radius=12,
+        width=300,
+    )
+    popup_phonebook_layer.content = popup_phonebook_card
+
     # --- [데이터 계산 함수] ---
     def get_mangeun_target():
         """저장된 월별 만근 기준이 있으면 사용하고, 없으면 기본 기준을 반환합니다."""
@@ -206,11 +366,15 @@ def main(page: ft.Page):
         mangeun_dropdown.value = str(m_target)
 
         stats_text.value = f"근무 {work_days}일   휴무 {off_days}일"
+        
+        # [수정 반영] 중복값 표현 제거 및 초과/부족/충족 상태 명확화
         diff = work_days - m_target
-        if diff >= 0:
-            mangeun_text.value = f"만근 {m_target}일 · 기준보다 {diff}일 초과"
+        if diff > 0:
+            mangeun_text.value = f"만근기준 {diff}일 초과"
+        elif diff < 0:
+            mangeun_text.value = f"만근기준 {abs(diff)}일 부족"
         else:
-            mangeun_text.value = f"만근 {m_target}일 · 기준보다 {abs(diff)}일 부족"
+            mangeun_text.value = "만근기준 충족"
 
         calendar_grid.controls.clear()
         cal = calendar.Calendar(firstweekday=6)
@@ -450,9 +614,10 @@ def main(page: ft.Page):
         alignment="spaceBetween",
     )
 
+    # [수정 반영] 하단 설정 영역의 라벨 기재 형식 맞춤 ('만근 기준 설정' ➔ '만근 설정')
     mangeun_setting_row = ft.Row(
         [
-            ft.Text("만근 기준 설정", size=13, weight="bold", color=COLOR_BLACK),
+            ft.Text("만근 설정", size=13, weight="bold", color=COLOR_BLACK),
             mangeun_dropdown,
         ],
         alignment="start",
@@ -477,11 +642,26 @@ def main(page: ft.Page):
         alignment="spaceAround",
     )
 
+    btn_phonebook_trigger = ft.TextButton(
+        "📞 전화번호부", 
+        on_click=open_phonebook_popup, 
+        style=ft.ButtonStyle(color=COLOR_PRIMARY, text_style=ft.TextStyle(size=12, weight="bold"))
+    )
+
+    stats_and_button_row = ft.Row(
+        [
+            stats_text,
+            btn_phonebook_trigger
+        ],
+        alignment="spaceBetween",
+        vertical_alignment="center"
+    )
+
     def get_calendar_view():
         return ft.Column(
             [
                 header_nav,
-                stats_text,
+                stats_and_button_row,
                 mangeun_text,
                 mangeun_setting_row,
                 ft.Divider(height=1),
@@ -512,7 +692,6 @@ def main(page: ft.Page):
     )
 
     def get_settings_view():
-        # 설정 화면을 열 때마다 현재 저장된 근무 형태와 저장 문구 상태를 맞춥니다.
         work_type_radio.value = page.client_storage.get(STORAGE_WORK_TYPE_KEY) or WORK_TYPE_SHIFT
         save_status_text.value = ""
         return ft.Column(
@@ -547,19 +726,15 @@ def main(page: ft.Page):
     # --- [v2.1 신규 활성화 및 안정화: 운행 정보 입력 화면 관리 구역] ---
     # =========================================================================
 
-    # 개별 구역 저장 피드백 안내 레이블
     feedback_labels = {
         "route": ft.Text("", size=12, color=COLOR_SUCCESS, weight="bold"),
         "vehicle": ft.Text("", size=12, color=COLOR_SUCCESS, weight="bold"),
         "neighbors": ft.Text("", size=12, color=COLOR_SUCCESS, weight="bold"),
         "office": ft.Text("", size=12, color=COLOR_SUCCESS, weight="bold"),
-        "drivers": ft.Text("", size=12, color=COLOR_SUCCESS, weight="bold"),
     }
 
-    # [수정 완료] Flet 구버전 호환성을 위해 오류를 유발하던 line_height=1.4 옵션 제거
     summary_text = ft.Text("", size=13, color=COLOR_BLACK)
     
-    # 요약 정보 실시간 리프레시 함수
     def update_summary_box():
         route_num = page.client_storage.get(STORAGE_ROUTE_NUMBER) or "미입력"
         vehicle_map = load_json_from_storage(STORAGE_TODAY_VEHICLE, {})
@@ -585,7 +760,6 @@ def main(page: ft.Page):
         )
 
     def trigger_feedback(target_key):
-        """저장 성공 피드백 메시지를 화면에 즉시 띄우고 요약 박스를 동적으로 갱신합니다."""
         feedback_labels[target_key].value = "저장되었습니다."
         update_summary_box()
         page.update()
@@ -593,28 +767,22 @@ def main(page: ft.Page):
     def get_input_view():
         nonlocal selected_input_date
         
-        # 공용 안전 JSON 스토리지 로더 함수로 대전환 처리 통일
         route_num = page.client_storage.get(STORAGE_ROUTE_NUMBER) or ""
         office_list = load_json_from_storage(STORAGE_PHONEBOOK_OFFICE, [])
-        driver_list = load_json_from_storage(STORAGE_DRIVER_CONTACTS, [])
         vehicle_map = load_json_from_storage(STORAGE_TODAY_VEHICLE, {})
         neighbors_map = load_json_from_storage(STORAGE_NEIGHBOR_VEHICLES, {})
         
-        # 선택 날짜(`selected_input_date`)에 맵핑된 세부 딕셔너리 추출
         today_vehicle = vehicle_map.get(selected_input_date, "")
         today_neighbors = neighbors_map.get(selected_input_date, {
             "front_car": "", "front_driver_name": "", "front_driver_phone": "",
             "back_car": "", "back_driver_name": "", "back_driver_phone": ""
         })
 
-        # 입력 메뉴 재진입 시 기존 저장 완료 메시지 전량 초기화
         for lbl in feedback_labels.values():
             lbl.value = ""
 
-        # 초기 로드 시점에 요약 데이터 세팅
         update_summary_box()
 
-        # 요약 박스 컨테이너 레이아웃 (ft.Container 활용)
         summary_box_container = ft.Container(
             content=summary_text,
             bgcolor="#EFF6FF",
@@ -624,7 +792,6 @@ def main(page: ft.Page):
             margin=ft.margin.only(bottom=10)
         )
 
-        # 상단 날짜 제어 전용 컴포넌트 필드 (모바일 화면 비율 유지 가로폭 180 설정 유지)
         date_display_field = ft.TextField(
             label="선택된 기준 날짜",
             value=selected_input_date,
@@ -638,9 +805,7 @@ def main(page: ft.Page):
         def handle_date_picked(e):
             nonlocal selected_input_date
             if date_picker.value:
-                # 선택된 날짜 문자열 변환 및 할당
                 selected_input_date = date_picker.value.strftime("%Y-%m-%d")
-                # 날짜 변경에 따른 타겟 데이터 동적 리로드 스위칭 후 화면 전체 리빌드
                 content_area.content = get_input_view()
                 page.update()
 
@@ -649,23 +814,19 @@ def main(page: ft.Page):
             last_date=datetime(2030, 12, 31),
             on_change=handle_date_picked
         )
-        # 페이지 리스트 상에 공용 오버레이 등록
         if date_picker not in page.overlay:
             page.overlay.append(date_picker)
 
-        # Web 배포 환경의 안정성을 위해 속성 제어 방식으로 DatePicker 오픈 함수 정의
         def open_date_picker(e):
             date_picker.open = True
             page.update()
 
-        # [1] 노선번호 관리 (불필요한 ft.Row 포장 해제 및 세로 배치 안정화)
         route_field = ft.TextField(label="노선번호 입력", value=route_num, hint_text="예: 143")
         
         def save_route(e):
             page.client_storage.set(STORAGE_ROUTE_NUMBER, route_field.value.strip())
             trigger_feedback("route")
 
-        # [2] 기준 날짜별 차량 번호 관리 (불필요한 ft.Row 포장 해제 및 세로 배치 안정화)
         vehicle_field = ft.TextField(label="오늘 운행 차량 번호", value=today_vehicle, hint_text="예: 1234호")
         
         def save_today_vehicle(e):
@@ -674,16 +835,20 @@ def main(page: ft.Page):
             page.client_storage.set(STORAGE_TODAY_VEHICLE, json.dumps(v_map, ensure_ascii=False))
             trigger_feedback("vehicle")
 
-        # [3] 동료 기사 Dropdown 명단 옵션 가공 (메모 결합형 보강)
         def make_driver_dropdown_options():
-            current_drivers = load_json_from_storage(STORAGE_DRIVER_CONTACTS, [])
-            opts = [ft.dropdown.Option("", "직접 입력 (목록에 없음)")]
-            for d in current_drivers:
-                display_label = f"{d['name']} ({d['phone']} / {d['memo']})" if d.get('memo') else f"{d['name']} ({d['phone']})"
-                opts.append(ft.dropdown.Option(f"{d['name']}/{d['phone']}", display_label))
-            return opts
+            try:
+                current_drivers = load_json_from_storage(STORAGE_DRIVER_CONTACTS, [])
+                if not current_drivers:
+                    return [ft.dropdown.Option("", "전화번호부에 등록된 동료가 없습니다.")]
+                
+                opts = [ft.dropdown.Option("", "직접 입력 (목록에서 선택)")]
+                for d in current_drivers:
+                    display_label = f"{d['name']} ({d['phone']} / {d['memo']})" if d.get('memo') else f"{d['name']} ({d['phone']})"
+                    opts.append(ft.dropdown.Option(f"{d['name']}/{d['phone']}", display_label))
+                return opts
+            except Exception:
+                return [ft.dropdown.Option("", "직접 입력 (목록에서 선택)")]
 
-        # 앞차/뒷차 세로형 TextField 컴포넌트 유지
         front_car_field = ft.TextField(label="차량번호", value=today_neighbors.get("front_car", ""), hint_text="예: 2694")
         front_driver_name_field = ft.TextField(label="운전자 이름", value=today_neighbors.get("front_driver_name", ""), hint_text="예: 선명구")
         front_driver_phone_field = ft.TextField(label="전화번호", value=today_neighbors.get("front_driver_phone", ""), hint_text="예: 010-0000-0000")
@@ -691,6 +856,52 @@ def main(page: ft.Page):
         back_car_field = ft.TextField(label="차량번호", value=today_neighbors.get("back_car", ""), hint_text="예: 2745")
         back_driver_name_field = ft.TextField(label="운전자 이름", value=today_neighbors.get("back_driver_name", ""), hint_text="예: 이청일")
         back_driver_phone_field = ft.TextField(label="전화번호", value=today_neighbors.get("back_driver_phone", ""), hint_text="예: 010-0000-0000")
+
+        def handle_front_selection(e):
+            try:
+                if front_driver_dd.value:
+                    name, phone = front_driver_dd.value.split("/")
+                    front_driver_name_field.value = name
+                    front_driver_phone_field.value = phone
+                else:
+                    front_driver_name_field.value = ""
+                    front_driver_phone_field.value = ""
+                page.update()
+            except Exception:
+                pass
+
+        def handle_back_selection(e):
+            try:
+                if back_driver_dd.value:
+                    name, phone = back_driver_dd.value.split("/")
+                    back_driver_name_field.value = name
+                    back_driver_phone_field.value = phone
+                else:
+                    back_driver_name_field.value = ""
+                    back_driver_phone_field.value = ""
+                page.update()
+            except Exception:
+                pass
+
+        driver_dropdown_options = make_driver_dropdown_options()
+        front_driver_dd = ft.Dropdown(label="등록된 동료 기사 선택 (앞차)", options=driver_dropdown_options, on_change=handle_front_selection, value="")
+        back_driver_dd = ft.Dropdown(label="등록된 동료 기사 선택 (뒷차)", options=driver_dropdown_options, on_change=handle_back_selection, value="")
+
+        def save_neighbors(e):
+            try:
+                n_map = load_json_from_storage(STORAGE_NEIGHBOR_VEHICLES, {})
+                n_map[selected_input_date] = {
+                    "front_car": front_car_field.value.strip(),
+                    "front_driver_name": front_driver_name_field.value.strip(),
+                    "front_driver_phone": front_driver_phone_field.value.strip(),
+                    "back_car": back_car_field.value.strip(),
+                    "back_driver_name": back_driver_name_field.value.strip(),
+                    "back_driver_phone": back_driver_phone_field.value.strip()
+                }
+                page.client_storage.set(STORAGE_NEIGHBOR_VEHICLES, json.dumps(n_map, ensure_ascii=False))
+                trigger_feedback("neighbors")
+            except Exception:
+                pass
 
         front_info_card = ft.Container(
             content=ft.Column([
@@ -720,44 +931,6 @@ def main(page: ft.Page):
             bgcolor="#F8FAFC"
         )
 
-        def handle_front_selection(e):
-            if front_driver_dd.value:
-                name, phone = front_driver_dd.value.split("/")
-                front_driver_name_field.value = name
-                front_driver_phone_field.value = phone
-            else:
-                front_driver_name_field.value = ""
-                front_driver_phone_field.value = ""
-            page.update()
-
-        def handle_back_selection(e):
-            if back_driver_dd.value:
-                name, phone = back_driver_dd.value.split("/")
-                back_driver_name_field.value = name
-                back_driver_phone_field.value = phone
-            else:
-                back_driver_name_field.value = ""
-                back_driver_phone_field.value = ""
-            page.update()
-
-        driver_dropdown_options = make_driver_dropdown_options()
-        front_driver_dd = ft.Dropdown(label="등록된 동료 기사 선택 (앞차)", options=driver_dropdown_options, on_change=handle_front_selection)
-        back_driver_dd = ft.Dropdown(label="등록된 동료 기사 선택 (뒷차)", options=driver_dropdown_options, on_change=handle_back_selection)
-
-        def save_neighbors(e):
-            n_map = load_json_from_storage(STORAGE_NEIGHBOR_VEHICLES, {})
-            n_map[selected_input_date] = {
-                "front_car": front_car_field.value.strip(),
-                "front_driver_name": front_driver_name_field.value.strip(),
-                "front_driver_phone": front_driver_phone_field.value.strip(),
-                "back_car": back_car_field.value.strip(),
-                "back_driver_name": back_driver_name_field.value.strip(),
-                "back_driver_phone": back_driver_phone_field.value.strip()
-            }
-            page.client_storage.set(STORAGE_NEIGHBOR_VEHICLES, json.dumps(n_map, ensure_ascii=False))
-            trigger_feedback("neighbors")
-
-        # [4] 사무실/정비고 연락처 구역 (가로 Row에서 완벽한 수직 세로 배치 구조로 재구성)
         office_list_layout = ft.Column(spacing=4)
         office_type_input = ft.TextField(label="구분", hint_text="예: 정비고")
         office_phone_input = ft.TextField(label="전화번호", hint_text="예: 02-1234-5678")
@@ -807,8 +980,11 @@ def main(page: ft.Page):
             t_val = office_type_input.value.strip()
             p_val = office_phone_input.value.strip()
             if not t_val or not p_val: return
+            
+            formatted_office_phone = format_phone_number(p_val)
+
             current_items = load_json_from_storage(STORAGE_PHONEBOOK_OFFICE, [])
-            current_items.append({"type": t_val, "phone": p_val})
+            current_items.append({"type": t_val, "phone": formatted_office_phone})
             page.client_storage.set(STORAGE_PHONEBOOK_OFFICE, json.dumps(current_items, ensure_ascii=False))
             office_type_input.value, office_phone_input.value = "", ""
             redraw_office_list(update_page=True)
@@ -821,62 +997,11 @@ def main(page: ft.Page):
             page.client_storage.set(STORAGE_PHONEBOOK_OFFICE, json.dumps(current_items, ensure_ascii=False))
             redraw_office_list(update_page=True)
 
-        # [5] 동료운전자 인명부 관리 구역 (기존 완료된 세로 배치 레이아웃 준수)
-        driver_list_layout = ft.Column(spacing=4)
-        drv_name_input = ft.TextField(label="이름", hint_text="예: 홍길동")
-        drv_phone_input = ft.TextField(label="전화번호", hint_text="예: 010-1234-5678")
-        drv_memo_input = ft.TextField(label="메모 (선택)", hint_text="예: 오전조")
-
-        def redraw_driver_list(update_page=True):
-            driver_list_layout.controls.clear()
-            current_items = load_json_from_storage(STORAGE_DRIVER_CONTACTS, [])
-            for idx, item in enumerate(current_items):
-                def create_driver_delete_handler(target_idx):
-                    return lambda e: raise_confirm_dialog(
-                        "이 항목을 삭제하시겠습니까?", 
-                        lambda: remove_driver_item(target_idx)
-                    )
-                memo_info = f" ({item['memo']})" if item['memo'] else ""
-                driver_list_layout.controls.append(
-                    ft.Row([
-                        ft.Text(f"👤 {item['name']} | {item['phone']}{memo_info}", size=13, expand=True),
-                        ft.IconButton(icon=ft.icons.DELETE, icon_color=COLOR_OFF_TEXT, icon_size=16, on_click=create_driver_delete_handler(idx))
-                    ], alignment="spaceBetween")
-                )
-            fresh_options = make_driver_dropdown_options()
-            front_driver_dd.options = fresh_options
-            back_driver_dd.options = fresh_options
-            if update_page:
-                page.update()
-
-        def add_driver_item(e):
-            n_val = drv_name_input.value.strip()
-            p_val = drv_phone_input.value.strip()
-            m_val = drv_memo_input.value.strip()
-            if not n_val or not p_val: return
-            current_items = load_json_from_storage(STORAGE_DRIVER_CONTACTS, [])
-            current_items.append({"name": n_val, "phone": p_val, "memo": m_val})
-            page.client_storage.set(STORAGE_DRIVER_CONTACTS, json.dumps(current_items, ensure_ascii=False))
-            drv_name_input.value, drv_phone_input.value, drv_memo_input.value = "", "", ""
-            redraw_driver_list(update_page=True)
-            trigger_feedback("drivers")
-
-        def remove_driver_item(index):
-            current_items = load_json_from_storage(STORAGE_DRIVER_CONTACTS, [])
-            if 0 <= index < len(current_items):
-                current_items.pop(index)
-            page.client_storage.set(STORAGE_DRIVER_CONTACTS, json.dumps(current_items, ensure_ascii=False))
-            redraw_driver_list(update_page=True)
-
-        # 최초 생성 및 데이터 바인딩 시점에는 아직 화면에 달라붙기 전이므로 page.update()를 명시적으로 생략 처리
         redraw_office_list(update_page=False)
-        redraw_driver_list(update_page=False)
 
-        # 입력 전용 뷰 콤팩트 세로 배치 레이아웃 조립 반환
         return ft.Column([
             ft.Text("운행 정보 입력", size=22, weight="bold", color=COLOR_BLACK),
             
-            # 날짜 선택기 Row 구역 (텍스트 필드 너비를 180으로 최적화하여 캘린더 아이콘과 예쁘게 동행 처리)
             ft.Row([
                 date_display_field,
                 ft.IconButton(
@@ -888,10 +1013,8 @@ def main(page: ft.Page):
             ], alignment="start", vertical_alignment="center"),
             ft.Divider(height=10, color=COLOR_TRANSPARENT),
             
-            # 선택 날짜 운행 요약 박스 배치 위치 (노선번호 카드 바로 위)
             summary_box_container,
             
-            # 노선번호 관리 카드 섹션 (완전한 TextField 단독 세로 정렬화)
             ft.Card(ft.Container(ft.Column([
                 ft.Text("🚍 노선번호 관리", size=14, weight="bold", color=COLOR_DARK_BLUE),
                 route_field,
@@ -899,7 +1022,6 @@ def main(page: ft.Page):
                 feedback_labels["route"]
             ], spacing=8), padding=10)),
 
-            # 당일 배차 차량번호 등록 관리 카드 섹션 (완전한 TextField 단독 세로 정렬화)
             ft.Card(ft.Container(ft.Column([
                 ft.Text("🔑 해당 일자 운행 차량 번호 입력", size=14, weight="bold", color=COLOR_DARK_BLUE),
                 vehicle_field,
@@ -907,7 +1029,6 @@ def main(page: ft.Page):
                 feedback_labels["vehicle"]
             ], spacing=8), padding=10)),
 
-            # 앞차/뒷차 연계 정보 연동 등록 관리 카드 섹션 (세로형 카드 텍스트 필드 구조 보존)
             ft.Card(ft.Container(ft.Column([
                 ft.Text("↔️ 앞차 / 뒷차 운행 정보 연계", size=14, weight="bold", color=COLOR_DARK_BLUE),
                 front_driver_dd,
@@ -919,7 +1040,6 @@ def main(page: ft.Page):
                 feedback_labels["neighbors"]
             ], spacing=8), padding=10)),
 
-            # 실무 연락처 전화번호부 관리 카드 섹션 (구분과 전화번호를 시원한 단독 세로 배치화)
             ft.Card(ft.Container(ft.Column([
                 ft.Text("☎️ 사무실 / 정비고 / AS 연락처 등록", size=14, weight="bold", color=COLOR_DARK_BLUE),
                 office_type_input,
@@ -929,20 +1049,8 @@ def main(page: ft.Page):
                 ft.Divider(height=1),
                 office_list_layout
             ], spacing=8), padding=10)),
-
-            # 동료 기사단 인명 연락망 관리 카드 섹션 (기존 세로형 텍스트 필드 구조 완벽 보존)
-            ft.Card(ft.Container(ft.Column([
-                ft.Text("👥 동료운전자 비상 연락망 등록", size=14, weight="bold", color=COLOR_DARK_BLUE),
-                drv_name_input,
-                drv_phone_input,
-                drv_memo_input,
-                ft.ElevatedButton("동료 추가하기", width=280, height=42, bgcolor=COLOR_SUCCESS, color="white", on_click=add_driver_item),
-                feedback_labels["drivers"],
-                ft.Divider(height=1),
-                driver_list_layout
-            ], spacing=8), padding=10)),
             
-            ft.Container(height=30)  # 스크롤 최하단 탭 가림 현상 방지 공백
+            ft.Container(height=30)
         ], expand=True, scroll=ft.ScrollMode.AUTO)
 
     # --- [하단 탭 메뉴 전환 확장 분기 연동] ---
@@ -1004,7 +1112,6 @@ def main(page: ft.Page):
         alignment="spaceAround",
     )
 
-    # 최초 실행 진입점은 달력 화면입니다.
     content_area.content = get_calendar_view()
 
     main_layout = ft.Column(
@@ -1016,7 +1123,7 @@ def main(page: ft.Page):
         expand=True,
     )
 
-    page.add(ft.Stack([main_layout, popup_layer], expand=True))
+    page.add(ft.Stack([main_layout, popup_layer, popup_phonebook_layer], expand=True))
     rebuild_interface()
 
 
