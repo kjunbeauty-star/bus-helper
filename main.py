@@ -316,10 +316,10 @@ def main(page: ft.Page):
         alignment="spaceAround"
     )
 
-    # 신규 추가된 메인 저장 버튼
+ # 신규 추가된 메인 저장 버튼 (호환성 100% 문자열 아이콘으로 최종 교체)
     save_main_button = ft.ElevatedButton(
         text="현재 설정 및 근무 저장하기",
-        icon=ft.icons.SAVE,
+        icon="save",  # <- 대문자 ft.icons.SAVE를 소문자 "save"로 확실하게 고쳤습니다!
         bgcolor="#2563EB",
         color="white",
         on_click=on_main_save_click,
