@@ -14,7 +14,6 @@ STORAGE_SCHEDULES_KEY = "bus_helper_schedules"
 STORAGE_MANGEUN_KEY = "bus_helper_mangeun_targets"
 
 # --- [SQLite3 데이터베이스 제어 함수] ---
-
 def init_db():
     """앱 시작 시 데이터베이스와 테이블을 생성하고 초기화합니다."""
     conn = sqlite3.connect(DB_FILE)
@@ -50,7 +49,7 @@ def load_schedules_from_db():
     
     schedules = {}
     for row in rows:
-        schedules[row[0]] = {"status": row[1], "start_time": row[2]}
+        schedules[row[0]] = {"status": row[1], "start_time": row[2], "order_no": ""}
     return schedules
 
 def load_mangeun_targets_from_db():
@@ -103,12 +102,13 @@ def main(page: ft.Page):
     page.theme_mode = "light"
     page.padding = 4
 
-    # 폰/브라우저 저장소에서 기존 데이터 로드
+    # 폰/브라우저 저장소에서 기존 데이터 로드[cite: 2]
     saved_schedules = page.client_storage.get(STORAGE_SCHEDULES_KEY)
     saved_targets = page.client_storage.get(STORAGE_MANGEUN_KEY)
 
     USER_SCHEDULES = json.loads(saved_schedules) if saved_schedules else {}
     MANGEUN_TARGETS = json.loads(saved_targets) if saved_targets else {}
+    
     def save_all_to_client_storage():
         """현재 근무표와 만근 기준을 폰/브라우저 저장소에 저장합니다."""
         page.client_storage.set(STORAGE_SCHEDULES_KEY, json.dumps(USER_SCHEDULES, ensure_ascii=False))
@@ -126,14 +126,24 @@ def main(page: ft.Page):
     calendar_grid = ft.Column(spacing=2)
     popup_date_title = ft.Text("", size=16, weight="bold", color="black", text_align="center")
     
-    # 만근 기준 드롭다운 값 변경 시 SQLite 실시간 저장
+    # 순번 입력을 위한 텍스트 필드 컴포넌트[cite: 2]
+    order_input = ft.TextField(
+        label="배차 순번 (숫자 입력)",
+        hint_text="예: 3",
+        keyboard_type=ft.KeyboardType.NUMBER,
+        width=140,
+        height=40,
+        text_size=13,
+        content_padding=10
+    )
+    
+    # 만근 기준 드롭다운 값 변경 시 실시간 저장[cite: 2]
     def on_mangeun_dropdown_changed(e):
         try:
             val = int(mangeun_dropdown.value)
             key = f"{current['year']}_{current['month']}"
             MANGEUN_TARGETS[key] = val
             
-            # DB에 즉시 저장
             save_all_to_client_storage()
             rebuild_interface()
         except (ValueError, TypeError):
@@ -149,7 +159,7 @@ def main(page: ft.Page):
         on_change=on_mangeun_dropdown_changed
     )
 
-    # 24시간제 다이얼
+    # 24시간제 다이얼[cite: 2]
     hour_picker = ft.CupertinoPicker(
         controls=[ft.Text(f"{i:02d}", size=20) for i in range(24)],
         selected_index=5,
@@ -191,7 +201,7 @@ def main(page: ft.Page):
         expand=True
     )
 
-    # 2. 데이터 제어 함수
+    # 2. 데이터 제어 함수[cite: 2]
     def get_mangeun_target():
         try:
             y, m = int(current['year']), int(current['month'])
@@ -203,7 +213,7 @@ def main(page: ft.Page):
         except:
             return 22
 
-    # 3. 화면 리빌드 함수 (GMT+9 서울 시간 고정 및 DB 캐시 매칭)
+    # 3. 화면 리빌드 함수 (근무명 + 순번 결합 로직 탑재)[cite: 2]
     def rebuild_interface():
         nonlocal USER_SCHEDULES, MANGEUN_TARGETS
 
@@ -239,26 +249,32 @@ def main(page: ft.Page):
             week_row = ft.Row(alignment="spaceAround", spacing=2)
             for day in week:
                 if day == 0:
-                    week_row.controls.append(ft.Container(expand=1, height=46))
+                    week_row.controls.append(ft.Container(expand=1, height=48)) # 높이 최적화
                 else:
                     date_obj = datetime(current['year'], current['month'], day)
                     weekday = date_obj.weekday()   # 월=0 ... 토=5, 일=6
                     date_key = f"{current['year']}-{current['month']:02d}-{day:02d}"
-                    day_info = month_data.get(date_key, {"status": "", "start_time": ""})
+                    day_info = month_data.get(date_key, {"status": "", "start_time": "", "order_no": ""})
                     
                     status = day_info.get("status", "")
                     start_time = day_info.get("start_time", "")
+                    order_no = day_info.get("order_no", "")
                     
                     bg_color = "#FFFFFF"
                     text_color = "#000000"
                     status_desc = ""
                     
+                    # 근무명과 순번을 조건에 맞게 결합하여 한 줄로 표기
                     if status == "오전":
-                        bg_color = "#D2E3FC"; text_color = "#1A73E8"; status_desc = "오전"
+                        bg_color = "#D2E3FC"; text_color = "#1A73E8"
+                        status_desc = f"오전({order_no})" if order_no else "오전"
                     elif status == "오후":
-                        bg_color = "#E9D5FF"; text_color = "#7E22CE"; status_desc = "오후"
+                        bg_color = "#E9D5FF"; text_color = "#7E22CE"
+                        status_desc = f"오후({order_no})" if order_no else "오후"
                     elif status == "휴무":
-                        bg_color = "#FCE8E6"; text_color = "#D93025"; status_desc = "휴무"
+                        bg_color = "#FCE8E6"; text_color = "#D93025"
+                        status_desc = "휴무" # 휴무는 순번 결합에서 제외
+                        
                     if weekday == 6:
                         day_number_color = "#D93025"
                     elif weekday == 5:
@@ -275,8 +291,8 @@ def main(page: ft.Page):
                         content=ft.Column(
                             [
                                 ft.Text(f"{day}", size=12, weight="bold", color=day_number_color),
-                                ft.Text(status_desc, size=10, weight="bold", color=text_color),
-                                time_display
+                                ft.Text(status_desc, size=9, weight="bold", color=text_color),
+                                time_display,
                             ],
                             alignment="center",
                             horizontal_alignment="center",
@@ -285,7 +301,7 @@ def main(page: ft.Page):
                         bgcolor=bg_color,
                         border=day_border,
                         border_radius=4,
-                        height=46,
+                        height=48, # 한 줄 제거에 맞춰 62 -> 48로 콤팩트하게 줄임
                         expand=1,
                         on_click=lambda e, dk=date_key: open_input_popup(dk)
                     )
@@ -293,13 +309,16 @@ def main(page: ft.Page):
             calendar_grid.controls.append(week_row)
         page.update()
 
-    # 4. 팝업창 제어 및 SQLite 실시간 동기화 자동 저장 함수
+    # 4. 팝업창 제어 및 데이터 동기화 자동 저장 함수[cite: 2]
     def open_input_popup(date_key):
         current["selected_date"] = date_key
         popup_date_title.value = f"{date_key}\n근무를 선택하거나 시간을 맞추세요"
         
         day_info = USER_SCHEDULES.get(date_key, {})
         current_time = day_info.get("start_time", "")
+        current_order = day_info.get("order_no", "")
+        
+        order_input.value = str(current_order) if current_order else ""
         
         if current_time and ":" in current_time:
             h, m = map(int, current_time.split(":"))
@@ -319,6 +338,7 @@ def main(page: ft.Page):
     def select_status_and_save(status_value):
         target_date = current["selected_date"]
         
+        # 선택취소 시 전체 데이터 제거[cite: 2]
         if status_value == "선택취소":
             USER_SCHEDULES.pop(target_date, None)
             save_all_to_client_storage()
@@ -338,13 +358,24 @@ def main(page: ft.Page):
         else:
             final_time = ""
 
-        USER_SCHEDULES[target_date] = {"status": status_value, "start_time": final_time}
+        # 휴무 등록 시 요구사항에 맞춰 순번을 강제로 빈 문자열("") 지정 처리
+        if status_value == "휴무":
+            input_order = ""
+        else:
+            input_order = order_input.value.strip()
+
+        # 데이터 세트 저장[cite: 2]
+        USER_SCHEDULES[target_date] = {
+            "status": status_value, 
+            "start_time": final_time,
+            "order_no": input_order
+        }
         save_all_to_client_storage()
         
         popup_layer.visible = False  
         rebuild_interface()          
 
-    # 5. 팝업창 디자인 구성
+    # 5. 팝업창 디자인 구성[cite: 2]
     popup_card = ft.Container(
         content=ft.Column(
             [
@@ -357,6 +388,18 @@ def main(page: ft.Page):
                     on_click=lambda e: select_status_and_save("자동")
                 ),
                 ft.Divider(height=2),
+                
+                # 순번 입력 라인
+                ft.Row(
+                    [
+                        ft.Text("근무 순번:", size=12, weight="bold", color="black"),
+                        order_input
+                    ],
+                    alignment="center",
+                    spacing=10
+                ),
+                ft.Divider(height=2),
+                
                 ft.Text("시간 없이 근무만 등록할 때:", size=11, weight="bold", color="grey"),
                 ft.Container(
                     content=ft.Text("휴무 지정", size=15, weight="bold", color="white"),
@@ -394,7 +437,7 @@ def main(page: ft.Page):
     )
     popup_layer.content = popup_card
 
-    # 상하단 레이아웃
+    # 상하단 레이아웃[cite: 2]
     def move_prev(e):
         current["month"] -= 1
         if current["month"] == 0: current["month"] = 12; current["year"] -= 1
@@ -434,7 +477,7 @@ def main(page: ft.Page):
         alignment="spaceAround"
     )
 
-    # 하단 메뉴 컴포넌트 선언
+    # 하단 메뉴 컴포넌트 선언[cite: 2]
     bottom_navigation_bar = ft.Row(
         [
             ft.TextButton("달력", style=ft.ButtonStyle(color="#2563EB"), expand=1, height=36),
@@ -445,7 +488,7 @@ def main(page: ft.Page):
         alignment="spaceAround"
     )
 
-    # 상단 컨텐츠 전용 스크롤 레이아웃 (달력 화면 구성요소만 깔끔하게 보관)
+    # 상단 컨텐츠 전용 스크롤 레이아웃
     scrollable_content = ft.Column(
         [
             header_nav,
@@ -461,12 +504,12 @@ def main(page: ft.Page):
         scroll=ft.ScrollMode.AUTO
     )
 
-    # 전체 화면 배치 구조 최적화 (하단 메뉴를 최하단에 항상 단단히 고정)
+    # 전체 화면 배치 구조 최적화[cite: 2]
     main_layout = ft.Column(
         [
-            scrollable_content,       # 상단 본문 스트리밍
-            ft.Divider(height=1),     # 구분선
-            bottom_navigation_bar     # 하단 고정 메뉴
+            scrollable_content,       
+            ft.Divider(height=1),     
+            bottom_navigation_bar     
         ],
         expand=True
     )
