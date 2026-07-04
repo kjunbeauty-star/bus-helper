@@ -126,15 +126,14 @@ def main(page: ft.Page):
     calendar_grid = ft.Column(spacing=2)
     popup_date_title = ft.Text("", size=16, weight="bold", color="black", text_align="center")
     
-    # 순번 입력을 위한 텍스트 필드 컴포넌트[cite: 2]
-    order_input = ft.TextField(
-        label="배차 순번 (숫자 입력)",
-        hint_text="예: 3",
-        keyboard_type=ft.KeyboardType.NUMBER,
+    # [수정] 순번 입력을 TextField에서 Dropdown 방식으로 전환
+    order_options = [ft.dropdown.Option("", "선택 안 함")] + [ft.dropdown.Option(str(i), f"{i}번") for i in range(1, 51)]
+    order_dropdown = ft.Dropdown(
+        options=order_options,
         width=140,
         height=40,
         text_size=13,
-        content_padding=10
+        content_padding=ft.padding.symmetric(vertical=4, horizontal=10),
     )
     
     # 만근 기준 드롭다운 값 변경 시 실시간 저장[cite: 2]
@@ -213,7 +212,7 @@ def main(page: ft.Page):
         except:
             return 22
 
-    # 3. 화면 리빌드 함수 (근무명 + 순번 결합 로직 탑재)[cite: 2]
+    # 3. 화면 리빌드 함수 (근무명 + 순번 결합 형태)[cite: 2]
     def rebuild_interface():
         nonlocal USER_SCHEDULES, MANGEUN_TARGETS
 
@@ -249,7 +248,7 @@ def main(page: ft.Page):
             week_row = ft.Row(alignment="spaceAround", spacing=2)
             for day in week:
                 if day == 0:
-                    week_row.controls.append(ft.Container(expand=1, height=48)) # 높이 최적화
+                    week_row.controls.append(ft.Container(expand=1, height=48))
                 else:
                     date_obj = datetime(current['year'], current['month'], day)
                     weekday = date_obj.weekday()   # 월=0 ... 토=5, 일=6
@@ -264,7 +263,6 @@ def main(page: ft.Page):
                     text_color = "#000000"
                     status_desc = ""
                     
-                    # 근무명과 순번을 조건에 맞게 결합하여 한 줄로 표기
                     if status == "오전":
                         bg_color = "#D2E3FC"; text_color = "#1A73E8"
                         status_desc = f"오전({order_no})" if order_no else "오전"
@@ -273,7 +271,7 @@ def main(page: ft.Page):
                         status_desc = f"오후({order_no})" if order_no else "오후"
                     elif status == "휴무":
                         bg_color = "#FCE8E6"; text_color = "#D93025"
-                        status_desc = "휴무" # 휴무는 순번 결합에서 제외
+                        status_desc = "휴무"
                         
                     if weekday == 6:
                         day_number_color = "#D93025"
@@ -291,7 +289,7 @@ def main(page: ft.Page):
                         content=ft.Column(
                             [
                                 ft.Text(f"{day}", size=12, weight="bold", color=day_number_color),
-                                ft.Text(status_desc, size=9, weight="bold", color=text_color),
+                                ft.Text(status_desc, size=10, weight="bold", color=text_color),
                                 time_display,
                             ],
                             alignment="center",
@@ -301,7 +299,7 @@ def main(page: ft.Page):
                         bgcolor=bg_color,
                         border=day_border,
                         border_radius=4,
-                        height=48, # 한 줄 제거에 맞춰 62 -> 48로 콤팩트하게 줄임
+                        height=48,
                         expand=1,
                         on_click=lambda e, dk=date_key: open_input_popup(dk)
                     )
@@ -318,7 +316,8 @@ def main(page: ft.Page):
         current_time = day_info.get("start_time", "")
         current_order = day_info.get("order_no", "")
         
-        order_input.value = str(current_order) if current_order else ""
+        # [수정] 기존 데이터 매칭 루틴을 드롭다운 바인딩으로 전환
+        order_dropdown.value = str(current_order) if current_order else ""
         
         if current_time and ":" in current_time:
             h, m = map(int, current_time.split(":"))
@@ -338,7 +337,6 @@ def main(page: ft.Page):
     def select_status_and_save(status_value):
         target_date = current["selected_date"]
         
-        # 선택취소 시 전체 데이터 제거[cite: 2]
         if status_value == "선택취소":
             USER_SCHEDULES.pop(target_date, None)
             save_all_to_client_storage()
@@ -358,13 +356,12 @@ def main(page: ft.Page):
         else:
             final_time = ""
 
-        # 휴무 등록 시 요구사항에 맞춰 순번을 강제로 빈 문자열("") 지정 처리
+        # [수정] 드롭다운 기반 순번 추출 및 휴무 예외 처리
         if status_value == "휴무":
             input_order = ""
         else:
-            input_order = order_input.value.strip()
+            input_order = order_dropdown.value if order_dropdown.value else ""
 
-        # 데이터 세트 저장[cite: 2]
         USER_SCHEDULES[target_date] = {
             "status": status_value, 
             "start_time": final_time,
@@ -389,11 +386,11 @@ def main(page: ft.Page):
                 ),
                 ft.Divider(height=2),
                 
-                # 순번 입력 라인
+                # [수정] 순번 드롭다운 배치 라인
                 ft.Row(
                     [
                         ft.Text("근무 순번:", size=12, weight="bold", color="black"),
-                        order_input
+                        order_dropdown
                     ],
                     alignment="center",
                     spacing=10
