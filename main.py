@@ -556,9 +556,38 @@ def main(page: ft.Page):
         "drivers": ft.Text("", size=12, color=COLOR_SUCCESS, weight="bold"),
     }
 
+    # "선택 날짜 운행 요약" 박스 텍스트 컴포넌트 선언
+    summary_text = ft.Text("", size=13, color=COLOR_BLACK, line_height=1.4)
+    
+    # 요약 정보 실시간 리프레시 함수
+    def update_summary_box():
+        route_num = page.client_storage.get(STORAGE_ROUTE_NUMBER) or "미입력"
+        vehicle_map = load_json_from_storage(STORAGE_TODAY_VEHICLE, {})
+        neighbors_map = load_json_from_storage(STORAGE_NEIGHBOR_VEHICLES, {})
+        
+        today_vehicle = vehicle_map.get(selected_input_date, "미입력")
+        today_neighbors = neighbors_map.get(selected_input_date, {})
+        
+        f_car = today_neighbors.get("front_car") or "미입력"
+        f_name = today_neighbors.get("front_driver_name") or "미입력"
+        f_phone = today_neighbors.get("front_driver_phone") or "미입력"
+        
+        b_car = today_neighbors.get("back_car") or "미입력"
+        b_name = today_neighbors.get("back_driver_name") or "미입력"
+        b_phone = today_neighbors.get("back_driver_phone") or "미입력"
+        
+        summary_text.value = (
+            f"📅 {selected_input_date} 운행 정보\n"
+            f"노선: {route_num}\n"
+            f"내 차량: {today_vehicle + '호' if today_vehicle != '미입력' and not today_vehicle.endswith('호') else today_vehicle}\n"
+            f"앞차: {f_car} / {f_name} / {f_phone}\n"
+            f"뒷차: {b_car} / {b_name} / {b_phone}"
+        )
+
     def trigger_feedback(target_key):
-        """저장 성공 피드백 메시지를 화면에 즉시 띄웁니다."""
+        """저장 성공 피드백 메시지를 화면에 즉시 띄우고 요약 박스를 동적으로 갱신합니다."""
         feedback_labels[target_key].value = "저장되었습니다."
+        update_summary_box()
         page.update()
 
     def get_input_view():
@@ -582,7 +611,20 @@ def main(page: ft.Page):
         for lbl in feedback_labels.values():
             lbl.value = ""
 
-        # 상단 날짜 제어 전용 컴포넌트 필드
+        # 초기 로드 시점에 요약 데이터 세팅
+        update_summary_box()
+
+        # 요약 박스 컨테이너 레이아웃 (ft.Container 활용)
+        summary_box_container = ft.Container(
+            content=summary_text,
+            bgcolor="#EFF6FF",
+            border=ft.border.all(1, "#BFDBFE"),
+            border_radius=8,
+            padding=12,
+            margin=ft.margin.only(bottom=10)
+        )
+
+        # 상단 날짜 제어 전용 컴포넌트 필드 (모바일 화면 비율 유지 가로폭 180 설정 유지)
         date_display_field = ft.TextField(
             label="선택된 기준 날짜",
             value=selected_input_date,
@@ -611,20 +653,20 @@ def main(page: ft.Page):
         if date_picker not in page.overlay:
             page.overlay.append(date_picker)
 
-        # [수정] Web 배포 환경의 안정성을 위해 속성 제어 방식으로 DatePicker 오픈 함수 정의
+        # Web 배포 환경의 안정성을 위해 속성 제어 방식으로 DatePicker 오픈 함수 정의
         def open_date_picker(e):
             date_picker.open = True
             page.update()
 
-        # [1] 노선번호 관리
-        route_field = ft.TextField(label="노선번호 입력", value=route_num, hint_text="예: 143", expand=True)
+        # [1] 노선번호 관리 (불필요한 ft.Row 포장 해제 및 세로 배치 안정화)
+        route_field = ft.TextField(label="노선번호 입력", value=route_num, hint_text="예: 143")
         
         def save_route(e):
             page.client_storage.set(STORAGE_ROUTE_NUMBER, route_field.value.strip())
             trigger_feedback("route")
 
-        # [2] 기준 날짜별 차량 번호 관리
-        vehicle_field = ft.TextField(label="오늘 운행 차량 번호", value=today_vehicle, hint_text="예: 1234호", expand=True)
+        # [2] 기준 날짜별 차량 번호 관리 (불필요한 ft.Row 포장 해제 및 세로 배치 안정화)
+        vehicle_field = ft.TextField(label="오늘 운행 차량 번호", value=today_vehicle, hint_text="예: 1234호")
         
         def save_today_vehicle(e):
             v_map = load_json_from_storage(STORAGE_TODAY_VEHICLE, {})
@@ -641,13 +683,42 @@ def main(page: ft.Page):
                 opts.append(ft.dropdown.Option(f"{d['name']}/{d['phone']}", display_label))
             return opts
 
-        front_car_field = ft.TextField(label="앞차 차량번호", value=today_neighbors.get("front_car", ""), expand=1)
-        front_driver_name_field = ft.TextField(label="앞차 운전자 이름", value=today_neighbors.get("front_driver_name", ""), expand=1)
-        front_driver_phone_field = ft.TextField(label="앞차 전화번호", value=today_neighbors.get("front_driver_phone", ""), expand=1)
+        # 앞차/뒷차 세로형 TextField 컴포넌트 유지
+        front_car_field = ft.TextField(label="차량번호", value=today_neighbors.get("front_car", ""), hint_text="예: 2694")
+        front_driver_name_field = ft.TextField(label="운전자 이름", value=today_neighbors.get("front_driver_name", ""), hint_text="예: 선명구")
+        front_driver_phone_field = ft.TextField(label="전화번호", value=today_neighbors.get("front_driver_phone", ""), hint_text="예: 010-0000-0000")
         
-        back_car_field = ft.TextField(label="뒷차 차량번호", value=today_neighbors.get("back_car", ""), expand=1)
-        back_driver_name_field = ft.TextField(label="뒷차 운전자 이름", value=today_neighbors.get("back_driver_name", ""), expand=1)
-        back_driver_phone_field = ft.TextField(label="뒷차 전화번호", value=today_neighbors.get("back_driver_phone", ""), expand=1)
+        back_car_field = ft.TextField(label="차량번호", value=today_neighbors.get("back_car", ""), hint_text="예: 2745")
+        back_driver_name_field = ft.TextField(label="운전자 이름", value=today_neighbors.get("back_driver_name", ""), hint_text="예: 이청일")
+        back_driver_phone_field = ft.TextField(label="전화번호", value=today_neighbors.get("back_driver_phone", ""), hint_text="예: 010-0000-0000")
+
+        front_info_card = ft.Container(
+            content=ft.Column([
+                ft.Text("앞차 정보", size=14, weight="bold", color=COLOR_DARK_BLUE),
+                ft.Divider(height=1, color=COLOR_BORDER),
+                front_car_field,
+                front_driver_name_field,
+                front_driver_phone_field,
+            ], spacing=8),
+            padding=12,
+            border=ft.border.all(1, COLOR_BORDER),
+            border_radius=8,
+            bgcolor="#F8FAFC"
+        )
+
+        back_info_card = ft.Container(
+            content=ft.Column([
+                ft.Text("뒷차 정보", size=14, weight="bold", color=COLOR_DARK_BLUE),
+                ft.Divider(height=1, color=COLOR_BORDER),
+                back_car_field,
+                back_driver_name_field,
+                back_driver_phone_field,
+            ], spacing=8),
+            padding=12,
+            border=ft.border.all(1, COLOR_BORDER),
+            border_radius=8,
+            bgcolor="#F8FAFC"
+        )
 
         def handle_front_selection(e):
             if front_driver_dd.value:
@@ -686,10 +757,10 @@ def main(page: ft.Page):
             page.client_storage.set(STORAGE_NEIGHBOR_VEHICLES, json.dumps(n_map, ensure_ascii=False))
             trigger_feedback("neighbors")
 
-        # [4] 사무실/정비고 연락처 구역
+        # [4] 사무실/정비고 연락처 구역 (가로 Row에서 완벽한 수직 세로 배치 구조로 재구성)
         office_list_layout = ft.Column(spacing=4)
-        office_type_input = ft.TextField(label="구분", hint_text="정비고", expand=1)
-        office_phone_input = ft.TextField(label="전화번호", hint_text="02-1234-5678", expand=2)
+        office_type_input = ft.TextField(label="구분", hint_text="예: 정비고")
+        office_phone_input = ft.TextField(label="전화번호", hint_text="예: 02-1234-5678")
 
         def raise_confirm_dialog(message, on_confirm_click):
             def close_dialog(e):
@@ -714,7 +785,6 @@ def main(page: ft.Page):
             page.dialog.open = True
             page.update()
 
-        # [수정] 아직 화면 배치가 완전히 끝나기 전의 오작동을 피하기 위해 update_page 스위치 인자 도입
         def redraw_office_list(update_page=True):
             office_list_layout.controls.clear()
             current_items = load_json_from_storage(STORAGE_PHONEBOOK_OFFICE, [])
@@ -751,13 +821,12 @@ def main(page: ft.Page):
             page.client_storage.set(STORAGE_PHONEBOOK_OFFICE, json.dumps(current_items, ensure_ascii=False))
             redraw_office_list(update_page=True)
 
-        # [5] 동료운전자 인명부 관리 구역
+        # [5] 동료운전자 인명부 관리 구역 (기존 완료된 세로 배치 레이아웃 준수)
         driver_list_layout = ft.Column(spacing=4)
-        drv_name_input = ft.TextField(label="이름", hint_text="홍길동", expand=1)
-        drv_phone_input = ft.TextField(label="전화번호", hint_text="010-1234-5678", expand=1)
-        drv_memo_input = ft.TextField(label="메모 (선택)", hint_text="예: 오전조", expand=1)
+        drv_name_input = ft.TextField(label="이름", hint_text="예: 홍길동")
+        drv_phone_input = ft.TextField(label="전화번호", hint_text="예: 010-1234-5678")
+        drv_memo_input = ft.TextField(label="메모 (선택)", hint_text="예: 오전조")
 
-        # [수정] 아직 화면 배치가 완전히 끝나기 전의 오작동을 피하기 위해 update_page 스위치 인자 도입
         def redraw_driver_list(update_page=True):
             driver_list_layout.controls.clear()
             current_items = load_json_from_storage(STORAGE_DRIVER_CONTACTS, [])
@@ -799,7 +868,7 @@ def main(page: ft.Page):
             page.client_storage.set(STORAGE_DRIVER_CONTACTS, json.dumps(current_items, ensure_ascii=False))
             redraw_driver_list(update_page=True)
 
-        # [수정] 최초 생성 및 데이터 바인딩 시점에는 아직 화면에 달라붙기 전이므로 page.update()를 명시적으로 생략 처리
+        # 최초 생성 및 데이터 바인딩 시점에는 아직 화면에 달라붙기 전이므로 page.update()를 명시적으로 생략 처리
         redraw_office_list(update_page=False)
         redraw_driver_list(update_page=False)
 
@@ -807,7 +876,7 @@ def main(page: ft.Page):
         return ft.Column([
             ft.Text("운행 정보 입력", size=22, weight="bold", color=COLOR_BLACK),
             
-            # [수정] 새로운 open_date_picker 구동 함수를 on_click에 안전하게 연결
+            # 날짜 선택기 Row 구역 (텍스트 필드 너비를 180으로 최적화하여 캘린더 아이콘과 예쁘게 동행 처리)
             ft.Row([
                 date_display_field,
                 ft.IconButton(
@@ -819,48 +888,54 @@ def main(page: ft.Page):
             ], alignment="start", vertical_alignment="center"),
             ft.Divider(height=10, color=COLOR_TRANSPARENT),
             
-            # 노선번호 관리 카드 섹션
+            # 선택 날짜 운행 요약 박스 배치 위치 (노선번호 카드 바로 위)
+            summary_box_container,
+            
+            # 노선번호 관리 카드 섹션 (완전한 TextField 단독 세로 정렬화)
             ft.Card(ft.Container(ft.Column([
                 ft.Text("🚍 노선번호 관리", size=14, weight="bold", color=COLOR_DARK_BLUE),
-                ft.Row([route_field]),
+                route_field,
                 ft.ElevatedButton("노선번호 저장", width=280, height=42, bgcolor=COLOR_PRIMARY, color="white", on_click=save_route),
                 feedback_labels["route"]
             ], spacing=8), padding=10)),
 
-            # 당일 배차 차량번호 등록 관리 카드 섹션
+            # 당일 배차 차량번호 등록 관리 카드 섹션 (완전한 TextField 단독 세로 정렬화)
             ft.Card(ft.Container(ft.Column([
                 ft.Text("🔑 해당 일자 운행 차량 번호 입력", size=14, weight="bold", color=COLOR_DARK_BLUE),
-                ft.Row([vehicle_field]),
+                vehicle_field,
                 ft.ElevatedButton("차량 번호 저장", width=280, height=42, bgcolor=COLOR_PRIMARY, color="white", on_click=save_today_vehicle),
                 feedback_labels["vehicle"]
             ], spacing=8), padding=10)),
 
-            # 앞차/뒷차 연계 정보 연동 등록 관리 카드 섹션
+            # 앞차/뒷차 연계 정보 연동 등록 관리 카드 섹션 (세로형 카드 텍스트 필드 구조 보존)
             ft.Card(ft.Container(ft.Column([
                 ft.Text("↔️ 앞차 / 뒷차 운행 정보 연계", size=14, weight="bold", color=COLOR_DARK_BLUE),
                 front_driver_dd,
-                ft.Row([front_car_field, front_driver_name_field, front_driver_phone_field]),
-                ft.Divider(height=5),
+                front_info_card,
+                ft.Divider(height=10, color=COLOR_TRANSPARENT),
                 back_driver_dd,
-                ft.Row([back_car_field, back_driver_name_field, back_driver_phone_field]),
+                back_info_card,
                 ft.ElevatedButton("연계 배차 정보 일괄 저장", width=280, height=44, bgcolor=COLOR_DARK_BLUE, color="white", on_click=save_neighbors),
                 feedback_labels["neighbors"]
             ], spacing=8), padding=10)),
 
-            # 실무 연락처 전화번호부 관리 카드 섹션
+            # 실무 연락처 전화번호부 관리 카드 섹션 (수정 완료: 구분과 전화번호를 시원한 단독 세로 배치화)
             ft.Card(ft.Container(ft.Column([
                 ft.Text("☎️ 사무실 / 정비고 / AS 연락처 등록", size=14, weight="bold", color=COLOR_DARK_BLUE),
-                ft.Row([office_type_input, office_phone_input]),
+                office_type_input,
+                office_phone_input,
                 ft.ElevatedButton("연락처 등록추가", width=280, height=42, bgcolor=COLOR_SUCCESS, color="white", on_click=add_office_item),
                 feedback_labels["office"],
                 ft.Divider(height=1),
                 office_list_layout
             ], spacing=8), padding=10)),
 
-            # 동료 기사단 인명 연락망 관리 카드 섹션
+            # 동료 기사단 인명 연락망 관리 카드 섹션 (기존 세로형 텍스트 필드 구조 완벽 보존)
             ft.Card(ft.Container(ft.Column([
                 ft.Text("👥 동료운전자 비상 연락망 등록", size=14, weight="bold", color=COLOR_DARK_BLUE),
-                ft.Row([drv_name_input, drv_phone_input, drv_memo_input]),
+                drv_name_input,
+                drv_phone_input,
+                drv_memo_input,
                 ft.ElevatedButton("동료 추가하기", width=280, height=42, bgcolor=COLOR_SUCCESS, color="white", on_click=add_driver_item),
                 feedback_labels["drivers"],
                 ft.Divider(height=1),
