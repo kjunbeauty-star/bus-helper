@@ -10,7 +10,7 @@ def main(page: ft.Page):
     page.theme_mode = "light"
     page.padding = 4
 
-    # --- [웹 환경 맞춤 영구 저장] 브라우저 자체 저장소에서 데이터 읽기 ---
+    # --- [웹 영구 저장] 브라우저 자체 저장소 데이터 로드 ---
     USER_SCHEDULES = page.client_storage.get("user_schedules") or {}
     MANGEUN_TARGETS = page.client_storage.get("mangeun_targets") or {}
 
@@ -31,26 +31,25 @@ def main(page: ft.Page):
     calendar_grid = ft.Column(spacing=2)
     popup_date_title = ft.Text("", size=16, weight="bold", color="black", text_align="center")
     
-    # [수정] 드롭다운 값 변경 시 실시간 자동 저장 처리
+    # 드롭다운 값 변경 시 실시간 자동 저장
     def on_mangeun_dropdown_changed(e):
         try:
             val = int(mangeun_dropdown.value)
             key = f"{current['year']}_{current['month']}"
             MANGEUN_TARGETS[key] = val
-            save_data_to_web()  # 브라우저 스토리지 자동저장
+            save_data_to_web()
             rebuild_interface()
-        except ValueError:
+        except (ValueError, TypeError):
             pass
 
-    # [수정 사항 2] 타이핑 대신 톡톡 골라 쓸 수 있는 드롭다운 메뉴 (15일 ~ 26일 범위 설정)
+    # [교정] 웹 배포 환경에서 렌더링 에러를 방지하도록 컨테이너 구조 규격 최적화
     mangeun_dropdown = ft.Dropdown(
         options=[ft.dropdown.Option(str(i)) for i in range(15, 27)],
-        width=70,
-        height=35,
+        width=80,
+        height=40,
         text_size=12,
-        content_padding=ft.padding.all(4),
-        alignment=ft.alignment.center,
-        on_change=on_mangeun_dropdown_changed  # 선택하는 즉시 자동저장
+        content_padding=ft.padding.symmetric(vertical=0, horizontal=8),
+        on_change=on_mangeun_dropdown_changed
     )
 
     # 24시간제 다이얼
@@ -123,7 +122,7 @@ def main(page: ft.Page):
         off_days = sum(1 for d in month_data.values() if d.get("status") == "휴무")
         
         m_target = get_mangeun_target()
-        mangeun_dropdown.value = str(m_target)  # 드롭다운 선택값 매칭
+        mangeun_dropdown.value = str(m_target)
         
         stats_text.value = f"근무 {work_days}일   휴무 {off_days}일"
         
@@ -309,14 +308,14 @@ def main(page: ft.Page):
         alignment="spaceBetween"
     )
 
-    # [수정] 만근 기준 텍스트와 드롭다운 정렬
+    # [교정] 레이아웃 틀어짐 방지를 위해 alignment 구조 표준화
     mangeun_setting_row = ft.Row(
         [
             ft.Text("만근", size=13, weight="bold", color="black"),
-            mangeun_dropdown,
-            ft.Container(width=10)
+            mangeun_dropdown
         ],
-        alignment="spaceBetween"
+        alignment="start",
+        spacing=10
     )
 
     days_letters = ["일", "월", "화", "수", "목", "금", "토"]
