@@ -1,5 +1,5 @@
-import os  # 요구사항: os 모듈 포함
-import json  # 백업/복원을 위한 json 모듈 포함
+import os  # Render 배포 환경용 및 파일 확인 모듈
+import sqlite3  # SQLite3 데이터베이스 모듈 추가
 import calendar
 from datetime import datetime, timedelta, timezone
 import flet as ft
@@ -7,25 +7,111 @@ import flet as ft
 # 대한민국 표준시 (GMT +9:00) 설정
 KST = timezone(timedelta(hours=9))
 
+# 데이터베이스 파일 이름 정의
+DB_FILE = "schedules.db"
+
+# --- [SQLite3 데이터베이스 제어 함수] ---
+
+def init_db():
+    """앱 시작 시 데이터베이스와 테이블을 생성하고 초기화합니다."""
+    conn = sqlite3.connect(DB_FILE)
+    cursor = conn.cursor()
+    
+    # 지시사항 3: schedules 테이블 생성
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS schedules (
+            date_key TEXT PRIMARY KEY,
+            status TEXT,
+            start_time TEXT
+        )
+    """)
+    
+    # 지시사항 3: mangeun_targets 테이블 생성
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS mangeun_targets (
+            month_key TEXT PRIMARY KEY,
+            target INTEGER
+        )
+    """)
+    
+    conn.commit()
+    conn.close()
+
+def load_schedules_from_db():
+    """데이터베이스에서 모든 근무 일정을 읽어와 딕셔너리로 반환합니다."""
+    conn = sqlite3.connect(DB_FILE)
+    cursor = conn.cursor()
+    cursor.execute("SELECT date_key, status, start_time FROM schedules")
+    rows = cursor.fetchall()
+    conn.close()
+    
+    schedules = {}
+    for row in rows:
+        schedules[row[0]] = {"status": row[1], "start_time": row[2]}
+    return schedules
+
+def load_mangeun_targets_from_db():
+    """데이터베이스에서 모든 월별 만근 기준을 읽어와 딕셔너리로 반환합니다."""
+    conn = sqlite3.connect(DB_FILE)
+    cursor = conn.cursor()
+    cursor.execute("SELECT month_key, target FROM mangeun_targets")
+    rows = cursor.fetchall()
+    conn.close()
+    
+    targets = {}
+    for row in rows:
+        targets[row[0]] = row[1]
+    return targets
+
+def save_schedule_to_db(date_key, status, start_time):
+    """근무 일정을 데이터베이스에 즉시 저장하거나 수정합니다."""
+    conn = sqlite3.connect(DB_FILE)
+    cursor = conn.cursor()
+    cursor.execute("""
+        INSERT OR REPLACE INTO schedules (date_key, status, start_time)
+        VALUES (?, ?, ?)
+    """, (date_key, status, start_time))
+    conn.commit()
+    conn.close()
+
+def delete_schedule_from_db(date_key):
+    """선택 취소 시 데이터베이스에서 해당 일정을 즉시 삭제합니다."""
+    conn = sqlite3.connect(DB_FILE)
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM schedules WHERE date_key = ?", (date_key,))
+    conn.commit()
+    conn.close()
+
+def save_mangeun_target_to_db(month_key, target):
+    """만근 목표 기준 값을 데이터베이스에 즉시 저장하거나 수정합니다."""
+    conn = sqlite3.connect(DB_FILE)
+    cursor = conn.cursor()
+    cursor.execute("""
+        INSERT OR REPLACE INTO mangeun_targets (month_key, target)
+        VALUES (?, ?)
+    """, (month_key, target))
+    conn.commit()
+    conn.close()
+
+# --- [Flet 메인 어플리케이션 인터페이스] ---
+
 def main(page: ft.Page):
     page.title = "버스기사도우미"
     page.theme_mode = "light"
     page.padding = 4
+
+    # 데이터베이스 및 테이블 초기화 고정
+    init_db()
+
+    # 앱 시작 시 SQLite DB에서 기존 데이터 로드
+    USER_SCHEDULES = load_schedules_from_db()
+    MANGEUN_TARGETS = load_mangeun_targets_from_db()
 
     # 클립보드 알림 바 기능
     def on_copy_success(e):
         page.snack_bar = ft.SnackBar(ft.Text("백업 데이터가 클립보드에 복사되었습니다."))
         page.snack_bar.open = True
         page.update()
-
-    # --- [웹 영구 저장] 브라우저 자체 저장소 데이터 로드 ---
-    USER_SCHEDULES = page.client_storage.get("user_schedules") or {}
-    MANGEUN_TARGETS = page.client_storage.get("mangeun_targets") or {}
-
-    def save_data_to_web():
-        """웹 브라우저 내부에 데이터를 즉시 영구 저장합니다."""
-        page.client_storage.set("user_schedules", USER_SCHEDULES)
-        page.client_storage.set("mangeun_targets", MANGEUN_TARGETS)
 
     # 현재 시간 세팅
     now_kst = datetime.now(KST)
@@ -39,18 +125,20 @@ def main(page: ft.Page):
     calendar_grid = ft.Column(spacing=2)
     popup_date_title = ft.Text("", size=16, weight="bold", color="black", text_align="center")
     
-    # 만근 기준 드롭다운 값 변경 시 실시간 자동 저장
+    # 만근 기준 드롭다운 값 변경 시 SQLite 실시간 저장
     def on_mangeun_dropdown_changed(e):
         try:
             val = int(mangeun_dropdown.value)
             key = f"{current['year']}_{current['month']}"
             MANGEUN_TARGETS[key] = val
-            save_data_to_web()
+            
+            # 지시사항 5: DB에 즉시 저장
+            save_mangeun_target_to_db(key, val)
             rebuild_interface()
         except (ValueError, TypeError):
             pass
 
-    # 📌 [수정 완료] 15일부터 26일까지 고를 수 있는 숫자 드롭다운 정의
+    # "만근" 옆 숫자 선택 드롭다운 (15일 ~ 26일)
     mangeun_dropdown = ft.Dropdown(
         options=[ft.dropdown.Option(str(i)) for i in range(15, 27)],
         width=80,
@@ -81,8 +169,8 @@ def main(page: ft.Page):
         on_copy_success(None)
 
     def trigger_restore_data(e):
-        """붙여넣은 텍스트를 해독하여 데이터를 복원하고 화면을 갱신합니다."""
-        nonlocal USER_SCHEDULES, MANGEUN_TARGETS
+        """붙여넣은 텍스트를 해독하여 데이터를 복원하고 전체 DB를 동기화 갱신합니다."""
+        global USER_SCHEDULES, MANGEUN_TARGETS
         raw_text = backup_input_field.value.strip()
         if not raw_text:
             page.snack_bar = ft.SnackBar(ft.Text("복원할 텍스트가 비어 있습니다."))
@@ -95,10 +183,16 @@ def main(page: ft.Page):
             if "schedules" in parsed_data and "mangeun_targets" in parsed_data:
                 USER_SCHEDULES = parsed_data["schedules"]
                 MANGEUN_TARGETS = parsed_data["mangeun_targets"]
-                save_data_to_web()
+                
+                # 복원된 전체 내역을 SQLite DB로 전체 이전 및 덮어쓰기
+                for d_key, val in USER_SCHEDULES.items():
+                    save_schedule_to_db(d_key, val.get("status", ""), val.get("start_time", ""))
+                for m_key, val in MANGEUN_TARGETS.items():
+                    save_mangeun_target_to_db(m_key, int(val))
+                
                 rebuild_interface()
                 backup_input_field.value = ""
-                page.snack_bar = ft.SnackBar(ft.Text("데이터가 성공적으로 복원되었습니다!"))
+                page.snack_bar = ft.SnackBar(ft.Text("데이터가 데이터베이스에 성공적으로 복원되었습니다!"))
                 page.snack_bar.open = True
             else:
                 page.snack_bar = ft.SnackBar(ft.Text("올바른 백업 양식이 아닙니다."))
@@ -162,8 +256,13 @@ def main(page: ft.Page):
         except:
             return 22
 
-    # 3. 화면 리빌드 함수 (GMT+9 서울 시간 고정)
+    # 3. 화면 리빌드 함수 (GMT+9 서울 시간 고정 및 DB 캐시 매칭)
     def rebuild_interface():
+        nonlocal USER_SCHEDULES, MANGEUN_TARGETS
+        # 화면 갱신 직전 최신 DB 상태 다시 불러오기 (정합성 유지)
+        USER_SCHEDULES = load_schedules_from_db()
+        MANGEUN_TARGETS = load_mangeun_targets_from_db()
+
         today = datetime.now(KST)
         today_y = today.year
         today_m = today.month
@@ -178,7 +277,7 @@ def main(page: ft.Page):
         off_days = sum(1 for d in month_data.values() if d.get("status") == "휴무")
         
         m_target = get_mangeun_target()
-        mangeun_dropdown.value = str(m_target)  # 드롭다운 값 할당
+        mangeun_dropdown.value = str(m_target)
         
         stats_text.value = f"근무 {work_days}일   휴무 {off_days}일"
         
@@ -242,7 +341,7 @@ def main(page: ft.Page):
             calendar_grid.controls.append(week_row)
         page.update()
 
-    # 4. 팝업창 제어 및 즉시 자동 저장 함수
+    # 4. 팝업창 제어 및 SQLite 실시간 동기화 자동 저장 함수
     def open_input_popup(date_key):
         current["selected_date"] = date_key
         popup_date_title.value = f"{date_key}\n근무를 선택하거나 시간을 맞추세요"
@@ -266,13 +365,11 @@ def main(page: ft.Page):
         page.update()
 
     def select_status_and_save(status_value):
-        nonlocal USER_SCHEDULES
         target_date = current["selected_date"]
         
         if status_value == "선택취소":
-            if target_date in USER_SCHEDULES:
-                del USER_SCHEDULES[target_date]
-            save_data_to_web()
+            # 지시사항 5: 선택취소 시 DB에서 즉시 삭제
+            delete_schedule_from_db(target_date)
             popup_layer.visible = False  
             rebuild_interface()
             return
@@ -289,8 +386,8 @@ def main(page: ft.Page):
         else:
             final_time = ""
 
-        USER_SCHEDULES[target_date] = {"status": status_value, "start_time": final_time}
-        save_data_to_web()
+        # 지시사항 5: 날짜 입력 완료 시 DB에 즉시 저장
+        save_schedule_to_db(target_date, status_value, final_time)
         
         popup_layer.visible = False  
         rebuild_interface()          
@@ -365,7 +462,6 @@ def main(page: ft.Page):
         alignment="spaceBetween"
     )
 
-    # 📌 [교정 완료] "만근 기준" 대신 요구사항대로 "만근" 두 글자 텍스트 + 드롭다운 컴포넌트 실탑재
     mangeun_setting_row = ft.Row(
         [
             ft.Text("만근", size=13, weight="bold", color="black"),
@@ -436,7 +532,7 @@ def main(page: ft.Page):
             header_nav,
             stats_text,
             mangeun_text,
-            mangeun_setting_row,  # 교정된 로우가 배치됨
+            mangeun_setting_row,
             ft.Divider(height=1),
             weeks_header,        
             ft.Divider(height=1),
@@ -460,4 +556,5 @@ def main(page: ft.Page):
 
     rebuild_interface()
 
+import json # 백업 구조 파싱을 위한 모듈 추가 고정
 ft.app(target=main, host="0.0.0.0", port=int(os.environ.get("PORT", 8080)), view=ft.AppView.WEB_BROWSER)
