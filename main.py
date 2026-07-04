@@ -2,6 +2,7 @@ import os
 import flet as ft
 import calendar
 from datetime import datetime, timedelta, timezone
+import json
 
 # --- [개인화] 서울 표준시 (GMT +9) 설정 ---
 KST = timezone(timedelta(hours=9))
@@ -16,20 +17,28 @@ def main(page: ft.Page):
     current = {"year": now_kst.year, "month": now_kst.month, "selected_date": ""}
     selected_time_state = {"hour": 5, "minute": 0}
 
-    # --- 데이터 로드 및 저장 함수 (Client Storage 활용) ---
+# --- [새로 붙여넣을 코드] 서버 리셋 방지용 브라우저 스토리지 로직 ---
     def load_data():
-        # 내부에 저장된 스케줄 데이터 로드 (없으면 빈 딕셔너리)
-        saved_schedules = page.client_storage.get("user_schedules")
-        saved_mangeun = page.client_storage.get("mangeun_targets")
-        
         global USER_SCHEDULES, MANGEUN_TARGETS
-        USER_SCHEDULES = saved_schedules if saved_schedules else {}
-        MANGEUN_TARGETS = saved_mangeun if saved_mangeun else {}
+        try:
+            schedules_raw = page.run_javascript_return("localStorage.getItem('user_schedules')")
+            mangeun_raw = page.run_javascript_return("localStorage.getItem('mangeun_targets')")
+            
+            USER_SCHEDULES = json.loads(schedules_raw) if schedules_raw else {}
+            MANGEUN_TARGETS = json.loads(mangeun_raw) if mangeun_raw else {}
+        except Exception:
+            USER_SCHEDULES = {}
+            MANGEUN_TARGETS = {}
 
     def save_data_to_storage():
-        # 현재 메모리의 데이터를 로컬 저장소에 영구 저장
-        page.client_storage.set("user_schedules", USER_SCHEDULES)
-        page.client_storage.set("mangeun_targets", MANGEUN_TARGETS)
+        try:
+            schedules_json = json.dumps(USER_SCHEDULES, ensure_ascii=False)
+            mangeun_json = json.dumps(MANGEUN_TARGETS, ensure_ascii=False)
+            
+            page.run_javascript(f"localStorage.setItem('user_schedules', '{schedules_json}');")
+            page.run_javascript(f"localStorage.setItem('mangeun_targets', '{mangeun_json}');")
+        except Exception as e:
+            print(f"저장 실패: {e}")
 
     # 최초 실행 시 데이터 불러오기
     load_data()
