@@ -1,3 +1,5 @@
+import os  # 요구사항: os 모듈 포함
+import json  # 백업/복원을 위한 json 모듈 포함
 import calendar
 from datetime import datetime, timedelta, timezone
 import flet as ft
@@ -9,6 +11,12 @@ def main(page: ft.Page):
     page.title = "버스기사도우미"
     page.theme_mode = "light"
     page.padding = 4
+
+    # 클립보드 알림 바 기능
+    def on_copy_success(e):
+        page.snack_bar = ft.SnackBar(ft.Text("백업 데이터가 클립보드에 복사되었습니다."))
+        page.snack_bar.open = True
+        page.update()
 
     # --- [웹 영구 저장] 브라우저 자체 저장소 데이터 로드 ---
     USER_SCHEDULES = page.client_storage.get("user_schedules") or {}
@@ -31,7 +39,7 @@ def main(page: ft.Page):
     calendar_grid = ft.Column(spacing=2)
     popup_date_title = ft.Text("", size=16, weight="bold", color="black", text_align="center")
     
-    # 드롭다운 값 변경 시 실시간 자동 저장
+    # 만근 기준 드롭다운 값 변경 시 실시간 자동 저장
     def on_mangeun_dropdown_changed(e):
         try:
             val = int(mangeun_dropdown.value)
@@ -42,7 +50,7 @@ def main(page: ft.Page):
         except (ValueError, TypeError):
             pass
 
-    # [교정] 웹 배포 환경에서 렌더링 에러를 방지하도록 컨테이너 구조 규격 최적화
+    # 📌 [수정 완료] 15일부터 26일까지 고를 수 있는 숫자 드롭다운 정의
     mangeun_dropdown = ft.Dropdown(
         options=[ft.dropdown.Option(str(i)) for i in range(15, 27)],
         width=80,
@@ -51,6 +59,54 @@ def main(page: ft.Page):
         content_padding=ft.padding.symmetric(vertical=0, horizontal=8),
         on_change=on_mangeun_dropdown_changed
     )
+
+    # --- 백업 및 복원 로직 ---
+    backup_input_field = ft.TextField(
+        label="복원할 백업 텍스트를 여기에 붙여넣으세요",
+        text_size=11,
+        multiline=True,
+        min_lines=2,
+        max_lines=4,
+        expand=True
+    )
+
+    def trigger_backup_copy(e):
+        """현재 데이터를 하나의 JSON 문자열로 변환하여 클립보드에 복사합니다."""
+        backup_data = {
+            "schedules": USER_SCHEDULES,
+            "mangeun_targets": MANGEUN_TARGETS
+        }
+        json_str = json.dumps(backup_data, ensure_ascii=False)
+        page.set_clipboard(json_str)
+        on_copy_success(None)
+
+    def trigger_restore_data(e):
+        """붙여넣은 텍스트를 해독하여 데이터를 복원하고 화면을 갱신합니다."""
+        nonlocal USER_SCHEDULES, MANGEUN_TARGETS
+        raw_text = backup_input_field.value.strip()
+        if not raw_text:
+            page.snack_bar = ft.SnackBar(ft.Text("복원할 텍스트가 비어 있습니다."))
+            page.snack_bar.open = True
+            page.update()
+            return
+        
+        try:
+            parsed_data = json.loads(raw_text)
+            if "schedules" in parsed_data and "mangeun_targets" in parsed_data:
+                USER_SCHEDULES = parsed_data["schedules"]
+                MANGEUN_TARGETS = parsed_data["mangeun_targets"]
+                save_data_to_web()
+                rebuild_interface()
+                backup_input_field.value = ""
+                page.snack_bar = ft.SnackBar(ft.Text("데이터가 성공적으로 복원되었습니다!"))
+                page.snack_bar.open = True
+            else:
+                page.snack_bar = ft.SnackBar(ft.Text("올바른 백업 양식이 아닙니다."))
+                page.snack_bar.open = True
+        except Exception:
+            page.snack_bar = ft.SnackBar(ft.Text("복원에 실패했습니다. 텍스트를 확인해주세요."))
+            page.snack_bar.open = True
+        page.update()
 
     # 24시간제 다이얼
     hour_picker = ft.CupertinoPicker(
@@ -122,7 +178,7 @@ def main(page: ft.Page):
         off_days = sum(1 for d in month_data.values() if d.get("status") == "휴무")
         
         m_target = get_mangeun_target()
-        mangeun_dropdown.value = str(m_target)
+        mangeun_dropdown.value = str(m_target)  # 드롭다운 값 할당
         
         stats_text.value = f"근무 {work_days}일   휴무 {off_days}일"
         
@@ -210,6 +266,7 @@ def main(page: ft.Page):
         page.update()
 
     def select_status_and_save(status_value):
+        nonlocal USER_SCHEDULES
         target_date = current["selected_date"]
         
         if status_value == "선택취소":
@@ -308,7 +365,7 @@ def main(page: ft.Page):
         alignment="spaceBetween"
     )
 
-    # [교정] 레이아웃 틀어짐 방지를 위해 alignment 구조 표준화
+    # 📌 [교정 완료] "만근 기준" 대신 요구사항대로 "만근" 두 글자 텍스트 + 드롭다운 컴포넌트 실탑재
     mangeun_setting_row = ft.Row(
         [
             ft.Text("만근", size=13, weight="bold", color="black"),
@@ -339,17 +396,53 @@ def main(page: ft.Page):
         alignment="spaceAround"
     )
 
+    # 백업 및 복원 레이아웃
+    backup_restore_layout = ft.Container(
+        content=ft.Column(
+            [
+                ft.Divider(height=2),
+                ft.Row(
+                    [
+                        ft.ElevatedButton(
+                            "내 근무 데이터 백업 복사", 
+                            icon=ft.icons.COPY,
+                            on_click=trigger_backup_copy,
+                            style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=6))
+                        ),
+                    ],
+                    alignment="center"
+                ),
+                ft.Row(
+                    [
+                        backup_input_field,
+                        ft.ElevatedButton(
+                            "복원하기", 
+                            icon=ft.icons.RESTORE,
+                            on_click=trigger_restore_data,
+                            style=ft.ButtonStyle(bgcolor="#10B981", color="white", shape=ft.RoundedRectangleBorder(radius=6))
+                        )
+                    ],
+                    alignment="spaceBetween",
+                    spacing=6
+                )
+            ],
+            spacing=4
+        ),
+        padding=ft.padding.symmetric(vertical=6, horizontal=4)
+    )
+
     main_layout = ft.Column(
         [
             header_nav,
             stats_text,
             mangeun_text,
-            mangeun_setting_row,
+            mangeun_setting_row,  # 교정된 로우가 배치됨
             ft.Divider(height=1),
             weeks_header,        
             ft.Divider(height=1),
             calendar_grid,       
             ft.Divider(height=2),
+            backup_restore_layout,
             bottom_navigation_bar 
         ],
         expand=True
