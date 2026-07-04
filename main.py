@@ -251,7 +251,7 @@ def main(page: ft.Page):
                     if status == "오전":
                         bg_color = "#D2E3FC"; text_color = "#1A73E8"; status_desc = "오전"
                     elif status == "오후":
-                        bg_color = "#FEEFC3"; text_color = "#E37400"; status_desc = "오후"
+                        bg_color = "#E9D5FF"; text_color = "#7E22CE"; status_desc = "오후"
                     elif status == "휴무":
                         bg_color = "#FCE8E6"; text_color = "#D93025"; status_desc = "휴무"
                     if weekday == 6:
