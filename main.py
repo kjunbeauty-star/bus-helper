@@ -271,12 +271,13 @@ def main(page: ft.Page):
             current["year"] -= 1
         update_calendar()
 
-    # 상단 네비게이션 바
+# ▼▼▼ [수정 후 코드] 들여쓰기 공백을 맞춰서 그대로 붙여넣어 주세요 ▼▼▼
+    # 상단 네비게이션 바 (에러 없는 기본 화살표 아이콘으로 교체)
     header_nav = ft.Row(
         [
-            ft.IconButton(ft.icons.ARROW_BACK_IOS, on_click=lambda _: change_month(-1), icon_size=16),
+            ft.IconButton(ft.icons.ARROW_LEFT, on_click=lambda _: change_month(-1), icon_size=24),
             month_title,
-            ft.IconButton(ft.icons.ARROW_FORWARD_IOS, on_click=lambda _: change_month(1), icon_size=16),
+            ft.IconButton(ft.icons.ARROW_RIGHT, on_click=lambda _: change_month(1), icon_size=24),
         ],
         alignment="center"
     )
