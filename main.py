@@ -1,6 +1,7 @@
 import os  # Render 배포 환경용 및 파일 확인 모듈
 import sqlite3  # SQLite3 데이터베이스 모듈
 import calendar
+import json  # 백업 구조 파싱을 위한 모듈
 from datetime import datetime, timedelta, timezone
 import flet as ft
 
@@ -103,7 +104,7 @@ def main(page: ft.Page):
     # 데이터베이스 및 테이블 초기화 고정
     init_db()
 
-    # 앱 시작 시 SQLite DB에서 기존 데이터 로드
+    # 앱 시작 시 SQLite DB에서 기존 데이터 로드 (로컬 변수로 관리)
     USER_SCHEDULES = load_schedules_from_db()
     MANGEUN_TARGETS = load_mangeun_targets_from_db()
 
@@ -131,6 +132,8 @@ def main(page: ft.Page):
             val = int(mangeun_dropdown.value)
             key = f"{current['year']}_{current['month']}"
             MANGEUN_TARGETS[key] = val
+            
+            # DB에 즉시 저장
             save_mangeun_target_to_db(key, val)
             rebuild_interface()
         except (ValueError, TypeError):
@@ -142,7 +145,7 @@ def main(page: ft.Page):
         width=80,
         height=40,
         text_size=12,
-        content_padding=ft.Padding(left=8, top=0, right=8, bottom=0),
+        content_padding=8,
         on_change=on_mangeun_dropdown_changed
     )
 
@@ -158,17 +161,20 @@ def main(page: ft.Page):
 
     def trigger_backup_copy(e):
         """현재 데이터를 하나의 JSON 문자열로 변환하여 클립보드에 복사합니다."""
+        # 최신 DB 데이터를 기반으로 백업 텍스트 생성
+        current_schedules = load_schedules_from_db()
+        current_targets = load_mangeun_targets_from_db()
+        
         backup_data = {
-            "schedules": USER_SCHEDULES,
-            "mangeun_targets": MANGEUN_TARGETS
+            "schedules": current_schedules,
+            "mangeun_targets": current_targets
         }
         json_str = json.dumps(backup_data, ensure_ascii=False)
         page.set_clipboard(json_str)
         on_copy_success(None)
 
     def trigger_restore_data(e):
-        """붙여넣은 텍스트를 해독하여 데이터를 복원하고 전체 DB를 동기화 갱신합니다."""
-        global USER_SCHEDULES, MANGEUN_TARGETS
+        """붙여넣은 텍스트를 해독하여 '전체 덮어쓰기' 방식으로 안전하게 트랜잭션 복원합니다."""
         raw_text = backup_input_field.value.strip()
         if not raw_text:
             page.snack_bar = ft.SnackBar(ft.Text("복원할 텍스트가 비어 있습니다."))
@@ -178,20 +184,47 @@ def main(page: ft.Page):
         
         try:
             parsed_data = json.loads(raw_text)
+            # 데이터 규격 검증
             if "schedules" in parsed_data and "mangeun_targets" in parsed_data:
-                USER_SCHEDULES = parsed_data["schedules"]
-                MANGEUN_TARGETS = parsed_data["mangeun_targets"]
                 
-                # 복원된 전체 내역을 SQLite DB로 전체 이전 및 덮어쓰기
-                for d_key, val in USER_SCHEDULES.items():
-                    save_schedule_to_db(d_key, val.get("status", ""), val.get("start_time", ""))
-                for m_key, val in MANGEUN_TARGETS.items():
-                    save_mangeun_target_to_db(m_key, int(val))
+                # --- SQLite 원자적 트랜잭션 시작 (전체 덮어쓰기) ---
+                conn = sqlite3.connect(DB_FILE)
                 
-                rebuild_interface()
-                backup_input_field.value = ""
-                page.snack_bar = ft.SnackBar(ft.Text("데이터가 데이터베이스에 성공적으로 복원되었습니다!"))
-                page.snack_bar.open = True
+                try:
+                    # 'with conn:' 블록을 사용하여 오류 발생 시 자동 Rollback 처리
+                    with conn:
+                        cursor = conn.cursor()
+                        # 1. 기존 데이터 전체 삭제
+                        cursor.execute("DELETE FROM schedules")
+                        cursor.execute("DELETE FROM mangeun_targets")
+                        
+                        # 2. 백업된 근무 일정(schedules) 순회 삽입
+                        for d_key, val in parsed_data["schedules"].items():
+                            cursor.execute("""
+                                INSERT OR REPLACE INTO schedules (date_key, status, start_time)
+                                VALUES (?, ?, ?)
+                            """, (d_key, val.get("status", ""), val.get("start_time", "")))
+                        
+                        # 3. 백업된 만근 목표(mangeun_targets) 순회 삽입
+                        for m_key, val in parsed_data["mangeun_targets"].items():
+                            cursor.execute("""
+                                INSERT OR REPLACE INTO mangeun_targets (month_key, target)
+                                VALUES (?, ?)
+                            """, (m_key, int(val)))
+                            
+                    # 정상 종료 시 인터페이스 리빌드 (내부에서 최신 DB 데이터를 자동으로 다시 불러옴)
+                    rebuild_interface()
+                    backup_input_field.value = ""
+                    page.snack_bar = ft.SnackBar(ft.Text("데이터가 전체 덮어쓰기 방식으로 성공적으로 복원되었습니다!"))
+                    page.snack_bar.open = True
+                    
+                except sqlite3.Error as db_err:
+                    # DB 작업 중 에러 발생 시 사용자에게 알림
+                    page.snack_bar = ft.SnackBar(ft.Text(f"데이터베이스 복원 중 오류가 발생하여 철회되었습니다: {db_err}"))
+                    page.snack_bar.open = True
+                finally:
+                    # try 및 except 수행 후 데이터베이스 연결을 공통으로 안전하게 종료
+                    conn.close()
             else:
                 page.snack_bar = ft.SnackBar(ft.Text("올바른 백업 양식이 아닙니다."))
                 page.snack_bar.open = True
@@ -257,6 +290,7 @@ def main(page: ft.Page):
     # 3. 화면 리빌드 함수 (GMT+9 서울 시간 고정 및 DB 캐시 매칭)
     def rebuild_interface():
         nonlocal USER_SCHEDULES, MANGEUN_TARGETS
+        # 화면 갱신 직전 최신 DB 상태 다시 불러오기 (정합성 유지 및 복원 데이터 동기화)
         USER_SCHEDULES = load_schedules_from_db()
         MANGEUN_TARGETS = load_mangeun_targets_from_db()
 
@@ -365,6 +399,7 @@ def main(page: ft.Page):
         target_date = current["selected_date"]
         
         if status_value == "선택취소":
+            # 선택취소 시 DB에서 즉시 삭제
             delete_schedule_from_db(target_date)
             popup_layer.visible = False  
             rebuild_interface()
@@ -382,6 +417,7 @@ def main(page: ft.Page):
         else:
             final_time = ""
 
+        # 날짜 입력 완료 시 DB에 즉시 저장
         save_schedule_to_db(target_date, status_value, final_time)
         
         popup_layer.visible = False  
@@ -437,7 +473,7 @@ def main(page: ft.Page):
     )
     popup_layer.content = popup_card
 
-    # 상하단 레이아웃 네비게이션
+    # 상하단 레이아웃
     def move_prev(e):
         current["month"] -= 1
         if current["month"] == 0: current["month"] = 12; current["year"] -= 1
@@ -477,11 +513,20 @@ def main(page: ft.Page):
         alignment="spaceAround"
     )
 
-    # 📌 [수정 사항 4] 이전에는 화면에 바로 배치되었던 백업/복원 레이아웃 정의 (동일 기능 분리 보존)
-    backup_restore_view = ft.Container(
+    bottom_navigation_bar = ft.Row(
+        [
+            ft.TextButton("달력", style=ft.ButtonStyle(color="#2563EB"), expand=1, height=36),
+            ft.TextButton("입력", style=ft.ButtonStyle(color="grey"), expand=1, height=36),
+            ft.TextButton("통계", style=ft.ButtonStyle(color="grey"), expand=1, height=40),
+            ft.TextButton("설정", style=ft.ButtonStyle(color="grey"), expand=1, height=40),
+        ],
+        alignment="spaceAround"
+    )
+
+    # 백업 및 복원 레이아웃
+    backup_restore_layout = ft.Container(
         content=ft.Column(
             [
-                ft.Text("데이터 백업 및 복원 설정", size=18, weight="bold"),
                 ft.Divider(height=2),
                 ft.Row(
                     [
@@ -494,10 +539,9 @@ def main(page: ft.Page):
                     ],
                     alignment="center"
                 ),
-                ft.Divider(height=1),
-                backup_input_field,
                 ft.Row(
                     [
+                        backup_input_field,
                         ft.ElevatedButton(
                             "복원하기", 
                             icon=ft.icons.RESTORE,
@@ -505,17 +549,16 @@ def main(page: ft.Page):
                             style=ft.ButtonStyle(bgcolor="#10B981", color="white", shape=ft.RoundedRectangleBorder(radius=6))
                         )
                     ],
-                    alignment="center"
+                    alignment="spaceBetween",
+                    spacing=6
                 )
             ],
-            spacing=10
+            spacing=4
         ),
-        content_padding=ft.Padding(left=10, top=16, right=10, bottom=16),
-        visible=False  # 📌 초기에는 보이지 않음 (설정 선택 시에만 전환됨)
+        padding=ft.padding.symmetric(vertical=6, horizontal=4)
     )
 
-    # 📌 [수정 사항 3] 달력 화면 전용 레이아웃 정의 (백업/복원 컴포넌트 완전 제외)
-    calendar_main_view = ft.Column(
+    main_layout = ft.Column(
         [
             header_nav,
             stats_text,
@@ -524,56 +567,9 @@ def main(page: ft.Page):
             ft.Divider(height=1),
             weeks_header,        
             ft.Divider(height=1),
-            calendar_grid
-        ],
-        visible=True
-    )
-
-    # 📌 [수정 사항 2] 하단 탭 클릭 제어 함수 추가 (화면 분기 제어)
-    def switch_tab(e):
-        selected_text = e.control.text
-        if selected_text == "달력":
-            calendar_main_view.visible = True
-            backup_restore_view.visible = False
-            # 버튼 색상 하이라이트 제어
-            btn_calendar.style.color = "#2563EB"
-            btn_settings.style.color = "grey"
-            rebuild_interface()
-        elif selected_text == "설정":
-            calendar_main_view.visible = False
-            backup_restore_view.visible = True
-            # 버튼 색상 하이라이트 제어
-            btn_calendar.style.color = "grey"
-            btn_settings.style.color = "#2563EB"
-        page.update()
-
-    # 하단 탭 내비게이션 버튼들 선언
-    btn_calendar = ft.TextButton("달력", style=ft.ButtonStyle(color="#2563EB"), expand=1, height=36, on_click=switch_tab)
-    btn_settings = ft.TextButton("설정", style=ft.ButtonStyle(color="grey"), expand=1, height=40, on_click=switch_tab)
-
-    bottom_navigation_bar = ft.Row(
-        [
-            btn_calendar,
-            ft.TextButton("입력", style=ft.ButtonStyle(color="grey"), expand=1, height=36),
-            ft.TextButton("통계", style=ft.ButtonStyle(color="grey"), expand=1, height=40),
-            btn_settings,
-        ],
-        alignment="spaceAround"
-    )
-
-    # 전체 컨텐츠 영역 묶음 구조 정의
-    content_container = ft.Column(
-        [
-            calendar_main_view,
-            backup_restore_view
-        ],
-        expand=True
-    )
-
-    main_layout = ft.Column(
-        [
-            content_container,
+            calendar_grid,       
             ft.Divider(height=2),
+            backup_restore_layout,
             bottom_navigation_bar 
         ],
         expand=True
@@ -591,5 +587,4 @@ def main(page: ft.Page):
 
     rebuild_interface()
 
-import json  # 백업 구조 파싱 모듈 고정
 ft.app(target=main, host="0.0.0.0", port=int(os.environ.get("PORT", 8080)), view=ft.AppView.WEB_BROWSER)
