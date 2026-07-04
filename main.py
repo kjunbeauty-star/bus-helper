@@ -314,7 +314,7 @@ def main(page: ft.Page):
                     time_display = ft.Text(start_time, size=9, weight="bold", color=text_color) if start_time and status != "휴무" else ft.Container()
 
                     is_today = (current['year'] == today_y and current['month'] == today_m and day == today_d)
-                    day_border = ft.Border.all(2, "#2563EB") if is_today else None
+                    day_border = ft.border.all(2, "#2563EB") if is_today else None
 
                     day_box = ft.Container(
                         content=ft.Column(
