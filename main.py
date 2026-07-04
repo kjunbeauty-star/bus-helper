@@ -1,5 +1,5 @@
 import os
-import json
+import json  # 📌 기사님의 소중한 데이터를 저장할 장부 기능 핵심 탑재!
 import calendar
 from datetime import datetime, timedelta, timezone
 import flet as ft
@@ -18,7 +18,7 @@ def load_data_from_file():
     if os.path.exists(DATA_FILE):
         try:
             with open(DATA_FILE, "r", encoding="utf-8") as f:
-                data = json.load(f)
+                data = json.load(f)  # 여기서 json 기능을 사용합니다.
                 USER_SCHEDULES = data.get("schedules", {})
                 MANGEUN_TARGETS = data.get("mangeun", {})
         except Exception:
@@ -33,7 +33,7 @@ def save_data_to_file():
     }
     try:
         with open(DATA_FILE, "w", encoding="utf-8") as f:
-            json.dump(data, f, ensure_ascii=False, indent=4)
+            json.dump(data, f, ensure_ascii=False, indent=4)  # 여기서 json으로 저장합니다.
     except Exception as e:
         print(f"자동 저장 실패: {e}")
 
@@ -63,7 +63,7 @@ def main(page: ft.Page):
             val = int(mangeun_setting_field.value)
             key = f"{current['year']}_{current['month']}"
             MANGEUN_TARGETS[key] = val
-            save_data_to_file()  # 수동 버튼 없이 실시간 자동 저장!
+            save_data_to_file()  # 실시간 자동 저장
             rebuild_interface()
         except ValueError:
             pass
@@ -73,7 +73,7 @@ def main(page: ft.Page):
         text_size=12, 
         content_padding=2, 
         text_align="center",
-        on_change=on_mangeun_changed  # 값이 바뀔 때마다 실시간 자동 저장
+        on_change=on_mangeun_changed
     )
 
     # 24시간제 다이얼
@@ -240,7 +240,7 @@ def main(page: ft.Page):
         if status_value == "선택취소":
             if target_date in USER_SCHEDULES:
                 del USER_SCHEDULES[target_date]
-            save_data_to_file()  # 즉시 파일로 자동 저장
+            save_data_to_file()  # 즉시 자동 저장
             popup_layer.visible = False  
             rebuild_interface()
             return
@@ -258,7 +258,7 @@ def main(page: ft.Page):
             final_time = ""
 
         USER_SCHEDULES[target_date] = {"status": status_value, "start_time": final_time}
-        save_data_to_file()  # 즉시 파일로 자동 저장
+        save_data_to_file()  # 즉시 자동 저장
         
         popup_layer.visible = False  
         rebuild_interface()          
@@ -333,12 +333,11 @@ def main(page: ft.Page):
         alignment="spaceBetween"
     )
 
-    # 불필요한 '저장' 버튼을 제거하고 깔끔하게 텍스트 필드만 연동
     mangeun_setting_row = ft.Row(
         [
             ft.Text("만근 기준", size=13, color="black"),
             ft.Container(content=mangeun_setting_field, width=38, height=24),
-            ft.Container(width=10)  # 여백 확보
+            ft.Container(width=10)
         ],
         alignment="spaceBetween"
     )
