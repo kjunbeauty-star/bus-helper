@@ -1,7 +1,6 @@
 import os  # Render 배포 환경용 및 파일 확인 모듈
 import sqlite3  # SQLite3 데이터베이스 모듈
 import calendar
-import json  # 백업 구조 파싱을 위한 모듈
 from datetime import datetime, timedelta, timezone
 import flet as ft
 
@@ -108,12 +107,6 @@ def main(page: ft.Page):
     USER_SCHEDULES = load_schedules_from_db()
     MANGEUN_TARGETS = load_mangeun_targets_from_db()
 
-    # 클립보드 알림 바 기능
-    def on_copy_success(e):
-        page.snack_bar = ft.SnackBar(ft.Text("백업 데이터가 클립보드에 복사되었습니다."))
-        page.snack_bar.open = True
-        page.update()
-
     # 현재 시간 세팅
     now_kst = datetime.now(KST)
     current = {"year": now_kst.year, "month": now_kst.month, "selected_date": ""}
@@ -148,84 +141,6 @@ def main(page: ft.Page):
         content_padding=8,
         on_change=on_mangeun_dropdown_changed
     )
-
-    # --- 백업 및 복원 로직 ---
-    backup_input_field = ft.TextField(
-        label="복원할 백업 텍스트를 여기에 붙여넣으세요",
-        text_size=11,
-        multiline=True,
-        min_lines=2,
-        max_lines=4,
-        expand=True
-    )
-
-    def trigger_backup_copy(e):
-        """현재 데이터를 하나의 JSON 문자열로 변환하여 클립보드에 복사합니다."""
-        current_schedules = load_schedules_from_db()
-        current_targets = load_mangeun_targets_from_db()
-        
-        backup_data = {
-            "schedules": current_schedules,
-            "mangeun_targets": current_targets
-        }
-        json_str = json.dumps(backup_data, ensure_ascii=False)
-        page.set_clipboard(json_str)
-        on_copy_success(None)
-
-    def trigger_restore_data(e):
-        """붙여넣은 텍스트를 해독하여 '전체 덮어쓰기' 방식으로 안전하게 트랜잭션 복원합니다."""
-        raw_text = backup_input_field.value.strip()
-        if not raw_text:
-            page.snack_bar = ft.SnackBar(ft.Text("복원할 텍스트가 비어 있습니다."))
-            page.snack_bar.open = True
-            page.update()
-            return
-        
-        try:
-            parsed_data = json.loads(raw_text)
-            if "schedules" in parsed_data and "mangeun_targets" in parsed_data:
-                
-                # --- SQLite 원자적 트랜잭션 시작 (전체 덮어쓰기) ---
-                conn = sqlite3.connect(DB_FILE)
-                
-                try:
-                    with conn:
-                        cursor = conn.cursor()
-                        # 1. 기존 데이터 전체 삭제
-                        cursor.execute("DELETE FROM schedules")
-                        cursor.execute("DELETE FROM mangeun_targets")
-                        
-                        # 2. 백업된 근무 일정(schedules) 순회 삽입
-                        for d_key, val in parsed_data["schedules"].items():
-                            cursor.execute("""
-                                INSERT OR REPLACE INTO schedules (date_key, status, start_time)
-                                VALUES (?, ?, ?)
-                            """, (d_key, val.get("status", ""), val.get("start_time", "")))
-                        
-                        # 3. 백업된 만근 목표(mangeun_targets) 순회 삽입
-                        for m_key, val in parsed_data["mangeun_targets"].items():
-                            cursor.execute("""
-                                INSERT OR REPLACE INTO mangeun_targets (month_key, target)
-                                VALUES (?, ?)
-                            """, (m_key, int(val)))
-                            
-                    rebuild_interface()
-                    backup_input_field.value = ""
-                    page.snack_bar = ft.SnackBar(ft.Text("데이터가 전체 덮어쓰기 방식으로 성공적으로 복원되었습니다!"))
-                    page.snack_bar.open = True
-                    
-                except sqlite3.Error as db_err:
-                    page.snack_bar = ft.SnackBar(ft.Text(f"데이터베이스 복원 중 오류가 발생하여 철회되었습니다: {db_err}"))
-                    page.snack_bar.open = True
-                finally:
-                    conn.close()
-            else:
-                page.snack_bar = ft.SnackBar(ft.Text("올바른 백업 양식이 아닙니다."))
-                page.snack_bar.open = True
-        except Exception:
-            page.snack_bar = ft.SnackBar(ft.Text("복원에 실패했습니다. 텍스트를 확인해주세요."))
-            page.snack_bar.open = True
-        page.update()
 
     # 24시간제 다이얼
     hour_picker = ft.CupertinoPicker(
@@ -515,64 +430,7 @@ def main(page: ft.Page):
         alignment="spaceAround"
     )
 
-    # --- 백업 및 복원 접기/펼치기 레이아웃 정의 ---
-    backup_restore_content = ft.Column(
-        [
-            ft.Row(
-                [
-                    ft.ElevatedButton(
-                        "내 근무 데이터 백업 복사", 
-                        icon=ft.icons.COPY,
-                        on_click=trigger_backup_copy,
-                        style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=6))
-                    ),
-                ],
-                alignment="center"
-            ),
-            ft.Row(
-                [
-                    backup_input_field,
-                    ft.ElevatedButton(
-                        "복원하기", 
-                        icon=ft.icons.RESTORE,
-                        on_click=trigger_restore_data,
-                        style=ft.ButtonStyle(bgcolor="#10B981", color="white", shape=ft.RoundedRectangleBorder(radius=6))
-                    )
-                ],
-                alignment="spaceBetween",
-                spacing=6
-            )
-        ],
-        spacing=4,
-        visible=False  # 기본 상태는 숨김(접힘) 처리
-    )
-
-    def toggle_backup_panel(e):
-        """백업/복원 패널을 접고 펼치는 함수"""
-        backup_restore_content.visible = not backup_restore_content.visible
-        toggle_button.text = "🛠️ 백업/복원 설정 닫기" if backup_restore_content.visible else "🛠️ 백업/복원 설정 열기"
-        page.update()
-
-    # 패널을 제어할 토글 버튼
-    toggle_button = ft.TextButton(
-        text="🛠️ 백업/복원 설정 열기",
-        style=ft.ButtonStyle(color="#475569"),
-        on_click=toggle_backup_panel
-    )
-
-    backup_restore_layout = ft.Container(
-        content=ft.Column(
-            [
-                ft.Divider(height=2),
-                ft.Row([toggle_button], alignment="center"),
-                backup_restore_content
-            ],
-            spacing=2
-        ),
-        padding=ft.padding.symmetric(vertical=2, horizontal=4)
-    )
-
-    # 상단 컨텐츠 전용 스크롤 레이아웃 (달력 및 통계, 백업 영역 포함)
+    # 상단 컨텐츠 전용 스크롤 레이아웃 (달력 화면 구성요소만 깔끔하게 보관)
     scrollable_content = ft.Column(
         [
             header_nav,
@@ -582,17 +440,16 @@ def main(page: ft.Page):
             ft.Divider(height=1),
             weeks_header,        
             ft.Divider(height=1),
-            calendar_grid,       
-            backup_restore_layout
+            calendar_grid
         ],
         expand=True,
         scroll=ft.ScrollMode.AUTO
     )
 
-    # 전체 화면 배치 구조 최적화 (하단 바를 스크롤에서 완벽 격리 및 최하단 고정)
+    # 전체 화면 배치 구조 최적화 (하단 메뉴를 최하단에 항상 단단히 고정)
     main_layout = ft.Column(
         [
-            scrollable_content,       # 상단 본문은 유동적으로 흐름/스크롤 처리
+            scrollable_content,       # 상단 본문 스트리밍
             ft.Divider(height=1),     # 구분선
             bottom_navigation_bar     # 하단 고정 메뉴
         ],
