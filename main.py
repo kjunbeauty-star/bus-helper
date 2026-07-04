@@ -236,6 +236,8 @@ def main(page: ft.Page):
                 if day == 0:
                     week_row.controls.append(ft.Container(expand=1, height=46))
                 else:
+                    date_obj = datetime(current['year'], current['month'], day)
+                    weekday = date_obj.weekday()   # 월=0 ... 토=5, 일=6
                     date_key = f"{current['year']}-{current['month']:02d}-{day:02d}"
                     day_info = month_data.get(date_key, {"status": "", "start_time": ""})
                     
@@ -252,6 +254,12 @@ def main(page: ft.Page):
                         bg_color = "#FEEFC3"; text_color = "#E37400"; status_desc = "오후"
                     elif status == "휴무":
                         bg_color = "#FCE8E6"; text_color = "#D93025"; status_desc = "휴무"
+                    if weekday == 6:
+                        day_number_color = "#D93025"
+                    elif weekday == 5:
+                        day_number_color = "#1A73E8"
+                    else:
+                        day_number_color = text_color
 
                     time_display = ft.Text(start_time, size=9, weight="bold", color=text_color) if start_time and status != "휴무" else ft.Container()
 
@@ -261,7 +269,7 @@ def main(page: ft.Page):
                     day_box = ft.Container(
                         content=ft.Column(
                             [
-                                ft.Text(f"{day}", size=12, weight="bold", color=text_color),
+                                ft.Text(f"{day}", size=12, weight="bold", color=day_number_color),
                                 ft.Text(status_desc, size=10, weight="bold", color=text_color),
                                 time_display
                             ],
