@@ -365,7 +365,7 @@ def main(page: ft.Page):
                         ),
                         ft.Container(
                             content=ft.Text("오후조 등록", size=14, weight="bold", color="white"),
-                            bgcolor="#E39430", alignment=ft.Alignment(0, 0), height=38, border_radius=6, expand=1,
+                            bgcolor="#7E22CE", alignment=ft.Alignment(0, 0), height=38, border_radius=6, expand=1,
                             on_click=lambda e: select_status_and_save("오후")
                         ),
                     ],
