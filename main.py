@@ -14,6 +14,13 @@ STORAGE_SCHEDULES_KEY = "bus_helper_schedules"
 STORAGE_MANGEUN_KEY = "bus_helper_mangeun_targets"
 STORAGE_WORK_TYPE_KEY = "bus_helper_work_type"
 
+# --- [v2.1 입력용 전용 스토리지 키 정의] ---
+STORAGE_ROUTE_NUMBER = "bus_helper_route_number"
+STORAGE_PHONEBOOK_OFFICE = "bus_helper_phonebook_office"
+STORAGE_DRIVER_CONTACTS = "bus_helper_driver_contacts"
+STORAGE_TODAY_VEHICLE = "bus_helper_today_vehicle"
+STORAGE_NEIGHBOR_VEHICLES = "bus_helper_neighbor_vehicles"
+
 # 근무 형태
 WORK_TYPE_SHIFT = "교대제"
 WORK_TYPE_ALT_DAY = "격일제"
@@ -76,6 +83,9 @@ def main(page: ft.Page):
     now_kst = datetime.now(KST)
     current = {"year": now_kst.year, "month": now_kst.month, "selected_date": ""}
     selected_time_state = {"hour": 5, "minute": 0}
+
+    # 입력 메뉴 내부에서 공유할 선택 날짜 상태 변수 (기본값 오늘)
+    selected_input_date = now_kst.strftime("%Y-%m-%d")
 
     # 중앙 화면 제어용 컨테이너
     content_area = ft.Container(expand=True)
@@ -533,7 +543,334 @@ def main(page: ft.Page):
             scroll=ft.ScrollMode.AUTO,
         )
 
-    # --- [하단 탭 메뉴 전환] ---
+    # =========================================================================
+    # --- [v2.1 신규 활성화 및 안정화: 운행 정보 입력 화면 관리 구역] ---
+    # =========================================================================
+
+    # 개별 구역 저장 피드백 안내 레이블
+    feedback_labels = {
+        "route": ft.Text("", size=12, color=COLOR_SUCCESS, weight="bold"),
+        "vehicle": ft.Text("", size=12, color=COLOR_SUCCESS, weight="bold"),
+        "neighbors": ft.Text("", size=12, color=COLOR_SUCCESS, weight="bold"),
+        "office": ft.Text("", size=12, color=COLOR_SUCCESS, weight="bold"),
+        "drivers": ft.Text("", size=12, color=COLOR_SUCCESS, weight="bold"),
+    }
+
+    def trigger_feedback(target_key):
+        """저장 성공 피드백 메시지를 화면에 즉시 띄웁니다."""
+        feedback_labels[target_key].value = "저장되었습니다."
+        page.update()
+
+    def get_input_view():
+        nonlocal selected_input_date
+        
+        # 공용 안전 JSON 스토리지 로더 함수로 대전환 처리 통일
+        route_num = page.client_storage.get(STORAGE_ROUTE_NUMBER) or ""
+        office_list = load_json_from_storage(STORAGE_PHONEBOOK_OFFICE, [])
+        driver_list = load_json_from_storage(STORAGE_DRIVER_CONTACTS, [])
+        vehicle_map = load_json_from_storage(STORAGE_TODAY_VEHICLE, {})
+        neighbors_map = load_json_from_storage(STORAGE_NEIGHBOR_VEHICLES, {})
+        
+        # 선택 날짜(`selected_input_date`)에 맵핑된 세부 딕셔너리 추출
+        today_vehicle = vehicle_map.get(selected_input_date, "")
+        today_neighbors = neighbors_map.get(selected_input_date, {
+            "front_car": "", "front_driver_name": "", "front_driver_phone": "",
+            "back_car": "", "back_driver_name": "", "back_driver_phone": ""
+        })
+
+        # 입력 메뉴 재진입 시 기존 저장 완료 메시지 전량 초기화
+        for lbl in feedback_labels.values():
+            lbl.value = ""
+
+        # 상단 날짜 제어 전용 컴포넌트 필드
+        date_display_field = ft.TextField(
+            label="선택된 기준 날짜",
+            value=selected_input_date,
+            read_only=True,
+            width=180,
+            height=45,
+            text_size=14,
+            content_padding=10
+        )
+
+        def handle_date_picked(e):
+            nonlocal selected_input_date
+            if date_picker.value:
+                # 선택된 날짜 문자열 변환 및 할당
+                selected_input_date = date_picker.value.strftime("%Y-%m-%d")
+                # 날짜 변경에 따른 타겟 데이터 동적 리로드 스위칭 후 화면 전체 리빌드
+                content_area.content = get_input_view()
+                page.update()
+
+        date_picker = ft.DatePicker(
+            first_date=datetime(2020, 1, 1),
+            last_date=datetime(2030, 12, 31),
+            on_change=handle_date_picked
+        )
+        # 페이지 리스트 상에 공용 오버레이 등록
+        if date_picker not in page.overlay:
+            page.overlay.append(date_picker)
+
+        # [수정] Web 배포 환경의 안정성을 위해 속성 제어 방식으로 DatePicker 오픈 함수 정의
+        def open_date_picker(e):
+            date_picker.open = True
+            page.update()
+
+        # [1] 노선번호 관리
+        route_field = ft.TextField(label="노선번호 입력", value=route_num, hint_text="예: 143", expand=True)
+        
+        def save_route(e):
+            page.client_storage.set(STORAGE_ROUTE_NUMBER, route_field.value.strip())
+            trigger_feedback("route")
+
+        # [2] 기준 날짜별 차량 번호 관리
+        vehicle_field = ft.TextField(label="오늘 운행 차량 번호", value=today_vehicle, hint_text="예: 1234호", expand=True)
+        
+        def save_today_vehicle(e):
+            v_map = load_json_from_storage(STORAGE_TODAY_VEHICLE, {})
+            v_map[selected_input_date] = vehicle_field.value.strip()
+            page.client_storage.set(STORAGE_TODAY_VEHICLE, json.dumps(v_map, ensure_ascii=False))
+            trigger_feedback("vehicle")
+
+        # [3] 동료 기사 Dropdown 명단 옵션 가공 (메모 결합형 보강)
+        def make_driver_dropdown_options():
+            current_drivers = load_json_from_storage(STORAGE_DRIVER_CONTACTS, [])
+            opts = [ft.dropdown.Option("", "직접 입력 (목록에 없음)")]
+            for d in current_drivers:
+                display_label = f"{d['name']} ({d['phone']} / {d['memo']})" if d.get('memo') else f"{d['name']} ({d['phone']})"
+                opts.append(ft.dropdown.Option(f"{d['name']}/{d['phone']}", display_label))
+            return opts
+
+        front_car_field = ft.TextField(label="앞차 차량번호", value=today_neighbors.get("front_car", ""), expand=1)
+        front_driver_name_field = ft.TextField(label="앞차 운전자 이름", value=today_neighbors.get("front_driver_name", ""), expand=1)
+        front_driver_phone_field = ft.TextField(label="앞차 전화번호", value=today_neighbors.get("front_driver_phone", ""), expand=1)
+        
+        back_car_field = ft.TextField(label="뒷차 차량번호", value=today_neighbors.get("back_car", ""), expand=1)
+        back_driver_name_field = ft.TextField(label="뒷차 운전자 이름", value=today_neighbors.get("back_driver_name", ""), expand=1)
+        back_driver_phone_field = ft.TextField(label="뒷차 전화번호", value=today_neighbors.get("back_driver_phone", ""), expand=1)
+
+        def handle_front_selection(e):
+            if front_driver_dd.value:
+                name, phone = front_driver_dd.value.split("/")
+                front_driver_name_field.value = name
+                front_driver_phone_field.value = phone
+            else:
+                front_driver_name_field.value = ""
+                front_driver_phone_field.value = ""
+            page.update()
+
+        def handle_back_selection(e):
+            if back_driver_dd.value:
+                name, phone = back_driver_dd.value.split("/")
+                back_driver_name_field.value = name
+                back_driver_phone_field.value = phone
+            else:
+                back_driver_name_field.value = ""
+                back_driver_phone_field.value = ""
+            page.update()
+
+        driver_dropdown_options = make_driver_dropdown_options()
+        front_driver_dd = ft.Dropdown(label="등록된 동료 기사 선택 (앞차)", options=driver_dropdown_options, on_change=handle_front_selection)
+        back_driver_dd = ft.Dropdown(label="등록된 동료 기사 선택 (뒷차)", options=driver_dropdown_options, on_change=handle_back_selection)
+
+        def save_neighbors(e):
+            n_map = load_json_from_storage(STORAGE_NEIGHBOR_VEHICLES, {})
+            n_map[selected_input_date] = {
+                "front_car": front_car_field.value.strip(),
+                "front_driver_name": front_driver_name_field.value.strip(),
+                "front_driver_phone": front_driver_phone_field.value.strip(),
+                "back_car": back_car_field.value.strip(),
+                "back_driver_name": back_driver_name_field.value.strip(),
+                "back_driver_phone": back_driver_phone_field.value.strip()
+            }
+            page.client_storage.set(STORAGE_NEIGHBOR_VEHICLES, json.dumps(n_map, ensure_ascii=False))
+            trigger_feedback("neighbors")
+
+        # [4] 사무실/정비고 연락처 구역
+        office_list_layout = ft.Column(spacing=4)
+        office_type_input = ft.TextField(label="구분", hint_text="정비고", expand=1)
+        office_phone_input = ft.TextField(label="전화번호", hint_text="02-1234-5678", expand=2)
+
+        def raise_confirm_dialog(message, on_confirm_click):
+            def close_dialog(e):
+                page.dialog.open = False
+                page.update()
+
+            def process_confirm(e):
+                page.dialog.open = False
+                on_confirm_click()
+                page.update()
+
+            page.dialog = ft.AlertDialog(
+                modal=True,
+                title=ft.Text("삭제 확인"),
+                content=ft.Text(message),
+                actions=[
+                    ft.TextButton("삭제", on_click=process_confirm, style=ft.ButtonStyle(color="red")),
+                    ft.TextButton("취소", on_click=close_dialog),
+                ],
+                actions_alignment="end",
+            )
+            page.dialog.open = True
+            page.update()
+
+        # [수정] 아직 화면 배치가 완전히 끝나기 전의 오작동을 피하기 위해 update_page 스위치 인자 도입
+        def redraw_office_list(update_page=True):
+            office_list_layout.controls.clear()
+            current_items = load_json_from_storage(STORAGE_PHONEBOOK_OFFICE, [])
+            for idx, item in enumerate(current_items):
+                def create_delete_handler(target_idx):
+                    return lambda e: raise_confirm_dialog(
+                        "이 항목을 삭제하시겠습니까?", 
+                        lambda: remove_office_item(target_idx)
+                    )
+                office_list_layout.controls.append(
+                    ft.Row([
+                        ft.Text(f"• {item['type']} : {item['phone']}", size=13, expand=True),
+                        ft.IconButton(icon=ft.icons.DELETE, icon_color=COLOR_OFF_TEXT, icon_size=16, on_click=create_delete_handler(idx))
+                    ], alignment="spaceBetween")
+                )
+            if update_page:
+                page.update()
+
+        def add_office_item(e):
+            t_val = office_type_input.value.strip()
+            p_val = office_phone_input.value.strip()
+            if not t_val or not p_val: return
+            current_items = load_json_from_storage(STORAGE_PHONEBOOK_OFFICE, [])
+            current_items.append({"type": t_val, "phone": p_val})
+            page.client_storage.set(STORAGE_PHONEBOOK_OFFICE, json.dumps(current_items, ensure_ascii=False))
+            office_type_input.value, office_phone_input.value = "", ""
+            redraw_office_list(update_page=True)
+            trigger_feedback("office")
+
+        def remove_office_item(index):
+            current_items = load_json_from_storage(STORAGE_PHONEBOOK_OFFICE, [])
+            if 0 <= index < len(current_items):
+                current_items.pop(index)
+            page.client_storage.set(STORAGE_PHONEBOOK_OFFICE, json.dumps(current_items, ensure_ascii=False))
+            redraw_office_list(update_page=True)
+
+        # [5] 동료운전자 인명부 관리 구역
+        driver_list_layout = ft.Column(spacing=4)
+        drv_name_input = ft.TextField(label="이름", hint_text="홍길동", expand=1)
+        drv_phone_input = ft.TextField(label="전화번호", hint_text="010-1234-5678", expand=1)
+        drv_memo_input = ft.TextField(label="메모 (선택)", hint_text="예: 오전조", expand=1)
+
+        # [수정] 아직 화면 배치가 완전히 끝나기 전의 오작동을 피하기 위해 update_page 스위치 인자 도입
+        def redraw_driver_list(update_page=True):
+            driver_list_layout.controls.clear()
+            current_items = load_json_from_storage(STORAGE_DRIVER_CONTACTS, [])
+            for idx, item in enumerate(current_items):
+                def create_driver_delete_handler(target_idx):
+                    return lambda e: raise_confirm_dialog(
+                        "이 항목을 삭제하시겠습니까?", 
+                        lambda: remove_driver_item(target_idx)
+                    )
+                memo_info = f" ({item['memo']})" if item['memo'] else ""
+                driver_list_layout.controls.append(
+                    ft.Row([
+                        ft.Text(f"👤 {item['name']} | {item['phone']}{memo_info}", size=13, expand=True),
+                        ft.IconButton(icon=ft.icons.DELETE, icon_color=COLOR_OFF_TEXT, icon_size=16, on_click=create_driver_delete_handler(idx))
+                    ], alignment="spaceBetween")
+                )
+            fresh_options = make_driver_dropdown_options()
+            front_driver_dd.options = fresh_options
+            back_driver_dd.options = fresh_options
+            if update_page:
+                page.update()
+
+        def add_driver_item(e):
+            n_val = drv_name_input.value.strip()
+            p_val = drv_phone_input.value.strip()
+            m_val = drv_memo_input.value.strip()
+            if not n_val or not p_val: return
+            current_items = load_json_from_storage(STORAGE_DRIVER_CONTACTS, [])
+            current_items.append({"name": n_val, "phone": p_val, "memo": m_val})
+            page.client_storage.set(STORAGE_DRIVER_CONTACTS, json.dumps(current_items, ensure_ascii=False))
+            drv_name_input.value, drv_phone_input.value, drv_memo_input.value = "", "", ""
+            redraw_driver_list(update_page=True)
+            trigger_feedback("drivers")
+
+        def remove_driver_item(index):
+            current_items = load_json_from_storage(STORAGE_DRIVER_CONTACTS, [])
+            if 0 <= index < len(current_items):
+                current_items.pop(index)
+            page.client_storage.set(STORAGE_DRIVER_CONTACTS, json.dumps(current_items, ensure_ascii=False))
+            redraw_driver_list(update_page=True)
+
+        # [수정] 최초 생성 및 데이터 바인딩 시점에는 아직 화면에 달라붙기 전이므로 page.update()를 명시적으로 생략 처리
+        redraw_office_list(update_page=False)
+        redraw_driver_list(update_page=False)
+
+        # 입력 전용 뷰 콤팩트 세로 배치 레이아웃 조립 반환
+        return ft.Column([
+            ft.Text("운행 정보 입력", size=22, weight="bold", color=COLOR_BLACK),
+            
+            # [수정] 새로운 open_date_picker 구동 함수를 on_click에 안전하게 연결
+            ft.Row([
+                date_display_field,
+                ft.IconButton(
+                    icon=ft.icons.CALENDAR_MONTH,
+                    icon_color=COLOR_PRIMARY,
+                    icon_size=28,
+                    on_click=open_date_picker
+                )
+            ], alignment="start", vertical_alignment="center"),
+            ft.Divider(height=10, color=COLOR_TRANSPARENT),
+            
+            # 노선번호 관리 카드 섹션
+            ft.Card(ft.Container(ft.Column([
+                ft.Text("🚍 노선번호 관리", size=14, weight="bold", color=COLOR_DARK_BLUE),
+                ft.Row([route_field]),
+                ft.ElevatedButton("노선번호 저장", width=280, height=42, bgcolor=COLOR_PRIMARY, color="white", on_click=save_route),
+                feedback_labels["route"]
+            ], spacing=8), padding=10)),
+
+            # 당일 배차 차량번호 등록 관리 카드 섹션
+            ft.Card(ft.Container(ft.Column([
+                ft.Text("🔑 해당 일자 운행 차량 번호 입력", size=14, weight="bold", color=COLOR_DARK_BLUE),
+                ft.Row([vehicle_field]),
+                ft.ElevatedButton("차량 번호 저장", width=280, height=42, bgcolor=COLOR_PRIMARY, color="white", on_click=save_today_vehicle),
+                feedback_labels["vehicle"]
+            ], spacing=8), padding=10)),
+
+            # 앞차/뒷차 연계 정보 연동 등록 관리 카드 섹션
+            ft.Card(ft.Container(ft.Column([
+                ft.Text("↔️ 앞차 / 뒷차 운행 정보 연계", size=14, weight="bold", color=COLOR_DARK_BLUE),
+                front_driver_dd,
+                ft.Row([front_car_field, front_driver_name_field, front_driver_phone_field]),
+                ft.Divider(height=5),
+                back_driver_dd,
+                ft.Row([back_car_field, back_driver_name_field, back_driver_phone_field]),
+                ft.ElevatedButton("연계 배차 정보 일괄 저장", width=280, height=44, bgcolor=COLOR_DARK_BLUE, color="white", on_click=save_neighbors),
+                feedback_labels["neighbors"]
+            ], spacing=8), padding=10)),
+
+            # 실무 연락처 전화번호부 관리 카드 섹션
+            ft.Card(ft.Container(ft.Column([
+                ft.Text("☎️ 사무실 / 정비고 / AS 연락처 등록", size=14, weight="bold", color=COLOR_DARK_BLUE),
+                ft.Row([office_type_input, office_phone_input]),
+                ft.ElevatedButton("연락처 등록추가", width=280, height=42, bgcolor=COLOR_SUCCESS, color="white", on_click=add_office_item),
+                feedback_labels["office"],
+                ft.Divider(height=1),
+                office_list_layout
+            ], spacing=8), padding=10)),
+
+            # 동료 기사단 인명 연락망 관리 카드 섹션
+            ft.Card(ft.Container(ft.Column([
+                ft.Text("👥 동료운전자 비상 연락망 등록", size=14, weight="bold", color=COLOR_DARK_BLUE),
+                ft.Row([drv_name_input, drv_phone_input, drv_memo_input]),
+                ft.ElevatedButton("동료 추가하기", width=280, height=42, bgcolor=COLOR_SUCCESS, color="white", on_click=add_driver_item),
+                feedback_labels["drivers"],
+                ft.Divider(height=1),
+                driver_list_layout
+            ], spacing=8), padding=10)),
+            
+            ft.Container(height=30)  # 스크롤 최하단 탭 가림 현상 방지 공백
+        ], expand=True, scroll=ft.ScrollMode.AUTO)
+
+    # --- [하단 탭 메뉴 전환 확장 분기 연동] ---
     def switch_tab(tab_name):
         btn_calendar.style.color = COLOR_PRIMARY if tab_name == "달력" else COLOR_GREY
         btn_input.style.color = COLOR_PRIMARY if tab_name == "입력" else COLOR_GREY
@@ -543,6 +880,8 @@ def main(page: ft.Page):
         if tab_name == "달력":
             content_area.content = get_calendar_view()
             rebuild_interface(update_page=False)
+        elif tab_name == "입력":
+            content_area.content = get_input_view()
         elif tab_name == "설정":
             content_area.content = get_settings_view()
         else:
@@ -552,7 +891,7 @@ def main(page: ft.Page):
                     ft.Text("해당 기능은 다음 개발 단계에서 추가될 예정입니다.", color=COLOR_GREY),
                 ],
                 expand=True,
-            )
+                )
 
         page.update()
 
