@@ -1,21 +1,40 @@
 import os
 import flet as ft
 import calendar
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 
-# --- [개인화] 동료 기사에게 영향을 주지 않는 순정 파이썬 메모리 장부 ---
-USER_SCHEDULES = {}
-MANGEUN_TARGETS = {}
+# --- [개인화] 서울 표준시 (GMT +9) 설정 ---
+KST = timezone(timedelta(hours=9))
 
 def main(page: ft.Page):
     page.title = "버스기사도우미"
     page.theme_mode = "light"
     page.padding = 4
 
-    current = {"year": 2026, "month": 7, "selected_date": ""}
+    # 현재 날짜 기준 설정 (서울 시각 기준)
+    now_kst = datetime.now(KST)
+    current = {"year": now_kst.year, "month": now_kst.month, "selected_date": ""}
     selected_time_state = {"hour": 5, "minute": 0}
 
-    # 1. 컴포넌트 선언
+    # --- 데이터 로드 및 저장 함수 (Client Storage 활용) ---
+    def load_data():
+        # 내부에 저장된 스케줄 데이터 로드 (없으면 빈 딕셔너리)
+        saved_schedules = page.client_storage.get("user_schedules")
+        saved_mangeun = page.client_storage.get("mangeun_targets")
+        
+        global USER_SCHEDULES, MANGEUN_TARGETS
+        USER_SCHEDULES = saved_schedules if saved_schedules else {}
+        MANGEUN_TARGETS = saved_mangeun if saved_mangeun else {}
+
+    def save_data_to_storage():
+        # 현재 메모리의 데이터를 로컬 저장소에 영구 저장
+        page.client_storage.set("user_schedules", USER_SCHEDULES)
+        page.client_storage.set("mangeun_targets", MANGEUN_TARGETS)
+
+    # 최초 실행 시 데이터 불러오기
+    load_data()
+
+    # 컴포넌트 선언
     month_title = ft.Text("", size=20, weight="bold", text_align="center")
     stats_text = ft.Text("", size=13, weight="bold", color="#1E3A8A")
     mangeun_text = ft.Text("", size=13, weight="bold", color="#1E3A8A")
@@ -24,306 +43,247 @@ def main(page: ft.Page):
     popup_date_title = ft.Text("", size=16, weight="bold", color="black", text_align="center")
     
     mangeun_setting_field = ft.TextField(
-        value="22", 
+        value=str(MANGEUN_TARGETS.get(f"{current['year']}-{current['month']}", 22)), 
         text_size=12, 
         content_padding=2, 
         text_align="center"
     )
 
-    # 영문 없이 숫자만 깔끔하게 돌아가는 24시간제 다이얼
-    hour_picker = ft.CupertinoPicker(
-        controls=[ft.Text(f"{i:02d}", size=20) for i in range(24)],
-        selected_index=5,
-        on_change=lambda e: update_hour(int(e.control.selected_index)),
-        height=100,
-        expand=1,
-        looping=True,
-    )
-    
-    minute_picker = ft.CupertinoPicker(
-        controls=[ft.Text(f"{i:02d}", size=20) for i in range(60)],
-        selected_index=0,
-        on_change=lambda e: update_minute(int(e.control.selected_index)),
-        height=100,
-        expand=1,
-        looping=True,
-    )
+    # 대화상자(Confirm) 닫기용
+    def close_confirm_dialog(e):
+        confirm_dialog.open = False
+        page.update()
 
-    def update_hour(val):
-        selected_time_state["hour"] = val
+    # 실제 저장 로직 수행 (확인 버튼 클릭 시)
+    def handle_save_confirmed(e):
+        confirm_dialog.open = False
+        save_data_to_storage()
+        page.show_snack_bar(ft.SnackBar(ft.Text("근무 상태가 기기에 안전하게 저장되었습니다!"), open=True))
+        page.update()
 
-    def update_minute(val):
-        selected_time_state["minute"] = val
-
-    dial_row = ft.Row(
-        [
-            hour_picker,
-            ft.Text(":", size=20, weight="bold", color="black"),
-            minute_picker,
+    # 저장 확인 팝업창 (AlertDialog)
+    confirm_dialog = ft.AlertDialog(
+        modal=True,
+        title=ft.Text("변경사항 저장"),
+        content=ft.Text("현재까지 입력된 근무 상태와 만근 설정을 저장하시겠습니까?\n저장 후에는 서버가 리셋되어도 유지됩니다."),
+        actions=[
+            ft.TextButton("취소", on_click=close_confirm_dialog),
+            ft.TextButton("확인", on_click=handle_save_confirmed, style=ft.ButtonStyle(color="blue")),
         ],
-        alignment="center",
-        height=100
+        actions_alignment="end",
     )
+    page.dialog = confirm_dialog
 
-    popup_layer = ft.Container(
-        visible=False,
-        bgcolor="#AA000000",  
-        alignment=ft.Alignment(0, 0),  
-        expand=True
-    )
-
-    # 2. 데이터 제어 함수
-    def load_user_schedules():
-        global USER_SCHEDULES
-        return USER_SCHEDULES
-
-    def save_user_schedules(data):
-        global USER_SCHEDULES
-        USER_SCHEDULES = data
-
-    def get_mangeun_target():
-        global MANGEUN_TARGETS
+    # 메인창 저장 버튼 클릭 이벤트
+    def on_main_save_click(e):
+        # 현재 만근 기준일 수도 딕셔너리에 실시간 반영 후 팝업 띄움
+        month_key = f"{current['year']}-{current['month']}"
         try:
-            y, m = int(current['year']), int(current['month'])
-            key = f"{y}_{m}"
-            if key in MANGEUN_TARGETS:
-                return int(MANGEUN_TARGETS[key])
-            days_in_month = calendar.monthrange(y, m)[1]
-            return 22 if days_in_month == 31 else (20 if m == 2 else 21)
-        except:
-            return 22
-
-    def save_mangeun_target(e):
-        global MANGEUN_TARGETS
-        try:
-            val = int(mangeun_setting_field.value)
-            key = f"{current['year']}_{current['month']}"
-            MANGEUN_TARGETS[key] = val
-            rebuild_interface() 
+            MANGEUN_TARGETS[month_key] = int(mangeun_setting_field.value)
         except ValueError:
-            pass
+            MANGEUN_TARGETS[month_key] = 22
+        
+        confirm_dialog.open = True
+        page.update()
 
-    # 3. 화면 리빌드 함수 (오늘 날짜 구글 캘린더식 테두리 하이라이트 추가)
-    def rebuild_interface():
-        # 시스템의 실제 오늘 날짜 가져오기 (2026년 7월 4일 기준)
-        today = datetime.now()
-        today_y = today.year
-        today_m = today.month
-        today_d = today.day
+    # 일정 입력용 팝업 다이얼로그 선언
+    schedule_dialog = ft.AlertDialog(title=ft.Text("근무 설정"))
 
-        month_title.value = f"{current['year']}년 {current['month']}월"
-        month_prefix = f"{current['year']}-{current['month']:02d}"
+    def open_schedule_popup(date_str):
+        current["selected_date"] = date_str
+        popup_date_title.value = f"{date_str} 근무 선택"
         
-        all_data = load_user_schedules()
-        month_data = {k: v for k, v in all_data.items() if k.startswith(month_prefix)}
+        current_status = USER_SCHEDULES.get(date_str, {}).get("status", "미설정")
+        current_time = USER_SCHEDULES.get(date_str, {}).get("time", "05:00")
         
-        work_days = sum(1 for d in month_data.values() if d.get("status") in ["오전", "오후"])
-        off_days = sum(1 for d in month_data.values() if d.get("status") == "휴무")
-        
-        m_target = get_mangeun_target()
-        mangeun_setting_field.value = str(m_target)
-        
-        stats_text.value = f"근무 {work_days}일   휴무 {off_days}일"
-        
-        diff = work_days - m_target
-        if diff >= 0:
-            mangeun_text.value = f"만근 {m_target}일 · 기준보다 {diff}일 초과"
-        else:
-            mangeun_text.value = f"만근 {m_target}일 · 기준보다 {abs(diff)}일 부족"
+        try:
+            h, m = map(int, current_time.split(":"))
+        except:
+            h, m = 5, 0
+        selected_time_state["hour"] = h
+        selected_time_state["minute"] = m
 
-        calendar_grid.controls.clear()
+        def set_status(status_name):
+            if date_str not in USER_SCHEDULES:
+                USER_SCHEDULES[date_str] = {}
+            USER_SCHEDULES[date_str]["status"] = status_name
+            USER_SCHEDULES[date_str]["time"] = f"{selected_time_state['hour']:02d}:{selected_time_state['minute']:02d}"
+            schedule_dialog.open = False
+            update_calendar()
+
+        def delete_status(e):
+            if date_str in USER_SCHEDULES:
+                del USER_SCHEDULES[date_str]
+            schedule_dialog.open = False
+            update_calendar()
+
+        def on_time_change(hour_delta, minute_delta):
+            selected_time_state["hour"] = (selected_time_state["hour"] + hour_delta) % 24
+            selected_time_state["minute"] = (selected_time_state["minute"] + minute_delta) % 60
+            time_text.value = f"{selected_time_state['hour']:02d}:{selected_time_state['minute']:02d}"
+            if date_str in USER_SCHEDULES:
+                USER_SCHEDULES[date_str]["time"] = time_text.value
+            page.update()
+
+        time_text = ft.Text(f"{selected_time_state['hour']:02d}:{selected_time_state['minute']:02d}", size=20, weight="bold")
+
+        schedule_dialog.content = ft.Container(
+            content=ft.Column(
+                [
+                    popup_date_title,
+                    ft.Divider(),
+                    ft.Text("근무 종류 선택", weight="bold"),
+                    ft.Row([
+                        ft.ElevatedButton("오전", bgcolor="#E3F2FD", color="#1E88E5", on_click=lambda _: set_status("오전"), expand=1),
+                        ft.ElevatedButton("오후", bgcolor="#FFF3E0", color="#F4511E", on_click=lambda _: set_status("오후"), expand=1),
+                        ft.ElevatedButton("휴무", bgcolor="#E8F5E9", color="#43A047", on_click=lambda _: set_status("휴무"), expand=1),
+                    ], alignment="center"),
+                    ft.Divider(),
+                    ft.Text("출근 시간 설정", weight="bold"),
+                    ft.Row([
+                        ft.IconButton(ft.icons.REMOVE, on_click=lambda _: on_time_change(-1, 0)),
+                        ft.IconButton(ft.icons.KEYBOARD_ARROW_DOWN, on_click=lambda _: on_time_change(0, -10)),
+                        time_text,
+                        ft.IconButton(ft.icons.KEYBOARD_ARROW_UP, on_click=lambda _: on_time_change(0, 10)),
+                        ft.IconButton(ft.icons.ADD, on_click=lambda _: on_time_change(1, 0)),
+                    ], alignment="center"),
+                    ft.Divider(),
+                    ft.ElevatedButton("근무 삭제", bgcolor="#FFEBEE", color="#E53935", on_click=delete_status, width=200),
+                ],
+                tight=True,
+                horizontal_alignment="center",
+                spacing=10
+            ),
+            width=300,
+            padding=10
+        )
+        schedule_dialog.open = True
+        page.update()
+
+    def update_calendar():
+        year = current["year"]
+        month = current["month"]
+        
+        month_title.value = f"{year}년 {month}월"
+        month_key = f"{year}-{month}"
+        
+        # 만근 기준일 가져오기
+        target_mangeun = MANGEUN_TARGETS.get(month_key, 22)
+        mangeun_setting_field.value = str(target_mangeun)
+
+        # 달력 날짜 계산
         cal = calendar.Calendar(firstweekday=6)
-        month_weeks = cal.monthdayscalendar(current['year'], current['month'])
+        month_days = cal.monthdayscalendar(year, month)
+
+        # 통계 계산
+        work_days = 0
+        off_days = 0
+        for d in range(1, 32):
+            date_key = f"{year}-{month:02d}-{d:02d}"
+            if date_key in USER_SCHEDULES:
+                status = USER_SCHEDULES[date_key].get("status", "")
+                if status in ["오전", "오후"]:
+                    work_days += 1
+                elif status == "휴무":
+                    off_days += 1
+
+        stats_text.value = f"📊 이번 달 근무 현황: 총 {work_days}일 출근 / 휴무 {off_days}일"
         
-        for week in month_weeks:
+        diff = work_days - target_mangeun
+        if diff >= 0:
+            mangeun_text.value = f"🎉 만근 달성! 기준({target_mangeun}일)보다 {diff}일 더 근무하셨습니다."
+            mangeun_text.color = "green"
+        else:
+            mangeun_text.value = f"⚠️ 만근까지 {abs(diff)}일 부족합니다. (기준: {target_mangeun}일)"
+            mangeun_text.color = "red"
+
+        # 그리드 초기화 후 다시 그리기
+        calendar_grid.controls.clear()
+        
+        # 오늘 날짜 하이라이트용 (서울시각 기준)
+        today_str = datetime.now(KST).strftime("%Y-%m-%d")
+
+        for week in month_days:
             week_row = ft.Row(alignment="spaceAround", spacing=2)
             for day in week:
                 if day == 0:
-                    week_row.controls.append(ft.Container(expand=1, height=46))
+                    week_row.controls.append(ft.Container(expand=1, height=55))
                 else:
-                    date_key = f"{current['year']}-{current['month']:02d}-{day:02d}"
-                    day_info = month_data.get(date_key, {"status": "", "start_time": ""})
-                    
-                    status = day_info.get("status", "")
-                    start_time = day_info.get("start_time", "")
-                    
-                    bg_color = "#FFFFFF"
-                    text_color = "#000000"
-                    status_desc = ""
-                    
+                    date_str = f"{year}-{month:02d}-{day:02d}"
+                    schedule = USER_SCHEDULES.get(date_str, {})
+                    status = schedule.get("status", "")
+                    time_str = schedule.get("time", "")
+
+                    # 상태별 색상 테마
+                    bg_color = "white"
+                    text_color = "black"
+                    border_style = None
+                    display_text = f"{day}"
+
                     if status == "오전":
-                        bg_color = "#D2E3FC"; text_color = "#1A73E8"; status_desc = "오전"
+                        bg_color = "#E3F2FD"
+                        text_color = "#1E88E5"
+                        display_text = f"{day}\n오전\n{time_str}"
                     elif status == "오후":
-                        bg_color = "#FEEFC3"; text_color = "#E37400"; status_desc = "오후"
+                        bg_color = "#FFF3E0"
+                        text_color = "#F4511E"
+                        display_text = f"{day}\n오후\n{time_str}"
                     elif status == "휴무":
-                        bg_color = "#FCE8E6"; text_color = "#D93025"; status_desc = "휴무"
+                        bg_color = "#E8F5E9"
+                        text_color = "#43A047"
+                        display_text = f"{day}\n휴무"
 
-                    time_display = ft.Text(start_time, size=9, weight="bold", color=text_color) if start_time and status != "휴무" else ft.Container()
-
-                    # 📌 [구글 캘린더 감성] 스마트폰 실제 오늘 날짜와 일치하면 파란색 굵은 테두리(박스) 추가!
-                    is_today = (current['year'] == today_y and current['month'] == today_m and day == today_d)
-                    day_border = ft.Border.all(2, "#2563EB") if is_today else None
+                    # 오늘 날짜 강조 표시 테두리
+                    if date_str == today_str:
+                        border_style = ft.border.all(2, "#6200EE")
 
                     day_box = ft.Container(
-                        content=ft.Column(
-                            [
-                                ft.Text(f"{day}", size=12, weight="bold", color=text_color),
-                                ft.Text(status_desc, size=10, weight="bold", color=text_color),
-                                time_display
-                            ],
-                            alignment="center",
-                            horizontal_alignment="center",
-                            spacing=0
-                        ),
-                        bgcolor=bg_color,
-                        border=day_border, # 테두리 적용
-                        border_radius=4,
-                        height=46,
+                        content=ft.Text(display_text, size=11, weight="bold", color=text_color, text_align="center"),
+                        alignment=ft.alignment.center,
                         expand=1,
-                        on_click=lambda e, dk=date_key: open_input_popup(dk)
+                        height=55,
+                        bgcolor=bg_color,
+                        border=border_style,
+                        border_radius=4,
+                        on_click=lambda e, d_str=date_str: open_schedule_popup(d_str)
                     )
                     week_row.controls.append(day_box)
-            calendar_grid.controls.append(week_row)
+            calendar_grid.controls.add(week_row)
+        
         page.update()
 
-    # 4. 팝업창 제어 함수
-    def open_input_popup(date_key):
-        current["selected_date"] = date_key
-        popup_date_title.value = f"{date_key}\n근무를 선택하거나 시간을 맞추세요"
-        
-        all_data = load_user_schedules()
-        day_info = all_data.get(date_key, {})
-        current_time = day_info.get("start_time", "")
-        
-        if current_time and ":" in current_time:
-            h, m = map(int, current_time.split(":"))
-            selected_time_state["hour"] = h
-            selected_time_state["minute"] = m
-            hour_picker.selected_index = h
-            minute_picker.selected_index = m
-        else:
-            selected_time_state["hour"] = 5
-            selected_time_state["minute"] = 0
-            hour_picker.selected_index = 5
-            minute_picker.selected_index = 0
-            
-        popup_layer.visible = True
-        page.update()
+    def change_month(delta):
+        current["month"] += delta
+        if current["month"] > 12:
+            current["month"] = 1
+            current["year"] += 1
+        elif current["month"] < 1:
+            current["month"] = 12
+            current["year"] -= 1
+        update_calendar()
 
-    def select_status_and_save(status_value):
-        target_date = current["selected_date"]
-        all_data = load_user_schedules()
-        
-        if status_value == "선택취소":
-            if target_date in all_data:
-                del all_data[target_date]
-            save_user_schedules(all_data)
-            popup_layer.visible = False  
-            rebuild_interface()
-            return
-
-        final_time = ""
-        if status_value == "자동":
-            h = selected_time_state["hour"]
-            m = selected_time_state["minute"]
-            if h >= 12:
-                status_value = "오후"
-            else:
-                status_value = "오전"
-            final_time = f"{h:02d}:{m:02d}"
-        else:
-            final_time = ""
-
-        all_data[target_date] = {"status": status_value, "start_time": final_time}
-        save_user_schedules(all_data)
-        
-        popup_layer.visible = False  
-        rebuild_interface()          
-
-    # 5. 팝업창 디자인 구성
-    popup_card = ft.Container(
-        content=ft.Column(
-            [
-                ft.Row([popup_date_title], alignment="center"),
-                ft.Divider(height=1, color="transparent"),
-                dial_row, 
-                ft.Container(
-                    content=ft.Text("선택한 시간으로 저장", size=15, weight="bold", color="white"),
-                    bgcolor="#2563EB", alignment=ft.Alignment(0, 0), height=44, border_radius=6,
-                    on_click=lambda e: select_status_and_save("자동")
-                ),
-                ft.Divider(height=2),
-                ft.Text("시간 없이 근무만 등록할 때:", size=11, weight="bold", color="grey"),
-                ft.Container(
-                    content=ft.Text("휴무 지정", size=15, weight="bold", color="white"),
-                    bgcolor="#D93025", alignment=ft.Alignment(0, 0), height=40, border_radius=6,
-                    on_click=lambda e: select_status_and_save("휴무")
-                ),
-                ft.Row(
-                    [
-                        ft.Container(
-                            content=ft.Text("오전조 등록", size=14, weight="bold", color="white"),
-                            bgcolor="#5C93E6", alignment=ft.Alignment(0, 0), height=38, border_radius=6, expand=1,
-                            on_click=lambda e: select_status_and_save("오전")
-                        ),
-                        ft.Container(
-                            content=ft.Text("오후조 등록", size=14, weight="bold", color="white"),
-                            bgcolor="#E39430", alignment=ft.Alignment(0, 0), height=38, border_radius=6, expand=1,
-                            on_click=lambda e: select_status_and_save("오후")
-                        ),
-                    ],
-                    spacing=10
-                ),
-                ft.Divider(height=1, color="transparent"),
-                ft.Row(
-                    [
-                        ft.TextButton("선택취소(삭제)", on_click=lambda e: select_status_and_save("선택취소"), style=ft.ButtonStyle(color="red")),
-                        ft.TextButton("닫기", on_click=lambda e: setattr(popup_layer, "visible", False) or page.update()),
-                    ],
-                    alignment="spaceBetween"
-                )
-            ],
-            spacing=6,
-            tight=True
-        ),
-        bgcolor="white", padding=12, border_radius=12, width=300
-    )
-    popup_layer.content = popup_card
-
-    # 상하단 내비게이션 레이아웃
-    def move_prev(e):
-        current["month"] -= 1
-        if current["month"] == 0: current["month"] = 12; current["year"] -= 1
-        rebuild_interface()
-
-    def move_next(e):
-        current["month"] += 1
-        if current["month"] == 13: current["month"] = 1; current["year"] += 1
-        rebuild_interface()
-
+    # 상단 네비게이션 바
     header_nav = ft.Row(
         [
-            ft.TextButton("◀ 이전", on_click=move_prev, style=ft.ButtonStyle(color="black")),
+            ft.IconButton(ft.icons.ARROW_BACK_IOS, on_click=lambda _: change_month(-1), icon_size=16),
             month_title,
-            ft.TextButton("다음 ▶", on_click=move_next, style=ft.ButtonStyle(color="black")),
+            ft.IconButton(ft.icons.ARROW_FORWARD_IOS, on_click=lambda _: change_month(1), icon_size=16),
         ],
-        alignment="spaceBetween"
+        alignment="center"
     )
 
+    # 만근일수 수동 설정 영역
     mangeun_setting_row = ft.Row(
         [
-            ft.Text("만근 기준", size=13, color="black"),
-            ft.Container(content=mangeun_setting_field, width=38, height=24),
-            ft.FilledButton(
-                "저장", 
-                height=24, 
-                style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=4)),
-                on_click=save_mangeun_target
-            )
+            ft.Text("이번 달 만근 기준일수 직접 설정:", size=11, color="grey"),
+            ft.Container(content=mangeun_setting_field, width=40, height=25),
+            ft.Text("일", size=11, color="grey"),
+            ft.TextButton("반영", on_click=lambda _: update_calendar(), style=ft.ButtonStyle(padding=2))
         ],
-        alignment="spaceBetween"
+        alignment="center"
     )
 
+    # 요일 헤더
     days_letters = ["일", "월", "화", "수", "목", "금", "토"]
     weeks_header = ft.Row(
         [
@@ -335,6 +295,7 @@ def main(page: ft.Page):
         alignment="spaceAround"
     )
 
+    # 하단 탭 내비게이션 바
     bottom_navigation_bar = ft.Row(
         [
             ft.TextButton("달력", style=ft.ButtonStyle(color="#2563EB"), expand=1, height=36),
@@ -343,6 +304,17 @@ def main(page: ft.Page):
             ft.TextButton("설정", style=ft.ButtonStyle(color="grey"), expand=1, height=40),
         ],
         alignment="spaceAround"
+    )
+
+    # 신규 추가된 메인 저장 버튼
+    save_main_button = ft.ElevatedButton(
+        text="현재 설정 및 근무 저장하기",
+        icon=ft.icons.SAVE,
+        bgcolor="#2563EB",
+        color="white",
+        on_click=on_main_save_click,
+        style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=6)),
+        height=40
     )
 
     main_layout = ft.Column(
@@ -356,21 +328,17 @@ def main(page: ft.Page):
             ft.Divider(height=1),
             calendar_grid,       
             ft.Divider(height=2),
-            bottom_navigation_bar 
+            ft.Row([save_main_button], alignment="center"),  # 저장 버튼 추가 위치
+            ft.Divider(height=1),
+            bottom_navigation_bar
         ],
-        expand=True
+        scroll="auto"
     )
 
-    page.add(
-        ft.Stack(
-            [
-                main_layout,
-                popup_layer
-            ],
-            expand=True
-        )
-    )
+    page.add(main_layout)
+    page.overlay.append(schedule_dialog)
+    update_calendar()
 
-    rebuild_interface()
-
-ft.app(target=main, host="0.0.0.0", port=int(os.environ.get("PORT", 8080)), view=ft.AppView.WEB_BROWSER)
+if __name__ == "__main__":
+    # 웹서버 형태로 구동되도록 설정 유지
+    ft.app(target=main, view=ft.AppView.WEB_BROWSER, port=8550)
