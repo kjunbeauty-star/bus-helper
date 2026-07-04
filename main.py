@@ -3,12 +3,15 @@ import sqlite3  # SQLite3 데이터베이스 모듈
 import calendar
 from datetime import datetime, timedelta, timezone
 import flet as ft
+import json
 
 # 대한민국 표준시 (GMT +9:00) 설정
 KST = timezone(timedelta(hours=9))
 
 # 데이터베이스 파일 이름 정의
 DB_FILE = "schedules.db"
+STORAGE_SCHEDULES_KEY = "bus_helper_schedules"
+STORAGE_MANGEUN_KEY = "bus_helper_mangeun_targets"
 
 # --- [SQLite3 데이터베이스 제어 함수] ---
 
@@ -100,12 +103,16 @@ def main(page: ft.Page):
     page.theme_mode = "light"
     page.padding = 4
 
-    # 데이터베이스 및 테이블 초기화 고정
-    init_db()
+    # 폰/브라우저 저장소에서 기존 데이터 로드
+    saved_schedules = page.client_storage.get(STORAGE_SCHEDULES_KEY)
+    saved_targets = page.client_storage.get(STORAGE_MANGEUN_KEY)
 
-    # 앱 시작 시 SQLite DB에서 기존 데이터 로드 (로컬 변수로 관리)
-    USER_SCHEDULES = load_schedules_from_db()
-    MANGEUN_TARGETS = load_mangeun_targets_from_db()
+    USER_SCHEDULES = json.loads(saved_schedules) if saved_schedules else {}
+    MANGEUN_TARGETS = json.loads(saved_targets) if saved_targets else {}
+    def save_all_to_client_storage():
+        """현재 근무표와 만근 기준을 폰/브라우저 저장소에 저장합니다."""
+        page.client_storage.set(STORAGE_SCHEDULES_KEY, json.dumps(USER_SCHEDULES, ensure_ascii=False))
+        page.client_storage.set(STORAGE_MANGEUN_KEY, json.dumps(MANGEUN_TARGETS, ensure_ascii=False))
 
     # 현재 시간 세팅
     now_kst = datetime.now(KST)
@@ -127,7 +134,7 @@ def main(page: ft.Page):
             MANGEUN_TARGETS[key] = val
             
             # DB에 즉시 저장
-            save_mangeun_target_to_db(key, val)
+            save_all_to_client_storage()
             rebuild_interface()
         except (ValueError, TypeError):
             pass
@@ -199,8 +206,6 @@ def main(page: ft.Page):
     # 3. 화면 리빌드 함수 (GMT+9 서울 시간 고정 및 DB 캐시 매칭)
     def rebuild_interface():
         nonlocal USER_SCHEDULES, MANGEUN_TARGETS
-        USER_SCHEDULES = load_schedules_from_db()
-        MANGEUN_TARGETS = load_mangeun_targets_from_db()
 
         today = datetime.now(KST)
         today_y = today.year
@@ -315,7 +320,8 @@ def main(page: ft.Page):
         target_date = current["selected_date"]
         
         if status_value == "선택취소":
-            delete_schedule_from_db(target_date)
+            USER_SCHEDULES.pop(target_date, None)
+            save_all_to_client_storage()
             popup_layer.visible = False  
             rebuild_interface()
             return
@@ -332,7 +338,8 @@ def main(page: ft.Page):
         else:
             final_time = ""
 
-        save_schedule_to_db(target_date, status_value, final_time)
+        USER_SCHEDULES[target_date] = {"status": status_value, "start_time": final_time}
+        save_all_to_client_storage()
         
         popup_layer.visible = False  
         rebuild_interface()          
