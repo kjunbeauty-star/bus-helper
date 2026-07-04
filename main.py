@@ -1,51 +1,25 @@
-import os
-import json  # 📌 기사님의 소중한 데이터를 저장할 장부 기능 핵심 탑재!
 import calendar
 from datetime import datetime, timedelta, timezone
 import flet as ft
 
-# --- [안정성] 기기 내부 파일에 즉시 기록하는 자동저장 장부 ---
-DATA_FILE = "bus_driver_helper_data.json"
-USER_SCHEDULES = {}
-MANGEUN_TARGETS = {}
-
 # 대한민국 표준시 (GMT +9:00) 설정
 KST = timezone(timedelta(hours=9))
-
-def load_data_from_file():
-    """앱 시작 시 기기 내부 파일에서 저장된 데이터를 불러옵니다."""
-    global USER_SCHEDULES, MANGEUN_TARGETS
-    if os.path.exists(DATA_FILE):
-        try:
-            with open(DATA_FILE, "r", encoding="utf-8") as f:
-                data = json.load(f)  # 여기서 json 기능을 사용합니다.
-                USER_SCHEDULES = data.get("schedules", {})
-                MANGEUN_TARGETS = data.get("mangeun", {})
-        except Exception:
-            USER_SCHEDULES = {}
-            MANGEUN_TARGETS = {}
-
-def save_data_to_file():
-    """데이터가 변경되면 이 함수가 호출되어 기기에 즉시 자동 저장됩니다."""
-    data = {
-        "schedules": USER_SCHEDULES,
-        "mangeun": MANGEUN_TARGETS
-    }
-    try:
-        with open(DATA_FILE, "w", encoding="utf-8") as f:
-            json.dump(data, f, ensure_ascii=False, indent=4)  # 여기서 json으로 저장합니다.
-    except Exception as e:
-        print(f"자동 저장 실패: {e}")
 
 def main(page: ft.Page):
     page.title = "버스기사도우미"
     page.theme_mode = "light"
     page.padding = 4
 
-    # 데이터 로드
-    load_data_from_file()
+    # --- [웹 환경 맞춤 영구 저장] 브라우저 자체 저장소에서 데이터 읽기 ---
+    USER_SCHEDULES = page.client_storage.get("user_schedules") or {}
+    MANGEUN_TARGETS = page.client_storage.get("mangeun_targets") or {}
 
-    # 한국 표준시(GMT+9) 기준으로 현재의 년/월 구하기
+    def save_data_to_web():
+        """웹 브라우저 내부에 데이터를 즉시 영구 저장합니다."""
+        page.client_storage.set("user_schedules", USER_SCHEDULES)
+        page.client_storage.set("mangeun_targets", MANGEUN_TARGETS)
+
+    # 현재 시간 세팅
     now_kst = datetime.now(KST)
     current = {"year": now_kst.year, "month": now_kst.month, "selected_date": ""}
     selected_time_state = {"hour": 5, "minute": 0}
@@ -57,23 +31,26 @@ def main(page: ft.Page):
     calendar_grid = ft.Column(spacing=2)
     popup_date_title = ft.Text("", size=16, weight="bold", color="black", text_align="center")
     
-    # 만근 기준 입력 필드값 변경 시 실시간 자동 저장을 위한 이벤트 핸들러
-    def on_mangeun_changed(e):
+    # [수정] 드롭다운 값 변경 시 실시간 자동 저장 처리
+    def on_mangeun_dropdown_changed(e):
         try:
-            val = int(mangeun_setting_field.value)
+            val = int(mangeun_dropdown.value)
             key = f"{current['year']}_{current['month']}"
             MANGEUN_TARGETS[key] = val
-            save_data_to_file()  # 실시간 자동 저장
+            save_data_to_web()  # 브라우저 스토리지 자동저장
             rebuild_interface()
         except ValueError:
             pass
 
-    mangeun_setting_field = ft.TextField(
-        value="22", 
-        text_size=12, 
-        content_padding=2, 
-        text_align="center",
-        on_change=on_mangeun_changed
+    # [수정 사항 2] 타이핑 대신 톡톡 골라 쓸 수 있는 드롭다운 메뉴 (15일 ~ 26일 범위 설정)
+    mangeun_dropdown = ft.Dropdown(
+        options=[ft.dropdown.Option(str(i)) for i in range(15, 27)],
+        width=70,
+        height=35,
+        text_size=12,
+        content_padding=ft.padding.all(4),
+        alignment=ft.alignment.center,
+        on_change=on_mangeun_dropdown_changed  # 선택하는 즉시 자동저장
     )
 
     # 24시간제 다이얼
@@ -130,7 +107,7 @@ def main(page: ft.Page):
         except:
             return 22
 
-    # 3. 화면 리빌드 함수 (GMT+9 서울 시간 고정 및 하이라이트)
+    # 3. 화면 리빌드 함수 (GMT+9 서울 시간 고정)
     def rebuild_interface():
         today = datetime.now(KST)
         today_y = today.year
@@ -146,7 +123,7 @@ def main(page: ft.Page):
         off_days = sum(1 for d in month_data.values() if d.get("status") == "휴무")
         
         m_target = get_mangeun_target()
-        mangeun_setting_field.value = str(m_target)
+        mangeun_dropdown.value = str(m_target)  # 드롭다운 선택값 매칭
         
         stats_text.value = f"근무 {work_days}일   휴무 {off_days}일"
         
@@ -185,7 +162,6 @@ def main(page: ft.Page):
 
                     time_display = ft.Text(start_time, size=9, weight="bold", color=text_color) if start_time and status != "휴무" else ft.Container()
 
-                    # 한국 시간 기준 오늘 날짜 테두리 하이라이트
                     is_today = (current['year'] == today_y and current['month'] == today_m and day == today_d)
                     day_border = ft.Border.all(2, "#2563EB") if is_today else None
 
@@ -240,7 +216,7 @@ def main(page: ft.Page):
         if status_value == "선택취소":
             if target_date in USER_SCHEDULES:
                 del USER_SCHEDULES[target_date]
-            save_data_to_file()  # 즉시 자동 저장
+            save_data_to_web()
             popup_layer.visible = False  
             rebuild_interface()
             return
@@ -258,7 +234,7 @@ def main(page: ft.Page):
             final_time = ""
 
         USER_SCHEDULES[target_date] = {"status": status_value, "start_time": final_time}
-        save_data_to_file()  # 즉시 자동 저장
+        save_data_to_web()
         
         popup_layer.visible = False  
         rebuild_interface()          
@@ -313,7 +289,7 @@ def main(page: ft.Page):
     )
     popup_layer.content = popup_card
 
-    # 상하단 내비게이션 레이아웃
+    # 상하단 레이아웃
     def move_prev(e):
         current["month"] -= 1
         if current["month"] == 0: current["month"] = 12; current["year"] -= 1
@@ -333,10 +309,11 @@ def main(page: ft.Page):
         alignment="spaceBetween"
     )
 
+    # [수정] 만근 기준 텍스트와 드롭다운 정렬
     mangeun_setting_row = ft.Row(
         [
-            ft.Text("만근 기준", size=13, color="black"),
-            ft.Container(content=mangeun_setting_field, width=38, height=24),
+            ft.Text("만근", size=13, weight="bold", color="black"),
+            mangeun_dropdown,
             ft.Container(width=10)
         ],
         alignment="spaceBetween"
