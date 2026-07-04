@@ -556,8 +556,8 @@ def main(page: ft.Page):
         "drivers": ft.Text("", size=12, color=COLOR_SUCCESS, weight="bold"),
     }
 
-    # "선택 날짜 운행 요약" 박스 텍스트 컴포넌트 선언
-    summary_text = ft.Text("", size=13, color=COLOR_BLACK, line_height=1.4)
+    # [수정 완료] Flet 구버전 호환성을 위해 오류를 유발하던 line_height=1.4 옵션 제거
+    summary_text = ft.Text("", size=13, color=COLOR_BLACK)
     
     # 요약 정보 실시간 리프레시 함수
     def update_summary_box():
@@ -919,7 +919,7 @@ def main(page: ft.Page):
                 feedback_labels["neighbors"]
             ], spacing=8), padding=10)),
 
-            # 실무 연락처 전화번호부 관리 카드 섹션 (수정 완료: 구분과 전화번호를 시원한 단독 세로 배치화)
+            # 실무 연락처 전화번호부 관리 카드 섹션 (구분과 전화번호를 시원한 단독 세로 배치화)
             ft.Card(ft.Container(ft.Column([
                 ft.Text("☎️ 사무실 / 정비고 / AS 연락처 등록", size=14, weight="bold", color=COLOR_DARK_BLUE),
                 office_type_input,
