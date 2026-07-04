@@ -1,5 +1,5 @@
 import os  # Render 배포 환경용 및 파일 확인 모듈
-import sqlite3  # SQLite3 데이터베이스 모듈
+import sqlite3  # SQLite3 데이터베이스 모듈 추가
 import calendar
 from datetime import datetime, timedelta, timezone
 import flet as ft
@@ -17,7 +17,7 @@ def init_db():
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
     
-    # schedules 테이블 생성
+    # 지시사항 3: schedules 테이블 생성
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS schedules (
             date_key TEXT PRIMARY KEY,
@@ -26,7 +26,7 @@ def init_db():
         )
     """)
     
-    # mangeun_targets 테이블 생성
+    # 지시사항 3: mangeun_targets 테이블 생성
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS mangeun_targets (
             month_key TEXT PRIMARY KEY,
@@ -132,19 +132,19 @@ def main(page: ft.Page):
             key = f"{current['year']}_{current['month']}"
             MANGEUN_TARGETS[key] = val
             
-            # DB에 즉시 저장
+            # 지시사항 5: DB에 즉시 저장
             save_mangeun_target_to_db(key, val)
             rebuild_interface()
         except (ValueError, TypeError):
             pass
 
-    # 📌 [교정] 에러를 일으키는 ft.padding.symmetric 대신 ft.Padding 클래스로 명시적 패딩값 적용
+    # "만근" 옆 숫자 선택 드롭다운 (15일 ~ 26일)
     mangeun_dropdown = ft.Dropdown(
         options=[ft.dropdown.Option(str(i)) for i in range(15, 27)],
         width=80,
         height=40,
         text_size=12,
-        content_padding=ft.Padding(left=8, top=0, right=8, bottom=0),
+        content_padding=8,
         on_change=on_mangeun_dropdown_changed
     )
 
@@ -259,7 +259,7 @@ def main(page: ft.Page):
     # 3. 화면 리빌드 함수 (GMT+9 서울 시간 고정 및 DB 캐시 매칭)
     def rebuild_interface():
         nonlocal USER_SCHEDULES, MANGEUN_TARGETS
-        # 화면 갱신 직전 최신 DB 상태 다시 불러오기
+        # 화면 갱신 직전 최신 DB 상태 다시 불러오기 (정합성 유지)
         USER_SCHEDULES = load_schedules_from_db()
         MANGEUN_TARGETS = load_mangeun_targets_from_db()
 
@@ -368,7 +368,7 @@ def main(page: ft.Page):
         target_date = current["selected_date"]
         
         if status_value == "선택취소":
-            # 선택취소 시 DB에서 즉시 삭제
+            # 지시사항 5: 선택취소 시 DB에서 즉시 삭제
             delete_schedule_from_db(target_date)
             popup_layer.visible = False  
             rebuild_interface()
@@ -386,7 +386,7 @@ def main(page: ft.Page):
         else:
             final_time = ""
 
-        # 날짜 입력 완료 시 DB에 즉시 저장
+        # 지시사항 5: 날짜 입력 완료 시 DB에 즉시 저장
         save_schedule_to_db(target_date, status_value, final_time)
         
         popup_layer.visible = False  
@@ -492,7 +492,7 @@ def main(page: ft.Page):
         alignment="spaceAround"
     )
 
-    # 백업 및 복원 레이아웃 (ft.Padding 구조 교정 적용)
+    # 백업 및 복원 레이아웃
     backup_restore_layout = ft.Container(
         content=ft.Column(
             [
@@ -524,7 +524,7 @@ def main(page: ft.Page):
             ],
             spacing=4
         ),
-        content_padding=ft.Padding(left=4, top=6, right=4, bottom=6)
+        padding=ft.padding.symmetric(vertical=6, horizontal=4)
     )
 
     main_layout = ft.Column(
@@ -556,5 +556,5 @@ def main(page: ft.Page):
 
     rebuild_interface()
 
-import json # 백업 구조 파싱을 위한 모듈 고정
+import json # 백업 구조 파싱을 위한 모듈 추가 고정
 ft.app(target=main, host="0.0.0.0", port=int(os.environ.get("PORT", 8080)), view=ft.AppView.WEB_BROWSER)
