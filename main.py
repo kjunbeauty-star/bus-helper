@@ -40,27 +40,6 @@ def load_mangeun_targets_from_db():
         targets[row[0]] = row[1]
     return targets
 
-def save_schedule_to_db(date_key, status, start_time):
-    conn = sqlite3.connect(DB_FILE)
-    cursor = conn.cursor()
-    cursor.execute("INSERT OR REPLACE INTO schedules (date_key, status, start_time) VALUES (?, ?, ?)", (date_key, status, start_time))
-    conn.commit()
-    conn.close()
-
-def delete_schedule_from_db(date_key):
-    conn = sqlite3.connect(DB_FILE)
-    cursor = conn.cursor()
-    cursor.execute("DELETE FROM schedules WHERE date_key = ?", (date_key,))
-    conn.commit()
-    conn.close()
-
-def save_mangeun_target_to_db(month_key, target):
-    conn = sqlite3.connect(DB_FILE)
-    cursor = conn.cursor()
-    cursor.execute("INSERT OR REPLACE INTO mangeun_targets (month_key, target) VALUES (?, ?, ?)", (month_key, target))
-    conn.commit()
-    conn.close()
-
 def main(page: ft.Page):
     page.title = "버스기사도우미"
     page.theme_mode = "light"
@@ -80,11 +59,18 @@ def main(page: ft.Page):
     current = {"year": now_kst.year, "month": now_kst.month, "selected_date": "2026-07-04"}
     selected_time_state = {"hour": 5, "minute": 0}
 
+    # 현재 어떤 탭이 선택되었는지 저장하는 변수 (기본값: "달력")
+    current_tab = "달력"
+
     month_title = ft.Text("", size=20, weight="bold", text_align="center")
     stats_text = ft.Text("", size=13, weight="bold", color="#1E3A8A")
     mangeun_text = ft.Text("", size=13, weight="bold", color="#1E3A8A")
     mangeun_value_text = ft.Text("", size=13, weight="bold", color="#1E3A8A")
+    
+    # 달력 전용 컨테이너와 입력화면 전용 컨테이너 분리
     calendar_grid = ft.Column(spacing=2)
+    input_zone_container = ft.Column(spacing=2, visible=False)
+    
     popup_date_title = ft.Text("", size=16, weight="bold", color="black", text_align="center")
     
     order_options = [ft.dropdown.Option("", "선택 안 함")] + [ft.dropdown.Option(str(i), f"{i}번") for i in range(1, 51)]
@@ -122,7 +108,7 @@ def main(page: ft.Page):
             return 22 if days_in_month == 31 else (20 if m == 2 else 21)
         except: return 22
 
-    # 기사님이 짜놓으신 요약 기능 함수가 main 함수 안에서 안전하게 동작하도록 들여쓰기 정렬
+    # 기사님의 1구역 운행 요약 카드 UI 생성 함수
     def build_driving_summary_zone(day_data=None):
         if not day_data:
             day_data = {
@@ -162,6 +148,42 @@ def main(page: ft.Page):
             ], spacing=8),
             padding=12, border=ft.border.all(1, "#2563EB"), border_radius=10, margin=ft.margin.only(bottom=10)
         )
+
+    # 탭 변경 처리 함수
+    def change_tab(tab_name):
+        nonlocal current_tab
+        current_tab = tab_name
+        
+        # 버튼 색상 활성화/비활성화 제어
+        btn_calendar.style.color = "#2563EB" if tab_name == "달력" else "grey"
+        btn_input.style.color = "#2563EB" if tab_name == "입력" else "grey"
+        btn_setting.style.color = "#2563EB" if tab_name == "설정" else "grey"
+        
+        # 탭 선택에 따른 메인 컨텐츠 가시성 제어
+        if tab_name == "달력":
+            calendar_grid.visible = True
+            input_zone_container.visible = False
+            weeks_header.visible = True
+            div_line1.visible = True
+            div_line2.visible = True
+        elif tab_name == "입력":
+            calendar_grid.visible = False
+            input_zone_container.visible = True
+            weeks_header.visible = False  # 입력 메뉴일 때는 요일 헤더 숨김
+            div_line1.visible = False
+            div_line2.visible = False
+            
+            # 입력 탭이 열릴 때 1구역 요약 카드를 새로 조립해서 넣어줌
+            input_zone_container.controls.clear()
+            input_zone_container.controls.append(build_driving_summary_zone())
+        elif tab_name == "설정":
+            calendar_grid.visible = False
+            input_zone_container.visible = False
+            weeks_header.visible = False
+            div_line1.visible = False
+            div_line2.visible = False
+
+        page.update()
 
     def rebuild_interface():
         nonlocal USER_SCHEDULES, MANGEUN_TARGETS
@@ -214,6 +236,12 @@ def main(page: ft.Page):
                     )
                     week_row.controls.append(day_box)
             calendar_grid.controls.append(week_row)
+        
+        # 만약 입력 탭 상태에서 데이터 갱신이 필요할 경우 리빌드 처리
+        if current_tab == "입력":
+            input_zone_container.controls.clear()
+            input_zone_container.controls.append(build_driving_summary_zone())
+
         page.update()
 
     def open_input_popup(date_key):
@@ -301,24 +329,33 @@ def main(page: ft.Page):
     days_letters = ["일", "월", "화", "수", "목", "금", "토"]
     weeks_header = ft.Row([ft.Container(content=ft.Text(d, size=13, weight="bold", color="#D93025" if d=="일" else ("#1A73E8" if d=="토" else "black")), expand=1, alignment=ft.Alignment(0, 0)) for d in days_letters], alignment="spaceAround")
 
-    bottom_navigation_bar = ft.Row([
-        ft.TextButton("달력", style=ft.ButtonStyle(color="#2563EB"), expand=1, height=40),
-        ft.TextButton("입력", style=ft.ButtonStyle(color="grey"), expand=1, height=40),
-        ft.TextButton("설정", style=ft.ButtonStyle(color="grey"), expand=1, height=40)
-    ], alignment="spaceAround")
+    # 구분선 컴포넌트 변수화 (가시성 제어용)
+    div_line1 = ft.Divider(height=1)
+    div_line2 = ft.Divider(height=1)
 
-    # 정렬된 위치에서 기사님의 1구역 함수를 확실하게 배치
+    # 하단 내비게이션 바 버튼 객체화 및 이벤트 연결
+    btn_calendar = ft.TextButton("달력", style=ft.ButtonStyle(color="#2563EB"), expand=1, height=40, on_click=lambda e: change_tab("달력"))
+    btn_input = ft.TextButton("입력", style=ft.ButtonStyle(color="grey"), expand=1, height=40, on_click=lambda e: change_tab("입력"))
+    btn_setting = ft.TextButton("설정", style=ft.ButtonStyle(color="grey"), expand=1, height=40, on_click=lambda e: change_tab("설정"))
+    
+    bottom_navigation_bar = ft.Row([btn_calendar, btn_input, btn_setting], alignment="spaceAround")
+
+    # 스크롤 영역 안에 달력 격자와 입력 화면 컨테이너를 동시에 배치하되 가시성으로 조절
     scrollable_content = ft.Column(
         [
-            header_nav, summary_group, ft.Divider(height=1),
-            weeks_header, ft.Divider(height=1),
-            build_driving_summary_zone()
+            header_nav, summary_group, div_line1,
+            weeks_header, div_line2,
+            calendar_grid,          # 달력 탭일 때 노출
+            input_zone_container    # 입력 탭일 때 노출 (운행 정보 요약 카드가 들어감)
         ],
         expand=True, scroll=ft.ScrollMode.AUTO
     )
 
     main_layout = ft.Column([scrollable_content, ft.Divider(height=1), bottom_navigation_bar], expand=True)
     page.add(ft.Stack([main_layout, popup_layer, mangeun_popup_layer], expand=True))
+    
+    # 첫 기동 시 초기 탭 강제 정렬 ("달력")
+    change_tab("달력")
     rebuild_interface()
 
 init_db()
