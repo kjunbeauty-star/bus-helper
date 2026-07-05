@@ -403,7 +403,8 @@ def main(page: ft.Page):
     main_layout = ft.Column([scrollable_content, ft.Divider(height=1), bottom_navigation_bar], expand=True)
     
     # 🌟 최상단 Stack 배치 순서를 완벽하게 정비하여 가림막 완벽 제거
-    page.add(ft.Stack([main_layout, popup_layer, mangeun_popup_layer], expand=True))
+    # 🛠️ 이렇게 순서를 바꿔주세요! (main_layout이 맨 위로 오게 함)
+    page.add(ft.Stack([popup_layer, mangeun_popup_layer, main_layout], expand=True))
     
     change_tab("달력")
     rebuild_interface()
