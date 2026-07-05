@@ -141,6 +141,24 @@ def main(page: ft.Page):
             padding=12, border=ft.border.all(1, "#2563EB"), border_radius=10, margin=ft.margin.only(bottom=10)
         )
 
+    # 🛠️ [신규 기능] 전화번호 입력 시 하이픈을 자동으로 채워주는 도우미 함수
+    def format_phone_number(e):
+        # 숫자만 남기기
+        clean = "".join(filter(str.isdigit, e.control.value))
+        
+        # 한국 전화번호 길이에 맞춰 하이픈 삽입 로직
+        if len(clean) <= 3:
+            formatted = clean
+        elif len(clean) <= 7:
+            formatted = f"{clean[:3]}-{clean[3:]}"
+        elif len(clean) <= 10:
+            formatted = f"{clean[:3]}-{clean[3:6]}-{clean[6:]}"
+        else:
+            formatted = f"{clean[:3]}-{clean[3:7]}-{clean[7:11]}"
+            
+        e.control.value = formatted
+        e.control.update()
+
     def open_info_input_popup(target_type):
         if target_type == "내차":
             tf_route = ft.TextField(label="노선번호", value=input_data_state["route"].replace("미입력",""), keyboard_type=ft.KeyboardType.NUMBER, expand=True, height=38)
@@ -165,7 +183,8 @@ def main(page: ft.Page):
         elif target_type == "앞차":
             tf_f_bus = ft.TextField(label="앞차번호", value=input_data_state["front_bus"].replace("호","").replace("미입력",""), keyboard_type=ft.KeyboardType.NUMBER, expand=True, height=38)
             tf_f_driver = ft.TextField(label="기사성함", value=input_data_state["front_driver"].replace("미입력",""), expand=True, height=38)
-            tf_f_phone = ft.TextField(label="전화번호", value=input_data_state["front_phone"].replace("미입력",""), keyboard_type=ft.KeyboardType.PHONE, expand=True, height=38)
+            # 🛠️ [수정 포인트]on_change 이벤트를 걸어 입력할 때마다 자동으로 하이픈이 생기도록 연동
+            tf_f_phone = ft.TextField(label="전화번호", value=input_data_state["front_phone"].replace("미입력",""), keyboard_type=ft.KeyboardType.PHONE, expand=True, height=38, on_change=format_phone_number)
             
             def save_front(e):
                 input_data_state["front_bus"] = f"{tf_f_bus.value}호" if tf_f_bus.value else "미입력"
@@ -187,7 +206,8 @@ def main(page: ft.Page):
         elif target_type == "뒷차":
             tf_b_bus = ft.TextField(label="뒷차번호", value=input_data_state["back_bus"].replace("호","").replace("미입력",""), keyboard_type=ft.KeyboardType.NUMBER, expand=True, height=38)
             tf_b_driver = ft.TextField(label="기사성함", value=input_data_state["back_driver"].replace("미입력",""), expand=True, height=38)
-            tf_b_phone = ft.TextField(label="전화번호", value=input_data_state["back_phone"].replace("미입력",""), keyboard_type=ft.KeyboardType.PHONE, expand=True, height=38)
+            # 🛠️ [수정 포인트]on_change 이벤트를 걸어 입력할 때마다 자동으로 하이픈이 생기도록 연동
+            tf_b_phone = ft.TextField(label="전화번호", value=input_data_state["back_phone"].replace("미입력",""), keyboard_type=ft.KeyboardType.PHONE, expand=True, height=38, on_change=format_phone_number)
             
             def save_back(e):
                 input_data_state["back_bus"] = f"{tf_b_bus.value}호" if tf_b_bus.value else "미입력"
@@ -210,7 +230,6 @@ def main(page: ft.Page):
         info_dialog.open = True
         page.update()
 
-    # 🛠️ [수정 포인트] 텅 빈 다이얼로그 에러를 방지하기 위해 기본 컨테이너를 미리 지정해 둡니다.
     info_dialog = ft.AlertDialog(modal=False, content=ft.Container())
     page.dialog = info_dialog
 
