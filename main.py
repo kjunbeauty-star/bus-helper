@@ -506,18 +506,18 @@ def main(page: ft.Page):
     mangeun_setting_row = ft.Row(
         [
             mangeun_value_text,
-            ft.TextButton(
-                "[변경]",
+            ft.OutlinedButton(
+                "변경",
                 on_click=open_mangeun_popup,
                 style=ft.ButtonStyle(color="#2563EB"),
-                height=24,
-                content_padding=ft.padding.symmetric(horizontal=4, vertical=0),
+                width=54,
+                height=28,
             ),
         ],
         alignment="start",
         vertical_alignment="center",
         spacing=6,
-        height=24,
+        height=28,
     )
 
     # 상단 요약 3줄만 촘촘하게 묶어 달력 구조에는 영향을 주지 않습니다.
