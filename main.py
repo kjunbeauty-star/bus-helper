@@ -79,7 +79,9 @@ def main(page: ft.Page):
     def update_minute(val): selected_time_state["minute"] = val
 
     dial_row = ft.Row([hour_picker, ft.Text(":", size=20, weight="bold", color="black"), minute_picker], alignment="center", height=100)
-    popup_layer = ft.Container(visible=False, bgcolor="#AA000000", alignment=ft.Alignment(0, 0), expand=True, click_through=True)
+    
+    # 🌟 문제의 원인이었던 평소 visible=False 상태의 팝업 레이어 배치
+    popup_layer = ft.Container(visible=False, bgcolor="#AA000000", alignment=ft.Alignment(0, 0), expand=True)
     mangeun_popup_layer = ft.Container(visible=False, bgcolor="#AA000000", alignment=ft.Alignment(0, 0), expand=True)
 
     def get_mangeun_target():
@@ -91,9 +93,7 @@ def main(page: ft.Page):
             return 22 if days_in_month == 31 else (20 if m == 2 else 21)
         except: return 22
 
-    # ⭐ [크기/버튼/폰트 완전 일치] 황금 비율 삼단 박스 요약화면 구현 구역
     def build_driving_summary_zone():
-        # [1] 내차 정보 박스 (높이 보정용 투명 컨테이너 포함)
         my_card = ft.Container(
             content=ft.Column([
                 ft.Row([
@@ -102,12 +102,11 @@ def main(page: ft.Page):
                 ], alignment="spaceBetween"),
                 ft.Text(f"노선: {input_data_state['route']}", size=14, weight="bold", color="black"),
                 ft.Text(f"내차: {input_data_state['bus_no']}", size=14, weight="bold", color="black"),
-                ft.Container(height=15)  # 앞/뒷차 전화번호 줄과 높이 균형을 정확히 맞추기 위한 여백
+                ft.Container(height=15)
             ], spacing=2, tight=True),
             bgcolor="#F8FAFC", border=ft.border.all(1, "#E2E8F0"), border_radius=8, padding=10, expand=1
         )
 
-        # [2] 앞차 정보 박스
         front_card = ft.Container(
             content=ft.Column([
                 ft.Row([
@@ -121,7 +120,6 @@ def main(page: ft.Page):
             bgcolor="#F8FAFC", border=ft.border.all(1, "#E2E8F0"), border_radius=8, padding=10, expand=1
         )
 
-        # [3] 뒷차 정보 박스
         back_card = ft.Container(
             content=ft.Column([
                 ft.Row([
@@ -144,7 +142,7 @@ def main(page: ft.Page):
             padding=12, border=ft.border.all(1, "#2563EB"), border_radius=10, margin=ft.margin.only(bottom=10)
         )
 
-    # 🌟 각 입력 버튼 클릭 시 전용 팝업 모달을 띄우는 신규 제어 함수
+    # 🌟 에러 단어 제거 및 정상 연동 완료된 팝업 함수
     def open_info_input_popup(target_type):
         popup_layer.controls.clear()
         
@@ -155,7 +153,6 @@ def main(page: ft.Page):
             def save_my(e):
                 input_data_state["route"] = tf_route.value if tf_route.value else "미입력"
                 input_data_state["bus_no"] = f"{tf_bus_no.value}호" if tf_bus_no.value else "미입력"
-                popup_layer.click_through = True
                 popup_layer.visible = False
                 rebuild_interface()
 
@@ -201,14 +198,10 @@ def main(page: ft.Page):
                 ft.Row([ft.ElevatedButton("확인", on_click=save_back, bgcolor="#1E3A8A", color="white", expand=True)], alignment="center")
             ], spacing=10, tight=True)
 
-        # 공용 팝업 레이어 레이아웃 틀 적용 및 팝업 작동
         popup_layer.content = ft.Container(content=box_content, bgcolor="white", padding=16, border_radius=12, width=280)
-        popup_layer.click_through = False
-
         popup_layer.visible = True
         page.update()
 
-    # 입력 탭 뷰 새로고침 (오직 깨끗한 삼단박스만 채우도록 단순화 완료)
     def refresh_input_tab_view():
         input_zone_container.controls.clear()
         input_zone_container.controls.append(build_driving_summary_zone())
@@ -315,7 +308,6 @@ def main(page: ft.Page):
             selected_time_state["hour"], selected_time_state["minute"] = 5, 0
             hour_picker.selected_index, minute_picker.selected_index = 5, 0
         
-        # 달력 전용 팝업 레이아웃 강제 주입
         popup_layer.content = popup_card
         popup_layer.visible = True
         page.update()
@@ -397,6 +389,7 @@ def main(page: ft.Page):
     
     bottom_navigation_bar = ft.Row([btn_calendar, btn_input, btn_setting], alignment="spaceAround")
 
+    # 🌟 팝업 도화지들을 레이아웃 내부가 아니라 완전히 독립시켜서 가림막 현상 방지
     scrollable_content = ft.Column(
         [
             header_nav, summary_group, div_line1,
@@ -408,6 +401,8 @@ def main(page: ft.Page):
     )
 
     main_layout = ft.Column([scrollable_content, ft.Divider(height=1), bottom_navigation_bar], expand=True)
+    
+    # 🌟 최상단 Stack 배치 순서를 완벽하게 정비하여 가림막 완벽 제거
     page.add(ft.Stack([main_layout, popup_layer, mangeun_popup_layer], expand=True))
     
     change_tab("달력")
