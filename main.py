@@ -99,11 +99,16 @@ def main(page: ft.Page):
         except: return 22
 
     def build_driving_summary_zone():
+        # 🛠️ [수정 포인트] 내차, 앞차, 뒷차의 파란색 ElevatedButton에 content=ft.Container 구조를 적용하여 글자를 완벽한 정중앙으로 고정합니다.
         my_card = ft.Container(
             content=ft.Column([
                 ft.Row([
                     ft.Text("내차 정보", size=11, color="grey", weight="bold"),
-                    ft.ElevatedButton("입력", on_click=lambda e: open_info_input_popup("내차"), bgcolor="#2563EB", color="white", width=55, height=22, style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=4), text_style=ft.TextStyle(size=10, weight="bold"), padding=0))
+                    ft.ElevatedButton(
+                        content=ft.Container(ft.Text("입력", size=10, weight="bold", color="white"), alignment=ft.alignment.center),
+                        on_click=lambda e: open_info_input_popup("내차"), bgcolor="#2563EB", width=55, height=22, 
+                        style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=4), padding=ft.padding.symmetric(vertical=0, horizontal=0))
+                    )
                 ], alignment="spaceBetween"),
                 ft.Text(f"노선: {input_data_state['route']}", size=14, weight="bold", color="black"),
                 ft.Text(f"내차: {input_data_state['bus_no']}", size=14, weight="bold", color="black"),
@@ -116,7 +121,11 @@ def main(page: ft.Page):
             content=ft.Column([
                 ft.Row([
                     ft.Text("앞차 정보", size=11, color="grey", weight="bold"),
-                    ft.ElevatedButton("입력", on_click=lambda e: open_info_input_popup("앞차"), bgcolor="#1E3A8A", color="white", width=55, height=22, style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=4), text_style=ft.TextStyle(size=10, weight="bold"), padding=0))
+                    ft.ElevatedButton(
+                        content=ft.Container(ft.Text("입력", size=10, weight="bold", color="white"), alignment=ft.alignment.center),
+                        on_click=lambda e: open_info_input_popup("앞차"), bgcolor="#1E3A8A", width=55, height=22, 
+                        style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=4), padding=ft.padding.symmetric(vertical=0, horizontal=0))
+                    )
                 ], alignment="spaceBetween"),
                 ft.Text(input_data_state['front_bus'], size=14, weight="bold", color="black"),
                 ft.Text(input_data_state['front_driver'], size=14, weight="bold", color="black"),
@@ -129,7 +138,11 @@ def main(page: ft.Page):
             content=ft.Column([
                 ft.Row([
                     ft.Text("뒷차 정보", size=11, color="grey", weight="bold"),
-                    ft.ElevatedButton("입력", on_click=lambda e: open_info_input_popup("뒷차"), bgcolor="#1E3A8A", color="white", width=55, height=22, style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=4), text_style=ft.TextStyle(size=10, weight="bold"), padding=0))
+                    ft.ElevatedButton(
+                        content=ft.Container(ft.Text("입력", size=10, weight="bold", color="white"), alignment=ft.alignment.center),
+                        on_click=lambda e: open_info_input_popup("뒷차"), bgcolor="#1E3A8A", width=55, height=22, 
+                        style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=4), padding=ft.padding.symmetric(vertical=0, horizontal=0))
+                    )
                 ], alignment="spaceBetween"),
                 ft.Text(input_data_state['back_bus'], size=14, weight="bold", color="black"),
                 ft.Text(input_data_state['back_driver'], size=14, weight="bold", color="black"),
@@ -147,23 +160,16 @@ def main(page: ft.Page):
             padding=12, border=ft.border.all(1, "#2563EB"), border_radius=10, margin=ft.margin.only(bottom=10)
         )
 
-    def format_phone_live(e):
-        val = e.control.value
-        clean = "".join(filter(lambda x: x.isdigit() or x == "-", val))
-        nums = "".join(filter(str.isdigit, clean))
-        
-        if len(nums) <= 3:
-            formatted = nums
-        elif len(nums) <= 7:
-            formatted = f"{nums[:3]}-{nums[3:]}"
-        elif len(nums) <= 10:
-            formatted = f"{nums[:3]}-{nums[3:6]}-{nums[6:]}"
+    def final_format_phone(raw_value):
+        clean = "".join(filter(str.isdigit, raw_value))
+        if len(clean) <= 3:
+            return clean
+        elif len(clean) <= 7:
+            return f"{clean[:3]}-{clean[3:]}"
+        elif len(clean) <= 10:
+            return f"{clean[:3]}-{clean[3:6]}-{clean[6:]}"
         else:
-            formatted = f"{nums[:3]}-{nums[3:7]}-{nums[7:11]}"
-        
-        if val != formatted:
-            e.control.value = formatted
-            e.control.update()
+            return f"{clean[:3]}-{clean[3:7]}-{clean[7:11]}"
 
     def open_info_input_popup(target_type):
         if target_type == "내차":
@@ -190,12 +196,12 @@ def main(page: ft.Page):
         elif target_type == "앞차":
             tf_f_bus = ft.TextField(label="앞차번호", value=input_data_state["front_bus"].replace("호","").replace("미입력",""), keyboard_type=ft.KeyboardType.NUMBER, expand=True, height=38)
             tf_f_driver = ft.TextField(label="기사성함", value=input_data_state["front_driver"].replace("미입력",""), expand=True, height=38)
-            tf_f_phone = ft.TextField(label="전화번호", value=input_data_state["front_phone"].replace("미입력",""), keyboard_type=ft.KeyboardType.PHONE, expand=True, height=38, on_change=format_phone_live)
+            tf_f_phone = ft.TextField(label="전화번호 (숫자만)", value=input_data_state["front_phone"].replace("-","").replace("미입력",""), keyboard_type=ft.KeyboardType.PHONE, expand=True, height=38)
             
             def save_front(e):
                 input_data_state["front_bus"] = f"{tf_f_bus.value}호" if tf_f_bus.value else "미입력"
                 input_data_state["front_driver"] = tf_f_driver.value if tf_f_driver.value else "미입력"
-                input_data_state["front_phone"] = tf_f_phone.value if tf_f_phone.value else "미입력"
+                input_data_state["front_phone"] = final_format_phone(tf_f_phone.value) if tf_f_phone.value else "미입력"
                 save_all_to_client_storage()
                 info_dialog.open = False  
                 page.update()
@@ -213,12 +219,12 @@ def main(page: ft.Page):
         elif target_type == "뒷차":
             tf_b_bus = ft.TextField(label="뒷차번호", value=input_data_state["back_bus"].replace("호","").replace("미입력",""), keyboard_type=ft.KeyboardType.NUMBER, expand=True, height=38)
             tf_b_driver = ft.TextField(label="기사성함", value=input_data_state["back_driver"].replace("미입력",""), expand=True, height=38)
-            tf_b_phone = ft.TextField(label="전화번호", value=input_data_state["back_phone"].replace("미입력",""), keyboard_type=ft.KeyboardType.PHONE, expand=True, height=38, on_change=format_phone_live)
+            tf_b_phone = ft.TextField(label="전화번호 (숫자만)", value=input_data_state["back_phone"].replace("-","").replace("미입력",""), keyboard_type=ft.KeyboardType.PHONE, expand=True, height=38)
             
             def save_back(e):
                 input_data_state["back_bus"] = f"{tf_b_bus.value}호" if tf_b_bus.value else "미입력"
                 input_data_state["back_driver"] = tf_b_driver.value if tf_b_driver.value else "미입력"
-                input_data_state["back_phone"] = tf_b_phone.value if tf_b_phone.value else "미입력"
+                input_data_state["back_phone"] = final_format_phone(tf_b_phone.value) if tf_b_phone.value else "미입력"
                 save_all_to_client_storage()
                 info_dialog.open = False  
                 page.update()
@@ -245,12 +251,10 @@ def main(page: ft.Page):
         input_zone_container.controls.append(build_driving_summary_zone())
         page.update()
 
-    # 🛠️ [수정 포인트] 활성화된 버튼만 파란색(#2563EB), 비활성화는 회색(grey)으로 역동적 색상 변경
     def change_tab(tab_name):
         nonlocal current_tab
         current_tab = tab_name
         
-        # 버튼 객체의 배경색(bgcolor)을 현재 탭 이름에 따라 실시간 스위칭
         btn_calendar.bgcolor = "#2563EB" if tab_name == "달력" else "grey"
         btn_input.bgcolor = "#2563EB" if tab_name == "운행정보" else "grey"
         btn_setting.bgcolor = "#2563EB" if tab_name == "설정" else "grey"
@@ -423,10 +427,24 @@ def main(page: ft.Page):
     div_line1 = ft.Divider(height=1)
     div_line2 = ft.Divider(height=1)
 
-    # 🛠️ [수정 포인트] 글자 링크에서 입체적인 ElevatedButton 스타일로 대개편 및 초기 색상 부여
-    btn_calendar = ft.ElevatedButton("달력", bgcolor="#2563EB", color="white", expand=1, height=40, style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=6)), on_click=lambda e: change_tab("달력"))
-    btn_input = ft.ElevatedButton("운행정보", bgcolor="grey", color="white", expand=1, height=40, style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=6)), on_click=lambda e: change_tab("운행정보"))
-    btn_setting = ft.ElevatedButton("설정", bgcolor="grey", color="white", expand=1, height=40, style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=6)), on_click=lambda e: change_tab("설정"))
+    btn_calendar = ft.ElevatedButton(
+        content=ft.Container(ft.Text("달력", color="white", size=14, weight="bold"), alignment=ft.alignment.center),
+        bgcolor="#2563EB", expand=1, height=40, 
+        style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=6), padding=ft.padding.symmetric(vertical=0, horizontal=0)), 
+        on_click=lambda e: change_tab("달력")
+    )
+    btn_input = ft.ElevatedButton(
+        content=ft.Container(ft.Text("운행정보", color="white", size=14, weight="bold"), alignment=ft.alignment.center),
+        bgcolor="grey", expand=1, height=40, 
+        style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=6), padding=ft.padding.symmetric(vertical=0, horizontal=0)), 
+        on_click=lambda e: change_tab("운행정보")
+    )
+    btn_setting = ft.ElevatedButton(
+        content=ft.Container(ft.Text("설정", color="white", size=14, weight="bold"), alignment=ft.alignment.center),
+        bgcolor="grey", expand=1, height=40, 
+        style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=6), padding=ft.padding.symmetric(vertical=0, horizontal=0)), 
+        on_click=lambda e: change_tab("설정")
+    )
     
     bottom_navigation_bar = ft.Row([btn_calendar, btn_input, btn_setting], alignment="spaceAround", spacing=8)
 
