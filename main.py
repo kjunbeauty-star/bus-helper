@@ -37,10 +37,11 @@ def main(page: ft.Page):
     current = {"year": now_kst.year, "month": now_kst.month, "selected_date": "2026-07-04"}
     selected_time_state = {"hour": 5, "minute": 0}
 
-    # 입력창 제어를 위한 임시 메모리 변수
     input_data_state = {
         "route": "미입력",
-        "bus_no": "미입력"
+        "bus_no": "미입력",
+        "front_bus": "미입력", "front_driver": "미입력", "front_phone": "미입력",
+        "back_bus": "미입력", "back_driver": "미입력", "back_phone": "미입력"
     }
 
     current_tab = "달력"
@@ -51,6 +52,8 @@ def main(page: ft.Page):
     mangeun_value_text = ft.Text("", size=13, weight="bold", color="#1E3A8A")
     
     calendar_grid = ft.Column(spacing=2)
+    
+    # 스위치 역할을 명확히 수행할 화면 컨테이너 박스 선언
     input_zone_container = ft.Column(spacing=2, visible=False)
     
     popup_date_title = ft.Text("", size=16, weight="bold", color="black", text_align="center")
@@ -90,25 +93,18 @@ def main(page: ft.Page):
             return 22 if days_in_month == 31 else (20 if m == 2 else 21)
         except: return 22
 
-    # 1구역 운행 요약 카드 UI 생성 함수 (상태 변수값을 반영하도록 개선)
     def build_driving_summary_zone():
-        day_data = {
-            "route": input_data_state["route"],
-            "bus_no": input_data_state["bus_no"],
-            "front_bus": "미입력", "front_driver": "미입력", "front_phone": "미입력",
-            "back_bus": "미입력", "back_driver": "미입력", "back_phone": "미입력"
-        }
         main_info_col = ft.Column([
-            ft.Text(f"노선: {day_data['route']}", size=16, weight="bold", color="black"),
-            ft.Text(f"내차: {day_data['bus_no']}", size=16, weight="bold", color="black")
+            ft.Text(f"노선: {input_data_state['route']}", size=16, weight="bold", color="black"),
+            ft.Text(f"내차: {input_data_state['bus_no']}", size=16, weight="bold", color="black")
         ], spacing=4)
 
         front_card = ft.Container(
             content=ft.Column([
                 ft.Text("앞차 정보", size=11, color="grey", weight="bold"),
-                ft.Text(day_data['front_bus'], size=14, weight="bold", color="black"),
-                ft.Text(day_data['front_driver'], size=14, weight="bold", color="black"),
-                ft.Text(day_data['front_phone'], size=13, color="#1E3A8A", weight="bold")
+                ft.Text(input_data_state['front_bus'], size=14, weight="bold", color="black"),
+                ft.Text(input_data_state['front_driver'], size=14, weight="bold", color="black"),
+                ft.Text(input_data_state['front_phone'], size=13, color="#1E3A8A", weight="bold")
             ], spacing=2, tight=True),
             bgcolor="#F8FAFC", border=ft.border.all(1, "#E2E8F0"), border_radius=8, padding=10, expand=1
         )
@@ -116,9 +112,9 @@ def main(page: ft.Page):
         back_card = ft.Container(
             content=ft.Column([
                 ft.Text("뒷차 정보", size=11, color="grey", weight="bold"),
-                ft.Text(day_data['back_bus'], size=14, weight="bold", color="black"),
-                ft.Text(day_data['back_driver'], size=14, weight="bold", color="black"),
-                ft.Text(day_data['back_phone'], size=13, color="#1E3A8A", weight="bold")
+                ft.Text(input_data_state['back_bus'], size=14, weight="bold", color="black"),
+                ft.Text(input_data_state['back_driver'], size=14, weight="bold", color="black"),
+                ft.Text(input_data_state['back_phone'], size=13, color="#1E3A8A", weight="bold")
             ], spacing=2, tight=True),
             bgcolor="#F8FAFC", border=ft.border.all(1, "#E2E8F0"), border_radius=8, padding=10, expand=1
         )
@@ -131,10 +127,7 @@ def main(page: ft.Page):
             padding=12, border=ft.border.all(1, "#2563EB"), border_radius=10, margin=ft.margin.only(bottom=10)
         )
 
-    # ⭐ [추가] 2구역: 노선번호 및 내차번호 입력 컴포넌트 생성 함수
-    # 수정된 2구역: 내차 / 앞차 / 뒷차 분리형 입력창 함수
     def build_input_fields_zone():
-        # --- [1. 내 정보 입력 구역] ---
         tf_route = ft.TextField(label="노선번호", hint_text="67", keyboard_type=ft.KeyboardType.NUMBER, expand=2, height=38, text_size=12, content_padding=ft.padding.symmetric(vertical=4, horizontal=6))
         tf_bus_no = ft.TextField(label="내차번호", hint_text="2743", keyboard_type=ft.KeyboardType.NUMBER, expand=2, height=38, text_size=12, content_padding=ft.padding.symmetric(vertical=4, horizontal=6))
         
@@ -153,7 +146,6 @@ def main(page: ft.Page):
             padding=8, border=ft.border.all(1, "#E2E8F0"), border_radius=6, margin=ft.margin.only(bottom=6)
         )
 
-        # --- [2. 앞차 정보 입력 구역] ---
         tf_f_bus = ft.TextField(label="앞차번호", hint_text="1234", keyboard_type=ft.KeyboardType.NUMBER, expand=3, height=38, text_size=12, content_padding=ft.padding.symmetric(vertical=4, horizontal=6))
         tf_f_driver = ft.TextField(label="기사성함", hint_text="홍길동", expand=3, height=38, text_size=12, content_padding=ft.padding.symmetric(vertical=4, horizontal=6))
         tf_f_phone = ft.TextField(label="전화번호", hint_text="01012345678", keyboard_type=ft.KeyboardType.PHONE, expand=4, height=38, text_size=12, content_padding=ft.padding.symmetric(vertical=4, horizontal=6))
@@ -174,7 +166,6 @@ def main(page: ft.Page):
             padding=8, border=ft.border.all(1, "#E2E8F0"), border_radius=6, margin=ft.margin.only(bottom=6)
         )
 
-        # --- [3. 뒷차 정보 입력 구역] ---
         tf_b_bus = ft.TextField(label="뒷차번호", hint_text="5678", keyboard_type=ft.KeyboardType.NUMBER, expand=3, height=38, text_size=12, content_padding=ft.padding.symmetric(vertical=4, horizontal=6))
         tf_b_driver = ft.TextField(label="기사성함", hint_text="김철수", expand=3, height=38, text_size=12, content_padding=ft.padding.symmetric(vertical=4, horizontal=6))
         tf_b_phone = ft.TextField(label="전화번호", hint_text="01087654321", keyboard_type=ft.KeyboardType.PHONE, expand=4, height=38, text_size=12, content_padding=ft.padding.symmetric(vertical=4, horizontal=6))
@@ -195,7 +186,6 @@ def main(page: ft.Page):
             padding=8, border=ft.border.all(1, "#E2E8F0"), border_radius=6, margin=ft.margin.only(bottom=10)
         )
 
-        # 기존 입력값 복원 세팅
         if input_data_state["route"] != "미입력": tf_route.value = input_data_state["route"]
         if input_data_state["bus_no"] != "미입력": tf_bus_no.value = input_data_state["bus_no"].replace("호", "")
         if input_data_state["front_bus"] != "미입력": tf_f_bus.value = input_data_state["front_bus"].replace("호", "")
@@ -205,17 +195,15 @@ def main(page: ft.Page):
         if input_data_state["back_driver"] != "미입력": tf_b_driver.value = input_data_state["back_driver"]
         if input_data_state["back_phone"] != "미입력": tf_b_phone.value = input_data_state["back_phone"]
 
-        # 최종적으로 세 개의 독립된 구역을 세로로 쌓아서 반환
         return ft.Column([my_zone, front_zone, back_zone], spacing=2)
 
-    # 입력 탭의 화면 구성품을 갱신하는 헬퍼 함수
     def refresh_input_tab_view():
         input_zone_container.controls.clear()
-        # 1구역 요약 카드와 2구역 입력창을 차례대로 결합
         input_zone_container.controls.append(build_driving_summary_zone())
         input_zone_container.controls.append(build_input_fields_zone())
         page.update()
 
+    # 스위치 오류와 새로고침 문제를 완벽히 교정한 탭 전환 함수
     def change_tab(tab_name):
         nonlocal current_tab
         current_tab = tab_name
@@ -236,10 +224,7 @@ def main(page: ft.Page):
             weeks_header.visible = False
             div_line1.visible = False
             div_line2.visible = False
-            
-            # 입력 탭 진입 시 1구역+2구역 통합 빌드
             refresh_input_tab_view()
-        # 이 부분이 change_tab 함수의 맨 아래쪽입니다.
         elif tab_name == "설정":
             calendar_grid.visible = False
             input_zone_container.visible = False
@@ -394,10 +379,9 @@ def main(page: ft.Page):
     div_line1 = ft.Divider(height=1)
     div_line2 = ft.Divider(height=1)
 
-    # 하단 내비게이션 바 버튼에 탭 전환 기능(on_click) 확실하게 연결
     btn_calendar = ft.TextButton("달력", style=ft.ButtonStyle(color="#2563EB"), expand=1, height=40, on_click=lambda e: change_tab("달력"))
     btn_input = ft.TextButton("입력", style=ft.ButtonStyle(color="grey"), expand=1, height=40, on_click=lambda e: change_tab("입력"))
-    btn_setting = ft.TextButton("설정", style=ft.ButtonStyle(color="grey"), expand=1, height=40, on_click=lambda e: change_tab("설정"))    
+    btn_setting = ft.TextButton("설정", style=ft.ButtonStyle(color="grey"), expand=1, height=40, on_click=lambda e: change_tab("설정"))
     
     bottom_navigation_bar = ft.Row([btn_calendar, btn_input, btn_setting], alignment="spaceAround")
 
