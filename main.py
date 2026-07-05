@@ -9,6 +9,8 @@ KST = timezone(timedelta(hours=9))
 DB_FILE = "schedules.db"
 STORAGE_SCHEDULES_KEY = "bus_helper_schedules"
 STORAGE_MANGEUN_KEY = "bus_helper_mangeun_targets"
+# 🛠️ 운행 정보 저장을 위한 고유 열쇠(Key) 추가
+STORAGE_INPUT_DATA_KEY = "bus_helper_input_data"
 
 def init_db():
     conn = sqlite3.connect(DB_FILE)
@@ -25,24 +27,32 @@ def main(page: ft.Page):
 
     saved_schedules = page.client_storage.get(STORAGE_SCHEDULES_KEY)
     saved_targets = page.client_storage.get(STORAGE_MANGEUN_KEY)
+    # 🛠️ 앱 시작 시 기존에 저장된 운행 정보 불러오기
+    saved_input_data = page.client_storage.get(STORAGE_INPUT_DATA_KEY)
 
     USER_SCHEDULES = json.loads(saved_schedules) if saved_schedules else {}
     MANGEUN_TARGETS = json.loads(saved_targets) if saved_targets else {}
     
+    # 🛠️ 저장된 운행 정보가 있으면 가져오고, 없으면 '미입력' 기본값 사용
+    if saved_input_data:
+        input_data_state = json.loads(saved_input_data)
+    else:
+        input_data_state = {
+            "route": "미입력",
+            "bus_no": "미입력",
+            "front_bus": "미입력", "front_driver": "미입력", "front_phone": "미입력",
+            "back_bus": "미입력", "back_driver": "미입력", "back_phone": "미입력"
+        }
+
     def save_all_to_client_storage():
         page.client_storage.set(STORAGE_SCHEDULES_KEY, json.dumps(USER_SCHEDULES, ensure_ascii=False))
         page.client_storage.set(STORAGE_MANGEUN_KEY, json.dumps(MANGEUN_TARGETS, ensure_ascii=False))
+        # 🛠️ 차량 정보 및 전화번호도 스마트폰에 영구 저장되도록 연동
+        page.client_storage.set(STORAGE_INPUT_DATA_KEY, json.dumps(input_data_state, ensure_ascii=False))
 
     now_kst = datetime.now(KST)
     current = {"year": now_kst.year, "month": now_kst.month, "selected_date": "2026-07-04"}
     selected_time_state = {"hour": 5, "minute": 0}
-
-    input_data_state = {
-        "route": "미입력",
-        "bus_no": "미입력",
-        "front_bus": "미입력", "front_driver": "미입력", "front_phone": "미입력",
-        "back_bus": "미입력", "back_driver": "미입력", "back_phone": "미입력"
-    }
 
     current_tab = "달력"
 
@@ -141,23 +151,23 @@ def main(page: ft.Page):
             padding=12, border=ft.border.all(1, "#2563EB"), border_radius=10, margin=ft.margin.only(bottom=10)
         )
 
-    # 🛠️ [신규 기능] 전화번호 입력 시 하이픈을 자동으로 채워주는 도우미 함수
-    def format_phone_number(e):
-        # 숫자만 남기기
-        clean = "".join(filter(str.isdigit, e.control.value))
+    def format_phone_live(e):
+        val = e.control.value
+        clean = "".join(filter(lambda x: x.isdigit() or x == "-", val))
+        nums = "".join(filter(str.isdigit, clean))
         
-        # 한국 전화번호 길이에 맞춰 하이픈 삽입 로직
-        if len(clean) <= 3:
-            formatted = clean
-        elif len(clean) <= 7:
-            formatted = f"{clean[:3]}-{clean[3:]}"
-        elif len(clean) <= 10:
-            formatted = f"{clean[:3]}-{clean[3:6]}-{clean[6:]}"
+        if len(nums) <= 3:
+            formatted = nums
+        elif len(nums) <= 7:
+            formatted = f"{nums[:3]}-{nums[3:]}"
+        elif len(nums) <= 10:
+            formatted = f"{nums[:3]}-{nums[3:6]}-{nums[6:]}"
         else:
-            formatted = f"{clean[:3]}-{clean[3:7]}-{clean[7:11]}"
-            
-        e.control.value = formatted
-        e.control.update()
+            formatted = f"{nums[:3]}-{nums[3:7]}-{nums[7:11]}"
+        
+        if val != formatted:
+            e.control.value = formatted
+            e.control.update()
 
     def open_info_input_popup(target_type):
         if target_type == "내차":
@@ -167,6 +177,8 @@ def main(page: ft.Page):
             def save_my(e):
                 input_data_state["route"] = tf_route.value if tf_route.value else "미입력"
                 input_data_state["bus_no"] = f"{tf_bus_no.value}호" if tf_bus_no.value else "미입력"
+                # 🛠️ 확인을 누르면 내부 저장소에 즉시 세이브 요청
+                save_all_to_client_storage()
                 info_dialog.open = False  
                 page.update()
                 rebuild_interface()
@@ -183,13 +195,14 @@ def main(page: ft.Page):
         elif target_type == "앞차":
             tf_f_bus = ft.TextField(label="앞차번호", value=input_data_state["front_bus"].replace("호","").replace("미입력",""), keyboard_type=ft.KeyboardType.NUMBER, expand=True, height=38)
             tf_f_driver = ft.TextField(label="기사성함", value=input_data_state["front_driver"].replace("미입력",""), expand=True, height=38)
-            # 🛠️ [수정 포인트]on_change 이벤트를 걸어 입력할 때마다 자동으로 하이픈이 생기도록 연동
-            tf_f_phone = ft.TextField(label="전화번호", value=input_data_state["front_phone"].replace("미입력",""), keyboard_type=ft.KeyboardType.PHONE, expand=True, height=38, on_change=format_phone_number)
+            tf_f_phone = ft.TextField(label="전화번호", value=input_data_state["front_phone"].replace("미입력",""), keyboard_type=ft.KeyboardType.PHONE, expand=True, height=38, on_change=format_phone_live)
             
             def save_front(e):
                 input_data_state["front_bus"] = f"{tf_f_bus.value}호" if tf_f_bus.value else "미입력"
                 input_data_state["front_driver"] = tf_f_driver.value if tf_f_driver.value else "미입력"
                 input_data_state["front_phone"] = tf_f_phone.value if tf_f_phone.value else "미입력"
+                # 🛠️ 확인을 누르면 내부 저장소에 즉시 세이브 요청
+                save_all_to_client_storage()
                 info_dialog.open = False  
                 page.update()
                 rebuild_interface()
@@ -206,13 +219,14 @@ def main(page: ft.Page):
         elif target_type == "뒷차":
             tf_b_bus = ft.TextField(label="뒷차번호", value=input_data_state["back_bus"].replace("호","").replace("미입력",""), keyboard_type=ft.KeyboardType.NUMBER, expand=True, height=38)
             tf_b_driver = ft.TextField(label="기사성함", value=input_data_state["back_driver"].replace("미입력",""), expand=True, height=38)
-            # 🛠️ [수정 포인트]on_change 이벤트를 걸어 입력할 때마다 자동으로 하이픈이 생기도록 연동
-            tf_b_phone = ft.TextField(label="전화번호", value=input_data_state["back_phone"].replace("미입력",""), keyboard_type=ft.KeyboardType.PHONE, expand=True, height=38, on_change=format_phone_number)
+            tf_b_phone = ft.TextField(label="전화번호", value=input_data_state["back_phone"].replace("미입력",""), keyboard_type=ft.KeyboardType.PHONE, expand=True, height=38, on_change=format_phone_live)
             
             def save_back(e):
                 input_data_state["back_bus"] = f"{tf_b_bus.value}호" if tf_b_bus.value else "미입력"
                 input_data_state["back_driver"] = tf_b_driver.value if tf_b_driver.value else "미입력"
                 input_data_state["back_phone"] = tf_b_phone.value if tf_b_phone.value else "미입력"
+                # 🛠️ 확인을 누르면 내부 저장소에 즉시 세이브 요청
+                save_all_to_client_storage()
                 info_dialog.open = False  
                 page.update()
                 rebuild_interface()
