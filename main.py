@@ -511,11 +511,12 @@ def main(page: ft.Page):
                 on_click=open_mangeun_popup,
                 bgcolor="#2563EB",
                 color="white",
-                width=68, # <- 기존 75에서 '68'로 줄임 (글자가 안 깨지는 안전 마지노선!)
-                height=28, # <- 기존 32에서 '28'로 줄임 (상단 1, 2번 라인 글자들과 높이 균형이 맞춤)
+                width=60, # <- 기존 75에서 '68'로 줄임 (글자가 안 깨지는 안전 마지노선!)
+                height=23, # <- 기존 32에서 '28'로 줄임 (상단 1, 2번 라인 글자들과 높이 균형이 맞춤)
                 style=ft.ButtonStyle(
                     shape=ft.RoundedRectangleBorder(radius=4),
-                    text_style=ft.TextStyle(size=11),
+                    text_style=ft.TextStyle(size=11, weight="bold"),
+                    padding=0, # ⭐ 중요: 버튼 내부 여백을 제거하여 글자가 세로로 꺾이는 문제를 완벽히 방지합니다.
                 ),
             ),
         ],
