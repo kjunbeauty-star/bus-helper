@@ -220,7 +220,7 @@ def main(page: ft.Page):
                     ft.Row([tf_route, tf_bus_no]),
                     ft.Row([
                         ft.ElevatedButton("확인", on_click=save_my, bgcolor="#2563EB", color="white", expand=1),
-                        ft.ElevatedButton("뒤로가기", on_click=lambda e: setattr(info_dialog, "open", False) or page.update(), bgcolor="grey", color="white", expand=1)
+                        ft.ElevatedButton("뒤로가기", on_click=lambda e: setattr(info_dialog, "open", False) or page.update(), bgcolor="grey", color="white", expand=1, style=ft.ButtonStyle(shape=ft.RectangleShape()))
                     ], alignment="center", spacing=8)
                 ], spacing=10, tight=True),
                 width=260, padding=4
@@ -246,7 +246,7 @@ def main(page: ft.Page):
                     tf_f_bus, tf_f_driver, tf_f_phone,
                     ft.Row([
                         ft.ElevatedButton("확인", on_click=save_front, bgcolor="#1E3A8A", color="white", expand=1),
-                        ft.ElevatedButton("뒤로가기", on_click=lambda e: setattr(info_dialog, "open", False) or page.update(), bgcolor="grey", color="white", expand=1)
+                        ft.ElevatedButton("뒤로가기", on_click=lambda e: setattr(info_dialog, "open", False) or page.update(), bgcolor="grey", color="white", expand=1, style=ft.ButtonStyle(shape=ft.RectangleShape()))
                     ], alignment="center", spacing=8)
                 ], spacing=10, tight=True),
                 width=260, padding=4
@@ -272,7 +272,7 @@ def main(page: ft.Page):
                     tf_b_bus, tf_b_driver, tf_b_phone,
                     ft.Row([
                         ft.ElevatedButton("확인", on_click=save_back, bgcolor="#1E3A8A", color="white", expand=1),
-                        ft.ElevatedButton("뒤로가기", on_click=lambda e: setattr(info_dialog, "open", False) or page.update(), bgcolor="grey", color="white", expand=1)
+                        ft.ElevatedButton("뒤로가기", on_click=lambda e: setattr(info_dialog, "open", False) or page.update(), bgcolor="grey", color="white", expand=1, style=ft.ButtonStyle(shape=ft.RectangleShape()))
                     ], alignment="center", spacing=8)
                 ], spacing=10, tight=True),
                 width=260, padding=4
@@ -483,7 +483,7 @@ def main(page: ft.Page):
     div_line2 = ft.Divider(height=1)
 
     btn_calendar = ft.ElevatedButton(
-        content=ft.Container(ft.Text("📅 달력", color="white", size=12, weight="bold"), alignment=ft.alignment.center),
+        content=ft.Container(ft.Text("달력", color="white", size=12, weight="bold"), alignment=ft.alignment.center),
         expand=1, height=40, 
         style=ft.ButtonStyle(bgcolor="#2563EB", shape=ft.RoundedRectangleBorder(radius=6), padding=ft.padding.symmetric(vertical=0, horizontal=0)), 
         on_click=lambda e: change_tab("달력")
