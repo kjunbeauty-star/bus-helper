@@ -219,7 +219,7 @@ def main(page: ft.Page):
                     ft.Text("👤 내 차량 설정", size=14, weight="bold"),
                     ft.Row([tf_route, tf_bus_no]),
                     ft.Row([
-                        ft.ElevatedButton("확인", on_click=save_my, bgcolor="#2563EB", color="white", expand=1),
+                        ft.ElevatedButton("확인", on_click=save_my, bgcolor="#2563EB", color="white", expand=1, style=ft.ButtonStyle(shape=ft.RectangleShape())),
                         ft.ElevatedButton("뒤로가기", on_click=lambda e: setattr(info_dialog, "open", False) or page.update(), bgcolor="grey", color="white", expand=1, style=ft.ButtonStyle(shape=ft.RectangleShape()))
                     ], alignment="center", spacing=8)
                 ], spacing=10, tight=True),
@@ -245,7 +245,7 @@ def main(page: ft.Page):
                     ft.Text("◀ 앞차 정보 입력", size=14, weight="bold"),
                     tf_f_bus, tf_f_driver, tf_f_phone,
                     ft.Row([
-                        ft.ElevatedButton("확인", on_click=save_front, bgcolor="#1E3A8A", color="white", expand=1),
+                        ft.ElevatedButton("확인", on_click=save_front, bgcolor="#1E3A8A", color="white", expand=1, style=ft.ButtonStyle(shape=ft.RectangleShape())),
                         ft.ElevatedButton("뒤로가기", on_click=lambda e: setattr(info_dialog, "open", False) or page.update(), bgcolor="grey", color="white", expand=1, style=ft.ButtonStyle(shape=ft.RectangleShape()))
                     ], alignment="center", spacing=8)
                 ], spacing=10, tight=True),
@@ -268,10 +268,10 @@ def main(page: ft.Page):
 
             box_content = ft.Container(
                 content=ft.Column([
-                    ft.Text("▶ 뒷차 정보 입력", size=14, weight="bold"),
-                    tf_b_bus, tf_b_driver, tf_b_phone,
+                    ft.Text("◀ 앞차 정보 입력", size=14, weight="bold"),
+                    tf_f_bus, tf_f_driver, tf_f_phone,
                     ft.Row([
-                        ft.ElevatedButton("확인", on_click=save_back, bgcolor="#1E3A8A", color="white", expand=1),
+                        ft.ElevatedButton("확인", on_click=save_front, bgcolor="#1E3A8A", color="white", expand=1, style=ft.ButtonStyle(shape=ft.RectangleShape())),
                         ft.ElevatedButton("뒤로가기", on_click=lambda e: setattr(info_dialog, "open", False) or page.update(), bgcolor="grey", color="white", expand=1, style=ft.ButtonStyle(shape=ft.RectangleShape()))
                     ], alignment="center", spacing=8)
                 ], spacing=10, tight=True),
