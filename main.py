@@ -99,6 +99,7 @@ def main(page: ft.Page):
         except: return 22
 
     def build_driving_summary_zone():
+        # 🛠️ [수정 포인트] 내차, 앞차, 뒷차의 파란색 ElevatedButton에 content=ft.Container 구조를 적용하여 글자를 완벽한 정중앙으로 고정합니다.
         my_card = ft.Container(
             content=ft.Column([
                 ft.Row([
@@ -254,11 +255,15 @@ def main(page: ft.Page):
         nonlocal current_tab
         current_tab = tab_name
         
-        # 🛠️ [버그 수정 완료] 세 가지 버튼의 활성화 상태 조건 검사를 명확하게 매칭했습니다.
         btn_calendar.bgcolor = "#2563EB" if tab_name == "달력" else "grey"
         btn_input.bgcolor = "#2563EB" if tab_name == "운행정보" else "grey"
         btn_setting.bgcolor = "#2563EB" if tab_name == "설정" else "grey"
         
+        # 2. 폰 화면에 "지금 당장 색상 바꿔!"라고 새로고침 명령을 내립니다.
+        btn_calendar.update()
+        btn_input.update()
+        btn_setting.update()
+
         if tab_name == "달력":
             calendar_grid.visible = True
             input_zone_container.visible = False
