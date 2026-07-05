@@ -52,8 +52,6 @@ def main(page: ft.Page):
     mangeun_value_text = ft.Text("", size=13, weight="bold", color="#1E3A8A")
     
     calendar_grid = ft.Column(spacing=2)
-    
-    # 스위치 역할을 명확히 수행할 화면 컨테이너 박스 선언
     input_zone_container = ft.Column(spacing=2, visible=False)
     
     popup_date_title = ft.Text("", size=16, weight="bold", color="black", text_align="center")
@@ -93,15 +91,29 @@ def main(page: ft.Page):
             return 22 if days_in_month == 31 else (20 if m == 2 else 21)
         except: return 22
 
+    # ⭐ [크기/버튼/폰트 완전 일치] 황금 비율 삼단 박스 요약화면 구현 구역
     def build_driving_summary_zone():
-        main_info_col = ft.Column([
-            ft.Text(f"노선: {input_data_state['route']}", size=16, weight="bold", color="black"),
-            ft.Text(f"내차: {input_data_state['bus_no']}", size=16, weight="bold", color="black")
-        ], spacing=4)
+        # [1] 내차 정보 박스 (높이 보정용 투명 컨테이너 포함)
+        my_card = ft.Container(
+            content=ft.Column([
+                ft.Row([
+                    ft.Text("내차 정보", size=11, color="grey", weight="bold"),
+                    ft.ElevatedButton("입력", on_click=lambda e: open_info_input_popup("내차"), bgcolor="#2563EB", color="white", width=55, height=22, style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=4), text_style=ft.TextStyle(size=10, weight="bold"), padding=0))
+                ], alignment="spaceBetween"),
+                ft.Text(f"노선: {input_data_state['route']}", size=14, weight="bold", color="black"),
+                ft.Text(f"내차: {input_data_state['bus_no']}", size=14, weight="bold", color="black"),
+                ft.Container(height=15)  # 앞/뒷차 전화번호 줄과 높이 균형을 정확히 맞추기 위한 여백
+            ], spacing=2, tight=True),
+            bgcolor="#F8FAFC", border=ft.border.all(1, "#E2E8F0"), border_radius=8, padding=10, expand=1
+        )
 
+        # [2] 앞차 정보 박스
         front_card = ft.Container(
             content=ft.Column([
-                ft.Text("앞차 정보", size=11, color="grey", weight="bold"),
+                ft.Row([
+                    ft.Text("앞차 정보", size=11, color="grey", weight="bold"),
+                    ft.ElevatedButton("입력", on_click=lambda e: open_info_input_popup("앞차"), bgcolor="#1E3A8A", color="white", width=55, height=22, style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=4), text_style=ft.TextStyle(size=10, weight="bold"), padding=0))
+                ], alignment="spaceBetween"),
                 ft.Text(input_data_state['front_bus'], size=14, weight="bold", color="black"),
                 ft.Text(input_data_state['front_driver'], size=14, weight="bold", color="black"),
                 ft.Text(input_data_state['front_phone'], size=13, color="#1E3A8A", weight="bold")
@@ -109,101 +121,96 @@ def main(page: ft.Page):
             bgcolor="#F8FAFC", border=ft.border.all(1, "#E2E8F0"), border_radius=8, padding=10, expand=1
         )
 
+        # [3] 뒷차 정보 박스
         back_card = ft.Container(
             content=ft.Column([
-                ft.Text("뒷차 정보", size=11, color="grey", weight="bold"),
+                ft.Row([
+                    ft.Text("뒷차 정보", size=11, color="grey", weight="bold"),
+                    ft.ElevatedButton("입력", on_click=lambda e: open_info_input_popup("뒷차"), bgcolor="#1E3A8A", color="white", width=55, height=22, style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=4), text_style=ft.TextStyle(size=10, weight="bold"), padding=0))
+                ], alignment="spaceBetween"),
                 ft.Text(input_data_state['back_bus'], size=14, weight="bold", color="black"),
                 ft.Text(input_data_state['back_driver'], size=14, weight="bold", color="black"),
                 ft.Text(input_data_state['back_phone'], size=13, color="#1E3A8A", weight="bold")
             ], spacing=2, tight=True),
             bgcolor="#F8FAFC", border=ft.border.all(1, "#E2E8F0"), border_radius=8, padding=10, expand=1
         )
-        helpers_row = ft.Row([front_card, back_card], spacing=8, alignment="spaceAround")
+        
         return ft.Container(
             content=ft.Column([
                 ft.Text("📅 운행 정보 요약", size=14, weight="bold", color="#1E3A8A"),
-                main_info_col, ft.Divider(height=1, color="#E2E8F0"), helpers_row
+                my_card, 
+                ft.Row([front_card, back_card], spacing=8, alignment="spaceAround")
             ], spacing=8),
             padding=12, border=ft.border.all(1, "#2563EB"), border_radius=10, margin=ft.margin.only(bottom=10)
         )
 
-    def build_input_fields_zone():
-        tf_route = ft.TextField(label="노선번호", hint_text="67", keyboard_type=ft.KeyboardType.NUMBER, expand=2, height=38, text_size=12, content_padding=ft.padding.symmetric(vertical=4, horizontal=6))
-        tf_bus_no = ft.TextField(label="내차번호", hint_text="2743", keyboard_type=ft.KeyboardType.NUMBER, expand=2, height=38, text_size=12, content_padding=ft.padding.symmetric(vertical=4, horizontal=6))
+    # 🌟 각 입력 버튼 클릭 시 전용 팝업 모달을 띄우는 신규 제어 함수
+    def open_info_input_popup(target_type):
+        popup_layer.controls.clear()
         
-        def on_my_confirm(e):
-            input_data_state["route"] = tf_route.value if tf_route.value else "미입력"
-            input_data_state["bus_no"] = f"{tf_bus_no.value}호" if tf_bus_no.value else "미입력"
-            refresh_input_tab_view()
+        if target_type == "내차":
+            tf_route = ft.TextField(label="노선번호", value=input_data_state["route"].replace("미입력",""), keyboard_type=ft.KeyboardType.NUMBER, expand=True, height=38)
+            tf_bus_no = ft.TextField(label="내차번호", value=input_data_state["bus_no"].replace("호","").replace("미입력",""), keyboard_type=ft.KeyboardType.NUMBER, expand=True, height=38)
+            
+            def save_my(e):
+                input_data_state["route"] = tf_route.value if tf_route.value else "미입력"
+                input_data_state["bus_no"] = f"{tf_bus_no.value}호" if tf_bus_no.value else "미입력"
+                popup_layer.visible = False
+                rebuild_interface()
 
-        btn_my_confirm = ft.ElevatedButton("확인", on_click=on_my_confirm, bgcolor="#2563EB", color="white", height=36, style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=4), padding=0))
-        
-        my_zone = ft.Container(
-            content=ft.Column([
-                ft.Text("👤 내 차량 설정", size=11, weight="bold", color="grey"),
-                ft.Row([tf_route, tf_bus_no, btn_my_confirm], spacing=6)
-            ], spacing=4),
-            padding=8, border=ft.border.all(1, "#E2E8F0"), border_radius=6, margin=ft.margin.only(bottom=6)
-        )
+            box_content = ft.Column([
+                ft.Text("👤 내 차량 설정", size=14, weight="bold"),
+                ft.Row([tf_route, tf_bus_no]),
+                ft.Row([ft.ElevatedButton("확인", on_click=save_my, bgcolor="#2563EB", color="white", expand=True)], alignment="center")
+            ], spacing=10, tight=True)
 
-        tf_f_bus = ft.TextField(label="앞차번호", hint_text="1234", keyboard_type=ft.KeyboardType.NUMBER, expand=3, height=38, text_size=12, content_padding=ft.padding.symmetric(vertical=4, horizontal=6))
-        tf_f_driver = ft.TextField(label="기사성함", hint_text="홍길동", expand=3, height=38, text_size=12, content_padding=ft.padding.symmetric(vertical=4, horizontal=6))
-        tf_f_phone = ft.TextField(label="전화번호", hint_text="01012345678", keyboard_type=ft.KeyboardType.PHONE, expand=4, height=38, text_size=12, content_padding=ft.padding.symmetric(vertical=4, horizontal=6))
-        
-        def on_front_confirm(e):
-            input_data_state["front_bus"] = f"{tf_f_bus.value}호" if tf_f_bus.value else "미입력"
-            input_data_state["front_driver"] = tf_f_driver.value if tf_f_driver.value else "미입력"
-            input_data_state["front_phone"] = tf_f_phone.value if tf_f_phone.value else "미입력"
-            refresh_input_tab_view()
+        elif target_type == "앞차":
+            tf_f_bus = ft.TextField(label="앞차번호", value=input_data_state["front_bus"].replace("호","").replace("미입력",""), keyboard_type=ft.KeyboardType.NUMBER, expand=True, height=38)
+            tf_f_driver = ft.TextField(label="기사성함", value=input_data_state["front_driver"].replace("미입력",""), expand=True, height=38)
+            tf_f_phone = ft.TextField(label="전화번호", value=input_data_state["front_phone"].replace("미입력",""), keyboard_type=ft.KeyboardType.PHONE, expand=True, height=38)
+            
+            def save_front(e):
+                input_data_state["front_bus"] = f"{tf_f_bus.value}호" if tf_f_bus.value else "미입력"
+                input_data_state["front_driver"] = tf_f_driver.value if tf_f_driver.value else "미입력"
+                input_data_state["front_phone"] = tf_f_phone.value if tf_f_phone.value else "미입력"
+                popup_layer.visible = False
+                rebuild_interface()
 
-        btn_front_confirm = ft.ElevatedButton("확인", on_click=on_front_confirm, bgcolor="#1E3A8A", color="white", height=36, style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=4), padding=0))
+            box_content = ft.Column([
+                ft.Text("◀ 앞차 정보 입력", size=14, weight="bold"),
+                tf_f_bus, tf_f_driver, tf_f_phone,
+                ft.Row([ft.ElevatedButton("확인", on_click=save_front, bgcolor="#1E3A8A", color="white", expand=True)], alignment="center")
+            ], spacing=10, tight=True)
 
-        front_zone = ft.Container(
-            content=ft.Column([
-                ft.Text("◀ 앞차 정보 입력", size=11, weight="bold", color="grey"),
-                ft.Row([tf_f_bus, tf_f_driver, tf_f_phone, btn_front_confirm], spacing=4)
-            ], spacing=4),
-            padding=8, border=ft.border.all(1, "#E2E8F0"), border_radius=6, margin=ft.margin.only(bottom=6)
-        )
+        elif target_type == "뒷차":
+            tf_b_bus = ft.TextField(label="뒷차번호", value=input_data_state["back_bus"].replace("호","").replace("미입력",""), keyboard_type=ft.KeyboardType.NUMBER, expand=True, height=38)
+            tf_b_driver = ft.TextField(label="기사성함", value=input_data_state["back_driver"].replace("미입력",""), expand=True, height=38)
+            tf_b_phone = ft.TextField(label="전화번호", value=input_data_state["back_phone"].replace("미입력",""), keyboard_type=ft.KeyboardType.PHONE, expand=True, height=38)
+            
+            def save_back(e):
+                input_data_state["back_bus"] = f"{tf_b_bus.value}호" if tf_b_bus.value else "미입력"
+                input_data_state["back_driver"] = tf_b_driver.value if tf_b_driver.value else "미입력"
+                input_data_state["back_phone"] = tf_b_phone.value if tf_b_phone.value else "미입력"
+                popup_layer.visible = False
+                rebuild_interface()
 
-        tf_b_bus = ft.TextField(label="뒷차번호", hint_text="5678", keyboard_type=ft.KeyboardType.NUMBER, expand=3, height=38, text_size=12, content_padding=ft.padding.symmetric(vertical=4, horizontal=6))
-        tf_b_driver = ft.TextField(label="기사성함", hint_text="김철수", expand=3, height=38, text_size=12, content_padding=ft.padding.symmetric(vertical=4, horizontal=6))
-        tf_b_phone = ft.TextField(label="전화번호", hint_text="01087654321", keyboard_type=ft.KeyboardType.PHONE, expand=4, height=38, text_size=12, content_padding=ft.padding.symmetric(vertical=4, horizontal=6))
+            box_content = ft.Column([
+                ft.Text("▶ 뒷차 정보 입력", size=14, weight="bold"),
+                tf_b_bus, tf_b_driver, tf_b_phone,
+                ft.Row([ft.ElevatedButton("확인", on_click=save_back, bgcolor="#1E3A8A", color="white", expand=True)], alignment="center")
+            ], spacing=10, tight=True)
 
-        def on_back_confirm(e):
-            input_data_state["back_bus"] = f"{tf_b_bus.value}호" if tf_b_bus.value else "미입력"
-            input_data_state["back_driver"] = tf_b_driver.value if tf_b_driver.value else "미입력"
-            input_data_state["back_phone"] = tf_b_phone.value if tf_b_phone.value else "미입력"
-            refresh_input_tab_view()
+        # 공용 팝업 레이어 레이아웃 틀 적용 및 팝업 작동
+        popup_layer.content = ft.Container(content=box_content, bgcolor="white", padding=16, border_radius=12, width=280)
+        popup_layer.visible = True
+        page.update()
 
-        btn_back_confirm = ft.ElevatedButton("확인", on_click=on_back_confirm, bgcolor="#1E3A8A", color="white", height=36, style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=4), padding=0))
-
-        back_zone = ft.Container(
-            content=ft.Column([
-                ft.Text("▶ 뒷차 정보 입력", size=11, weight="bold", color="grey"),
-                ft.Row([tf_b_bus, tf_b_driver, tf_b_phone, btn_back_confirm], spacing=4)
-            ], spacing=4),
-            padding=8, border=ft.border.all(1, "#E2E8F0"), border_radius=6, margin=ft.margin.only(bottom=10)
-        )
-
-        if input_data_state["route"] != "미입력": tf_route.value = input_data_state["route"]
-        if input_data_state["bus_no"] != "미입력": tf_bus_no.value = input_data_state["bus_no"].replace("호", "")
-        if input_data_state["front_bus"] != "미입력": tf_f_bus.value = input_data_state["front_bus"].replace("호", "")
-        if input_data_state["front_driver"] != "미입력": tf_f_driver.value = input_data_state["front_driver"]
-        if input_data_state["front_phone"] != "미입력": tf_f_phone.value = input_data_state["front_phone"]
-        if input_data_state["back_bus"] != "미입력": tf_b_bus.value = input_data_state["back_bus"].replace("호", "")
-        if input_data_state["back_driver"] != "미입력": tf_b_driver.value = input_data_state["back_driver"]
-        if input_data_state["back_phone"] != "미입력": tf_b_phone.value = input_data_state["back_phone"]
-
-        return ft.Column([my_zone, front_zone, back_zone], spacing=2)
-
+    # 입력 탭 뷰 새로고침 (오직 깨끗한 삼단박스만 채우도록 단순화 완료)
     def refresh_input_tab_view():
         input_zone_container.controls.clear()
         input_zone_container.controls.append(build_driving_summary_zone())
-        input_zone_container.controls.append(build_input_fields_zone())
         page.update()
 
-    # 스위치 오류와 새로고침 문제를 완벽히 교정한 탭 전환 함수
     def change_tab(tab_name):
         nonlocal current_tab
         current_tab = tab_name
@@ -304,6 +311,9 @@ def main(page: ft.Page):
         else:
             selected_time_state["hour"], selected_time_state["minute"] = 5, 0
             hour_picker.selected_index, minute_picker.selected_index = 5, 0
+        
+        # 달력 전용 팝업 레이아웃 강제 주입
+        popup_layer.content = popup_card
         popup_layer.visible = True
         page.update()
 
@@ -343,7 +353,6 @@ def main(page: ft.Page):
         ], spacing=6, tight=True),
         bgcolor="white", padding=12, border_radius=12, width=300
     )
-    popup_layer.content = popup_card
 
     def open_mangeun_popup(e):
         mangeun_dropdown.value = str(get_mangeun_target())
