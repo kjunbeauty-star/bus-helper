@@ -529,7 +529,7 @@ def main(page: ft.Page):
             mangeun_text,
             mangeun_setting_row,
         ],
-        spacing=0,
+        spacing=5,
         tight=True,
     )
 
