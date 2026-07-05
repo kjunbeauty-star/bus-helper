@@ -515,7 +515,7 @@ def main(page: ft.Page):
                 height=28, # <- 기존 32에서 '28'로 줄임 (상단 1, 2번 라인 글자들과 높이 균형이 맞춤)
                 style=ft.ButtonStyle(
                     shape=ft.RoundedRectangleBorder(radius=4),
-                    text_style=ft.TextStyle(size=12),
+                    text_style=ft.TextStyle(size=11),
                 ),
             ),
         ],
@@ -550,9 +550,8 @@ def main(page: ft.Page):
     # 하단 메뉴 컴포넌트 선언[cite: 2]
     bottom_navigation_bar = ft.Row(
         [
-            ft.TextButton("달력", style=ft.ButtonStyle(color="#2563EB"), expand=1, height=36),
-            ft.TextButton("입력", style=ft.ButtonStyle(color="grey"), expand=1, height=36),
-            ft.TextButton("통계", style=ft.ButtonStyle(color="grey"), expand=1, height=40),
+            ft.TextButton("달력", style=ft.ButtonStyle(color="#2563EB"), expand=1, height=40),
+            ft.TextButton("입력", style=ft.ButtonStyle(color="grey"), expand=1, height=40),
             ft.TextButton("설정", style=ft.ButtonStyle(color="grey"), expand=1, height=40),
         ],
         alignment="spaceAround"
