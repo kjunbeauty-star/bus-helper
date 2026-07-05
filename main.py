@@ -182,7 +182,7 @@ def main(page: ft.Page):
         
         return ft.Container(
             content=ft.Column([
-                ft.Text("📅 운행 정보 요약", size=14, weight="bold", color="#1E3A8A"),
+                ft.Text("🚍 운행 정보 요약", size=14, weight="bold", color="#1E3A8A"),
                 my_card, 
                 ft.Row([front_card, back_card], spacing=8, alignment="spaceAround")
             ], spacing=8),
@@ -489,19 +489,19 @@ def main(page: ft.Page):
         on_click=lambda e: change_tab("달력")
     )
     btn_input = ft.ElevatedButton(
-        content=ft.Container(ft.Text("🚍 운행정보", color="white", size=12, weight="bold"), alignment=ft.alignment.center),
+        content=ft.Container(ft.Text("운행정보", color="white", size=12, weight="bold"), alignment=ft.alignment.center),
         expand=1, height=40, 
         style=ft.ButtonStyle(bgcolor="grey", shape=ft.RoundedRectangleBorder(radius=6), padding=ft.padding.symmetric(vertical=0, horizontal=0)), 
         on_click=lambda e: change_tab("운행정보")
     )
     btn_phonebook = ft.ElevatedButton(
-        content=ft.Container(ft.Text("📞 전화번호", color="white", size=11, weight="bold"), alignment=ft.alignment.center),
+        content=ft.Container(ft.Text("전화번호", color="white", size=11, weight="bold"), alignment=ft.alignment.center),
         expand=1, height=40, 
         style=ft.ButtonStyle(bgcolor="grey", shape=ft.RoundedRectangleBorder(radius=6), padding=ft.padding.symmetric(vertical=0, horizontal=0)), 
         on_click=lambda e: change_tab("전화번호")
     )
     btn_setting = ft.ElevatedButton(
-        content=ft.Container(ft.Text("⚙️ 설정", color="white", size=12, weight="bold"), alignment=ft.alignment.center),
+        content=ft.Container(ft.Text("설정", color="white", size=12, weight="bold"), alignment=ft.alignment.center),
         expand=1, height=40, 
         style=ft.ButtonStyle(bgcolor="grey", shape=ft.RoundedRectangleBorder(radius=6), padding=ft.padding.symmetric(vertical=0, horizontal=0)), 
         on_click=lambda e: change_tab("설정")
