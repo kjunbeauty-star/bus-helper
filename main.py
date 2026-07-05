@@ -9,7 +9,6 @@ KST = timezone(timedelta(hours=9))
 DB_FILE = "schedules.db"
 STORAGE_SCHEDULES_KEY = "bus_helper_schedules"
 STORAGE_MANGEUN_KEY = "bus_helper_mangeun_targets"
-# 🛠️ 운행 정보 저장을 위한 고유 열쇠(Key) 추가
 STORAGE_INPUT_DATA_KEY = "bus_helper_input_data"
 
 def init_db():
@@ -27,13 +26,11 @@ def main(page: ft.Page):
 
     saved_schedules = page.client_storage.get(STORAGE_SCHEDULES_KEY)
     saved_targets = page.client_storage.get(STORAGE_MANGEUN_KEY)
-    # 🛠️ 앱 시작 시 기존에 저장된 운행 정보 불러오기
     saved_input_data = page.client_storage.get(STORAGE_INPUT_DATA_KEY)
 
     USER_SCHEDULES = json.loads(saved_schedules) if saved_schedules else {}
     MANGEUN_TARGETS = json.loads(saved_targets) if saved_targets else {}
     
-    # 🛠️ 저장된 운행 정보가 있으면 가져오고, 없으면 '미입력' 기본값 사용
     if saved_input_data:
         input_data_state = json.loads(saved_input_data)
     else:
@@ -47,7 +44,6 @@ def main(page: ft.Page):
     def save_all_to_client_storage():
         page.client_storage.set(STORAGE_SCHEDULES_KEY, json.dumps(USER_SCHEDULES, ensure_ascii=False))
         page.client_storage.set(STORAGE_MANGEUN_KEY, json.dumps(MANGEUN_TARGETS, ensure_ascii=False))
-        # 🛠️ 차량 정보 및 전화번호도 스마트폰에 영구 저장되도록 연동
         page.client_storage.set(STORAGE_INPUT_DATA_KEY, json.dumps(input_data_state, ensure_ascii=False))
 
     now_kst = datetime.now(KST)
@@ -177,7 +173,6 @@ def main(page: ft.Page):
             def save_my(e):
                 input_data_state["route"] = tf_route.value if tf_route.value else "미입력"
                 input_data_state["bus_no"] = f"{tf_bus_no.value}호" if tf_bus_no.value else "미입력"
-                # 🛠️ 확인을 누르면 내부 저장소에 즉시 세이브 요청
                 save_all_to_client_storage()
                 info_dialog.open = False  
                 page.update()
@@ -201,7 +196,6 @@ def main(page: ft.Page):
                 input_data_state["front_bus"] = f"{tf_f_bus.value}호" if tf_f_bus.value else "미입력"
                 input_data_state["front_driver"] = tf_f_driver.value if tf_f_driver.value else "미입력"
                 input_data_state["front_phone"] = tf_f_phone.value if tf_f_phone.value else "미입력"
-                # 🛠️ 확인을 누르면 내부 저장소에 즉시 세이브 요청
                 save_all_to_client_storage()
                 info_dialog.open = False  
                 page.update()
@@ -225,7 +219,6 @@ def main(page: ft.Page):
                 input_data_state["back_bus"] = f"{tf_b_bus.value}호" if tf_b_bus.value else "미입력"
                 input_data_state["back_driver"] = tf_b_driver.value if tf_b_driver.value else "미입력"
                 input_data_state["back_phone"] = tf_b_phone.value if tf_b_phone.value else "미입력"
-                # 🛠️ 확인을 누르면 내부 저장소에 즉시 세이브 요청
                 save_all_to_client_storage()
                 info_dialog.open = False  
                 page.update()
@@ -252,13 +245,15 @@ def main(page: ft.Page):
         input_zone_container.controls.append(build_driving_summary_zone())
         page.update()
 
+    # 🛠️ [수정 포인트] 활성화된 버튼만 파란색(#2563EB), 비활성화는 회색(grey)으로 역동적 색상 변경
     def change_tab(tab_name):
         nonlocal current_tab
         current_tab = tab_name
         
-        btn_calendar.style.color = "#2563EB" if tab_name == "달력" else "grey"
-        btn_input.style.color = "#2563EB" if tab_name == "입력" else "grey"
-        btn_setting.style.color = "#2563EB" if tab_name == "설정" else "grey"
+        # 버튼 객체의 배경색(bgcolor)을 현재 탭 이름에 따라 실시간 스위칭
+        btn_calendar.bgcolor = "#2563EB" if tab_name == "달력" else "grey"
+        btn_input.bgcolor = "#2563EB" if tab_name == "운행정보" else "grey"
+        btn_setting.bgcolor = "#2563EB" if tab_name == "설정" else "grey"
         
         if tab_name == "달력":
             calendar_grid.visible = True
@@ -266,7 +261,7 @@ def main(page: ft.Page):
             weeks_header.visible = True
             div_line1.visible = True
             div_line2.visible = True
-        elif tab_name == "입력":
+        elif tab_name == "운행정보":
             calendar_grid.visible = False
             input_zone_container.visible = True
             weeks_header.visible = False
@@ -334,7 +329,7 @@ def main(page: ft.Page):
                     week_row.controls.append(day_box)
             calendar_grid.controls.append(week_row)
         
-        if current_tab == "입력":
+        if current_tab == "운행정보":
             refresh_input_tab_view()
 
         page.update()
@@ -428,11 +423,12 @@ def main(page: ft.Page):
     div_line1 = ft.Divider(height=1)
     div_line2 = ft.Divider(height=1)
 
-    btn_calendar = ft.TextButton("달력", style=ft.ButtonStyle(color="#2563EB"), expand=1, height=40, on_click=lambda e: change_tab("달력"))
-    btn_input = ft.TextButton("입력", style=ft.ButtonStyle(color="grey"), expand=1, height=40, on_click=lambda e: change_tab("입력"))
-    btn_setting = ft.TextButton("설정", style=ft.ButtonStyle(color="grey"), expand=1, height=40, on_click=lambda e: change_tab("설정"))
+    # 🛠️ [수정 포인트] 글자 링크에서 입체적인 ElevatedButton 스타일로 대개편 및 초기 색상 부여
+    btn_calendar = ft.ElevatedButton("달력", bgcolor="#2563EB", color="white", expand=1, height=40, style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=6)), on_click=lambda e: change_tab("달력"))
+    btn_input = ft.ElevatedButton("운행정보", bgcolor="grey", color="white", expand=1, height=40, style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=6)), on_click=lambda e: change_tab("운행정보"))
+    btn_setting = ft.ElevatedButton("설정", bgcolor="grey", color="white", expand=1, height=40, style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=6)), on_click=lambda e: change_tab("설정"))
     
-    bottom_navigation_bar = ft.Row([btn_calendar, btn_input, btn_setting], alignment="spaceAround")
+    bottom_navigation_bar = ft.Row([btn_calendar, btn_input, btn_setting], alignment="spaceAround", spacing=8)
 
     scrollable_content = ft.Column(
         [
