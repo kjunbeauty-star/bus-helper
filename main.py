@@ -247,11 +247,6 @@ def main(page: ft.Page):
             div_line1.visible = False
             div_line2.visible = False
 
-        # ⭐ [이 줄을 추가해 주세요!] 겉껍질 박스도 화면 갱신 대상에 포함시킵니다.
-        # 251번 줄의 기존 코드를 지우고 아래 코드로 교체합니다.
-        scrollable_content.visible = True 
-        
-        # 253번 줄의 page.update()를 지우고 아래 강제 새로고침 코드로 교체합니다.
         page.update()
 
     def rebuild_interface():
