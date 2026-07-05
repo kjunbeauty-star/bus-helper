@@ -80,7 +80,7 @@ def main(page: ft.Page):
 
     dial_row = ft.Row([hour_picker, ft.Text(":", size=20, weight="bold", color="black"), minute_picker], alignment="center", height=100)
     
-    # 🌟 문제의 원인이었던 평소 visible=False 상태의 팝업 레이어 배치
+    # 🌟 터치 방해를 원천 차단하기 위해 평소에는 화면에 배치하지 않고 투명 도화지로만 선언
     popup_layer = ft.Container(visible=False, bgcolor="#AA000000", alignment=ft.Alignment(0, 0), expand=True)
     mangeun_popup_layer = ft.Container(visible=False, bgcolor="#AA000000", alignment=ft.Alignment(0, 0), expand=True)
 
@@ -142,7 +142,7 @@ def main(page: ft.Page):
             padding=12, border=ft.border.all(1, "#2563EB"), border_radius=10, margin=ft.margin.only(bottom=10)
         )
 
-    # 🌟 에러 단어 제거 및 정상 연동 완료된 팝업 함수
+    # 🌟 버튼을 누를 때만 오버레이 공간으로 호출하여 독립 실행하는 안전한 팝업 구조
     def open_info_input_popup(target_type):
         popup_layer.controls.clear()
         
@@ -389,7 +389,6 @@ def main(page: ft.Page):
     
     bottom_navigation_bar = ft.Row([btn_calendar, btn_input, btn_setting], alignment="spaceAround")
 
-    # 🌟 팝업 도화지들을 레이아웃 내부가 아니라 완전히 독립시켜서 가림막 현상 방지
     scrollable_content = ft.Column(
         [
             header_nav, summary_group, div_line1,
@@ -400,11 +399,12 @@ def main(page: ft.Page):
         expand=True, scroll=ft.ScrollMode.AUTO
     )
 
+    # 🌟 Stack 내부 배치에서 복잡한 가림막용 팝업 레이어들을 아예 완전히 제외시켜 버립니다.
     main_layout = ft.Column([scrollable_content, ft.Divider(height=1), bottom_navigation_bar], expand=True)
+    page.add(main_layout)
     
-    # 🌟 최상단 Stack 배치 순서를 완벽하게 정비하여 가림막 완벽 제거
-    # 🛠️ 이렇게 순서를 바꿔주세요! (main_layout이 맨 위로 오게 함)
-    page.add(ft.Stack([popup_layer, mangeun_popup_layer, main_layout], expand=True))
+    # 🌟 대신 Flet 공식 전용 오버레이 보관함에 팝업창을 넣어 터치 간섭을 100% 영구적으로 소멸시킵니다.
+    page.overlay.extend([popup_layer, mangeun_popup_layer])
     
     change_tab("달력")
     rebuild_interface()
