@@ -217,7 +217,9 @@ def main(page: ft.Page):
     pb_phone_input = ft.TextField(label="전화번호", hint_text="하이픈 없이 입력 가능")
     pb_memo_input = ft.TextField(label="메모 (선택)", hint_text="예: 오전조")
     pb_feedback_text = ft.Text("", size=12, color=COLOR_SUCCESS, weight="bold")
-    pb_list_layout = ft.Column(spacing=4, scroll=ft.ScrollMode.AUTO, max_height=200)
+    
+    # [수정 반영] max_height 인자 제거
+    pb_list_layout = ft.Column(spacing=4, scroll=ft.ScrollMode.AUTO)
 
     def open_phonebook_popup(e):
         """버튼 클릭 시 통합 전화번호부 팝업창을 엽니다."""
@@ -317,7 +319,8 @@ def main(page: ft.Page):
                 pb_feedback_text,
                 ft.Divider(height=2),
                 ft.Text("📋 등록된 동료 명단", size=12, color=COLOR_GREY, weight="bold"),
-                pb_list_layout,
+                # [수정 반영] Column을 Container로 감싸서 height=200 제한 부여
+                ft.Container(content=pb_list_layout, height=200),
                 ft.Divider(height=1),
                 ft.Row([ft.TextButton("팝업 닫기", on_click=close_phonebook_popup)], alignment="end")
             ],
@@ -530,7 +533,7 @@ def main(page: ft.Page):
         bgcolor=COLOR_FULL_TEXT,
         alignment=ft.Alignment(0, 0),
         height=38,
-        border_radius=6,
+                border_radius=6,
         on_click=lambda e: select_status_and_save(STATUS_FULL),
         visible=False,
     )
