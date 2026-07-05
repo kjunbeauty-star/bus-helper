@@ -79,7 +79,7 @@ def main(page: ft.Page):
     def update_minute(val): selected_time_state["minute"] = val
 
     dial_row = ft.Row([hour_picker, ft.Text(":", size=20, weight="bold", color="black"), minute_picker], alignment="center", height=100)
-    popup_layer = ft.Container(visible=False, bgcolor="#AA000000", alignment=ft.Alignment(0, 0), expand=True)
+    popup_layer = ft.Container(visible=False, bgcolor="#AA000000", alignment=ft.Alignment(0, 0), expand=True, click_through=True)
     mangeun_popup_layer = ft.Container(visible=False, bgcolor="#AA000000", alignment=ft.Alignment(0, 0), expand=True)
 
     def get_mangeun_target():
@@ -155,6 +155,7 @@ def main(page: ft.Page):
             def save_my(e):
                 input_data_state["route"] = tf_route.value if tf_route.value else "미입력"
                 input_data_state["bus_no"] = f"{tf_bus_no.value}호" if tf_bus_no.value else "미입력"
+                popup_layer.click_through = True
                 popup_layer.visible = False
                 rebuild_interface()
 
@@ -202,6 +203,8 @@ def main(page: ft.Page):
 
         # 공용 팝업 레이어 레이아웃 틀 적용 및 팝업 작동
         popup_layer.content = ft.Container(content=box_content, bgcolor="white", padding=16, border_radius=12, width=280)
+        popup_layer.click_through = False
+
         popup_layer.visible = True
         page.update()
 
