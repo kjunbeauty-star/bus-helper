@@ -670,7 +670,6 @@ def main(page: ft.Page):
                 calendar_grid,
             ],
             expand=True,
-            scroll=ft.ScrollMode.AUTO,
         )
 
     # --- [설정 화면 구성] ---
@@ -850,7 +849,7 @@ def main(page: ft.Page):
                 return [ft.dropdown.Option("", "직접 입력 (목록에서 선택)")]
 
         front_car_field = ft.TextField(label="차량번호", value=today_neighbors.get("front_car", ""), hint_text="예: 2694")
-        front_driver_name_field = ft.TextField(label="운전자 이름", value=today_neighbors.get("front_driver_name", ""), hint_text="예: 선명구")
+        front_driver_name_field = ft.TextField(label="운전자 이름", value=today_neighbors.get("front_driver_name", ""), hint_text="예:선명구")
         front_driver_phone_field = ft.TextField(label="전화번호", value=today_neighbors.get("front_driver_phone", ""), hint_text="예: 010-0000-0000")
         
         back_car_field = ft.TextField(label="차량번호", value=today_neighbors.get("back_car", ""), hint_text="예: 2745")
