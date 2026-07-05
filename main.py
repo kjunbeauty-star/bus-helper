@@ -109,6 +109,7 @@ def main(page: ft.Page):
             return 22 if days_in_month == 31 else (20 if m == 2 else 21)
         except: return 22
 
+    # 🛠️ 스마트폰 실제 전화 다이얼로 연결해 주는 핵심 전달원 함수 신설
     def make_call(phone_number):
         if phone_number and phone_number != "미입력":
             page.launch_url(f"tel:{phone_number}")
@@ -131,6 +132,7 @@ def main(page: ft.Page):
             bgcolor="#F8FAFC", border=ft.border.all(1, "#E2E8F0"), border_radius=8, padding=10, expand=1
         )
 
+        # 🛠️ 앞차 정보 텍스트와 빨간 전화기(☎️) 아이콘을 가로로 정렬하고 클릭 시 통화가 걸리도록 수정
         front_card = ft.Container(
             content=ft.Column([
                 ft.Row([
@@ -154,6 +156,7 @@ def main(page: ft.Page):
             bgcolor="#F8FAFC", border=ft.border.all(1, "#E2E8F0"), border_radius=8, padding=10, expand=1
         )
 
+        # 🛠️ 뒷차 정보 텍스트와 빨간 전화기(☎️) 아이콘을 가로로 정렬하고 클릭 시 통화가 걸리도록 수정
         back_card = ft.Container(
             content=ft.Column([
                 ft.Row([
@@ -197,6 +200,7 @@ def main(page: ft.Page):
         else:
             return f"{clean[:3]}-{clean[3:7]}-{clean[7:11]}"
 
+    # 🛠️ [중요] 팝업창 하단에 [확인 / 뒤로가기] 쌍버튼 구조로 전면 개편하여 브라우저 종료 차단
     def open_info_input_popup(target_type):
         if target_type == "내차":
             tf_route = ft.TextField(label="노선번호", value=input_data_state["route"].replace("미입력",""), keyboard_type=ft.KeyboardType.NUMBER, expand=True, height=38)
@@ -210,14 +214,33 @@ def main(page: ft.Page):
                 page.update()
                 rebuild_interface()
 
-            # 🛠️ 수리: 각진 직사각형 스타일 적용 및 글자가 깨지지 않도록 여백조절장치 적용
             box_content = ft.Container(
                 content=ft.Column([
                     ft.Text("👤 내 차량 설정", size=14, weight="bold"),
                     ft.Row([tf_route, tf_bus_no]),
                     ft.Row([
-                        ft.ElevatedButton(content=ft.Text("확인", color="white", size=12, weight="bold"), on_click=save_my, bgcolor="#2563EB", expand=1, style=ft.ButtonStyle(shape=ft.RectangleShape(), padding=0)),
-                        ft.ElevatedButton(content=ft.Text("뒤로가기", color="white", size=12, weight="bold"), on_click=lambda e: setattr(info_dialog, "open", False) or page.update(), bgcolor="grey", expand=1, style=ft.ButtonStyle(shape=ft.RectangleShape(), padding=0))
+                        ft.ElevatedButton(
+                            content=ft.Container(ft.Text("확인", size=13, weight="bold", color="white"), alignment=ft.alignment.center),
+                            on_click=save_my,
+                            expand=1,
+                            height=38,
+                            style=ft.ButtonStyle(
+                                bgcolor="#2563EB",
+                                shape=ft.RoundedRectangleBorder(radius=0),
+                                padding=ft.padding.symmetric(vertical=0, horizontal=0),
+                            ),
+                        ),
+                        ft.ElevatedButton(
+                            content=ft.Container(ft.Text("뒤로가기", size=13, weight="bold", color="white"), alignment=ft.alignment.center),
+                            on_click=lambda e: setattr(info_dialog, "open", False) or page.update(),
+                            expand=1,
+                            height=38,
+                            style=ft.ButtonStyle(
+                                bgcolor="grey",
+                                shape=ft.RoundedRectangleBorder(radius=0),
+                                padding=ft.padding.symmetric(vertical=0, horizontal=0),
+                            ),
+                        )
                     ], alignment="center", spacing=8)
                 ], spacing=10, tight=True),
                 width=260, padding=4
@@ -237,14 +260,33 @@ def main(page: ft.Page):
                 page.update()
                 rebuild_interface()
 
-            # 🛠️ 수리: 각진 직사각형 스타일 적용 및 글자가 깨지지 않도록 여백조절장치 적용
             box_content = ft.Container(
                 content=ft.Column([
                     ft.Text("◀ 앞차 정보 입력", size=14, weight="bold"),
                     tf_f_bus, tf_f_driver, tf_f_phone,
                     ft.Row([
-                        ft.ElevatedButton(content=ft.Text("확인", color="white", size=12, weight="bold"), on_click=save_front, bgcolor="#1E3A8A", expand=1, style=ft.ButtonStyle(shape=ft.RectangleShape(), padding=0)),
-                        ft.ElevatedButton(content=ft.Text("뒤로가기", color="white", size=12, weight="bold"), on_click=lambda e: setattr(info_dialog, "open", False) or page.update(), bgcolor="grey", expand=1, style=ft.ButtonStyle(shape=ft.RectangleShape(), padding=0))
+                        ft.ElevatedButton(
+                            content=ft.Container(ft.Text("확인", size=13, weight="bold", color="white"), alignment=ft.alignment.center),
+                            on_click=save_front,
+                            expand=1,
+                            height=38,
+                            style=ft.ButtonStyle(
+                                bgcolor="#1E3A8A",
+                                shape=ft.RoundedRectangleBorder(radius=0),
+                                padding=ft.padding.symmetric(vertical=0, horizontal=0),
+                            ),
+                        ),
+                        ft.ElevatedButton(
+                            content=ft.Container(ft.Text("뒤로가기", size=13, weight="bold", color="white"), alignment=ft.alignment.center),
+                            on_click=lambda e: setattr(info_dialog, "open", False) or page.update(),
+                            expand=1,
+                            height=38,
+                            style=ft.ButtonStyle(
+                                bgcolor="grey",
+                                shape=ft.RoundedRectangleBorder(radius=0),
+                                padding=ft.padding.symmetric(vertical=0, horizontal=0),
+                            ),
+                        )
                     ], alignment="center", spacing=8)
                 ], spacing=10, tight=True),
                 width=260, padding=4
@@ -264,14 +306,33 @@ def main(page: ft.Page):
                 page.update()
                 rebuild_interface()
 
-            # 🛠️ 수리: 각진 직사각형 스타일 적용 및 글자가 깨지지 않도록 여백조절장치 적용
             box_content = ft.Container(
                 content=ft.Column([
                     ft.Text("▶ 뒷차 정보 입력", size=14, weight="bold"),
                     tf_b_bus, tf_b_driver, tf_b_phone,
                     ft.Row([
-                        ft.ElevatedButton(content=ft.Text("확인", color="white", size=12, weight="bold"), on_click=save_back, bgcolor="#1E3A8A", expand=1, style=ft.ButtonStyle(shape=ft.RectangleShape(), padding=0)),
-                        ft.ElevatedButton(content=ft.Text("뒤로가기", color="white", size=12, weight="bold"), on_click=lambda e: setattr(info_dialog, "open", False) or page.update(), bgcolor="grey", expand=1, style=ft.ButtonStyle(shape=ft.RectangleShape(), padding=0))
+                        ft.ElevatedButton(
+                            content=ft.Container(ft.Text("확인", size=13, weight="bold", color="white"), alignment=ft.alignment.center),
+                            on_click=save_back,
+                            expand=1,
+                            height=38,
+                            style=ft.ButtonStyle(
+                                bgcolor="#1E3A8A",
+                                shape=ft.RoundedRectangleBorder(radius=0),
+                                padding=ft.padding.symmetric(vertical=0, horizontal=0),
+                            ),
+                        ),
+                        ft.ElevatedButton(
+                            content=ft.Container(ft.Text("뒤로가기", size=13, weight="bold", color="white"), alignment=ft.alignment.center),
+                            on_click=lambda e: setattr(info_dialog, "open", False) or page.update(),
+                            expand=1,
+                            height=38,
+                            style=ft.ButtonStyle(
+                                bgcolor="grey",
+                                shape=ft.RoundedRectangleBorder(radius=0),
+                                padding=ft.padding.symmetric(vertical=0, horizontal=0),
+                            ),
+                        )
                     ], alignment="center", spacing=8)
                 ], spacing=10, tight=True),
                 width=260, padding=4
