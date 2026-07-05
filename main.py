@@ -201,6 +201,7 @@ def main(page: ft.Page):
         else:
             return f"{clean[:3]}-{clean[3:7]}-{clean[7:11]}"
 
+    # 🛠️ 수리 완료: 팝업창 내부 버튼들의 글자 크기(size=12)와 내부 여백(padding=0)을 조절하여 절대 안 깨지게 수정
     def open_info_input_popup(target_type):
         if target_type == "내차":
             tf_route = ft.TextField(label="노선번호", value=input_data_state["route"].replace("미입력",""), keyboard_type=ft.KeyboardType.NUMBER, expand=True, height=38)
@@ -219,8 +220,8 @@ def main(page: ft.Page):
                     ft.Text("👤 내 차량 설정", size=14, weight="bold"),
                     ft.Row([tf_route, tf_bus_no]),
                     ft.Row([
-                        ft.ElevatedButton("확인", on_click=save_my, bgcolor="#2563EB", color="white", expand=1, style=ft.ButtonStyle(shape=ft.RectangleShape())),
-                        ft.ElevatedButton("뒤로가기", on_click=lambda e: setattr(info_dialog, "open", False) or page.update(), bgcolor="grey", color="white", expand=1, style=ft.ButtonStyle(shape=ft.RectangleShape()))
+                        ft.ElevatedButton(content=ft.Text("확인", color="white", size=12, weight="bold"), on_click=save_my, bgcolor="#2563EB", expand=1, style=ft.ButtonStyle(shape=ft.RectangleShape(), padding=0)),
+                        ft.ElevatedButton(content=ft.Text("뒤로가기", color="white", size=12, weight="bold"), on_click=lambda e: setattr(info_dialog, "open", False) or page.update(), bgcolor="grey", expand=1, style=ft.ButtonStyle(shape=ft.RectangleShape(), padding=0))
                     ], alignment="center", spacing=8)
                 ], spacing=10, tight=True),
                 width=260, padding=4
@@ -245,8 +246,8 @@ def main(page: ft.Page):
                     ft.Text("◀ 앞차 정보 입력", size=14, weight="bold"),
                     tf_f_bus, tf_f_driver, tf_f_phone,
                     ft.Row([
-                        ft.ElevatedButton("확인", on_click=save_front, bgcolor="#1E3A8A", color="white", expand=1, style=ft.ButtonStyle(shape=ft.RectangleShape())),
-                        ft.ElevatedButton("뒤로가기", on_click=lambda e: setattr(info_dialog, "open", False) or page.update(), bgcolor="grey", color="white", expand=1, style=ft.ButtonStyle(shape=ft.RectangleShape()))
+                        ft.ElevatedButton(content=ft.Text("확인", color="white", size=12, weight="bold"), on_click=save_front, bgcolor="#1E3A8A", expand=1, style=ft.ButtonStyle(shape=ft.RectangleShape(), padding=0)),
+                        ft.ElevatedButton(content=ft.Text("뒤로가기", color="white", size=12, weight="bold"), on_click=lambda e: setattr(info_dialog, "open", False) or page.update(), bgcolor="grey", expand=1, style=ft.ButtonStyle(shape=ft.RectangleShape(), padding=0))
                     ], alignment="center", spacing=8)
                 ], spacing=10, tight=True),
                 width=260, padding=4
@@ -271,8 +272,8 @@ def main(page: ft.Page):
                     ft.Text("▶ 뒷차 정보 입력", size=14, weight="bold"),
                     tf_b_bus, tf_b_driver, tf_b_phone,
                     ft.Row([
-                        ft.ElevatedButton("확인", on_click=save_back, bgcolor="#1E3A8A", color="white", expand=1, style=ft.ButtonStyle(shape=ft.RectangleShape())),
-                        ft.ElevatedButton("뒤로가기", on_click=lambda e: setattr(info_dialog, "open", False) or page.update(), bgcolor="grey", color="white", expand=1, style=ft.ButtonStyle(shape=ft.RectangleShape()))
+                        ft.ElevatedButton(content=ft.Text("확인", color="white", size=12, weight="bold"), on_click=save_back, bgcolor="#1E3A8A", expand=1, style=ft.ButtonStyle(shape=ft.RectangleShape(), padding=0)),
+                        ft.ElevatedButton(content=ft.Text("뒤로가기", color="white", size=12, weight="bold"), on_click=lambda e: setattr(info_dialog, "open", False) or page.update(), bgcolor="grey", expand=1, style=ft.ButtonStyle(shape=ft.RectangleShape(), padding=0))
                     ], alignment="center", spacing=8)
                 ], spacing=10, tight=True),
                 width=260, padding=4
@@ -289,7 +290,6 @@ def main(page: ft.Page):
         input_zone_container.controls.clear()
         input_zone_container.controls.append(build_driving_summary_zone())
 
-    # 🛠️ 수리 완료: 탭 이동 시 컨테이너 가시성(visible)을 명확히 제어하고 리프레시 타이밍 완벽 결합
     def change_tab(tab_name):
         nonlocal current_tab
         current_tab = tab_name
@@ -458,16 +458,6 @@ def main(page: ft.Page):
     )
     mangeun_popup_layer.content = mangeun_popup_card
 
-    def move_prev(e):
-        current["month"] -= 1
-        if current["month"] == 0: current["month"] = 12; current["year"] -= 1
-        rebuild_interface()
-
-    def move_next(e):
-        current["month"] += 1
-        if current["month"] == 13: current["month"] = 1; current["year"] += 1
-        rebuild_interface()
-
     header_nav = ft.Row([ft.TextButton("◀ 이전", on_click=move_prev, style=ft.ButtonStyle(color="black")), month_title, ft.TextButton("다음 ▶", on_click=move_next, style=ft.ButtonStyle(color="black"))], alignment="spaceBetween")
     mangeun_setting_row = ft.Row([mangeun_value_text, ft.ElevatedButton("변경", on_click=open_mangeun_popup, bgcolor="#2563EB", color="white", width=68, height=22, style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=4), text_style=ft.TextStyle(size=11, weight="bold"), padding=0))], alignment="start", vertical_alignment="center", spacing=6, height=22)
     summary_group = ft.Column([stats_text, mangeun_text, mangeun_setting_row], spacing=6, tight=True)
@@ -477,7 +467,7 @@ def main(page: ft.Page):
     div_line1 = ft.Divider(height=1)
     div_line2 = ft.Divider(height=1)
 
-    # 🛠️ 수리 완료: 이모지 아이콘 완전 제거, 글자만 두 글자로 통일, 각진 직사각형 스타일 전면 적용
+    # 기사님이 정해주신 이모지 없는 글자 전용 버튼 스타일
     btn_calendar = ft.ElevatedButton(
         content=ft.Container(ft.Text("달력", color="white", size=12, weight="bold"), alignment=ft.alignment.center),
         expand=1, height=40, 
@@ -520,7 +510,6 @@ def main(page: ft.Page):
     
     page.add(ft.Stack([main_layout, popup_layer, mangeun_popup_layer], expand=True))
     
-    # 🛠️ 타이밍 교정 완료: 초기 로드 방식을 안전하게 전환
     change_tab("달력")
     rebuild_interface()
 
