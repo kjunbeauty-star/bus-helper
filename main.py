@@ -89,13 +89,20 @@ def main(page: ft.Page):
     selected_input_date = now_kst.strftime("%Y-%m-%d")
 
     # 중앙 화면 제어용 컨테이너
-    content_area = ft.Container(expand=True)
+    content_area = ft.Container(
+        expand=True,
+        padding=ft.padding.symmetric(horizontal=4, vertical=2),
+    )
 
     # --- [컴포넌트 선언] ---
     month_title = ft.Text("", size=20, weight="bold", text_align="center")
     stats_text = ft.Text("", size=13, weight="bold", color=COLOR_DARK_BLUE)
     mangeun_text = ft.Text("", size=13, weight="bold", color=COLOR_DARK_BLUE)
     calendar_grid = ft.Column(spacing=2)
+    calendar_body = ft.Container(
+        content=calendar_grid,
+        padding=ft.padding.only(top=2),
+    )
     popup_date_title = ft.Text("", size=16, weight="bold", color=COLOR_BLACK, text_align="center")
     save_status_text = ft.Text("", size=14, weight="bold", color=COLOR_SUCCESS)
 
@@ -667,9 +674,10 @@ def main(page: ft.Page):
                 ft.Divider(height=1),
                 weeks_header,
                 ft.Divider(height=1),
-                calendar_grid,
+                calendar_body,
             ],
-            expand=True,
+            spacing=6,
+            tight=True,
         )
 
     # --- [설정 화면 구성] ---
