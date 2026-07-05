@@ -513,7 +513,10 @@ def main(page: ft.Page):
                 color="white",
                 width=68, # <- 기존 75에서 '68'로 줄임 (글자가 안 깨지는 안전 마지노선!)
                 height=28, # <- 기존 32에서 '28'로 줄임 (상단 1, 2번 라인 글자들과 높이 균형이 맞춤)
-                style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=4)),
+                style=ft.ButtonStyle(
+                    shape=ft.RoundedRectangleBorder(radius=4),
+                    text_style=ft.TextStyle(size=12),
+                ),
             ),
         ],
         alignment="start",
