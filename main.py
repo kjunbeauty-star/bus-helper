@@ -366,11 +366,15 @@ def main(page: ft.Page):
         mangeun_dropdown.value = str(m_target)
 
         stats_text.value = f"근무 {work_days}일   휴무 {off_days}일"
+        
+        # [수정 반영] 중복값 표현 제거 및 초과/부족/충족 상태 명확화
         diff = work_days - m_target
-        if diff >= 0:
-            mangeun_text.value = f"만근 {m_target}일 · 기준보다 {diff}일 초과"
+        if diff > 0:
+            mangeun_text.value = f"만근기준 {diff}일 초과"
+        elif diff < 0:
+            mangeun_text.value = f"만근기준 {abs(diff)}일 부족"
         else:
-            mangeun_text.value = f"만근 {m_target}일 · 기준보다 {abs(diff)}일 부족"
+            mangeun_text.value = "만근기준 충족"
 
         calendar_grid.controls.clear()
         cal = calendar.Calendar(firstweekday=6)
@@ -601,7 +605,6 @@ def main(page: ft.Page):
             current["year"] += 1
         rebuild_interface()
 
-    # [수정 반영] 월 이동 헤더 구조 단순화
     header_nav = ft.Row(
         [
             ft.TextButton("◀ 이전", on_click=move_prev, style=ft.ButtonStyle(color=COLOR_BLACK)),
@@ -611,9 +614,10 @@ def main(page: ft.Page):
         alignment="spaceBetween",
     )
 
+    # [수정 반영] 하단 설정 영역의 라벨 기재 형식 맞춤 ('만근 기준 설정' ➔ '만근 설정')
     mangeun_setting_row = ft.Row(
         [
-            ft.Text("만근 기준 설정", size=13, weight="bold", color=COLOR_BLACK),
+            ft.Text("만근 설정", size=13, weight="bold", color=COLOR_BLACK),
             mangeun_dropdown,
         ],
         alignment="start",
@@ -638,14 +642,12 @@ def main(page: ft.Page):
         alignment="spaceAround",
     )
 
-    # [수정 반영] 콤팩트한 크기의 전화번호부 전용 독립 버튼 객체 생성
     btn_phonebook_trigger = ft.TextButton(
         "📞 전화번호부", 
         on_click=open_phonebook_popup, 
         style=ft.ButtonStyle(color=COLOR_PRIMARY, text_style=ft.TextStyle(size=12, weight="bold"))
     )
 
-    # [수정 반영] 통계 정보 텍스트와 전화번호부 버튼을 가로 한 행에 배치 (우측 정렬 처리)
     stats_and_button_row = ft.Row(
         [
             stats_text,
@@ -659,7 +661,7 @@ def main(page: ft.Page):
         return ft.Column(
             [
                 header_nav,
-                stats_and_button_row,  # 수정 적용된 배치 행
+                stats_and_button_row,
                 mangeun_text,
                 mangeun_setting_row,
                 ft.Divider(height=1),
