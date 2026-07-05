@@ -47,7 +47,7 @@ def main(page: ft.Page):
         page.client_storage.set(STORAGE_INPUT_DATA_KEY, json.dumps(input_data_state, ensure_ascii=False))
 
     now_kst = datetime.now(KST)
-    current = {"year": now_kst.year, "month": now_kst.month, "selected_date": "2026-07-04"}
+    current = {"year": now_kst.year, "month": now_kst.month, "selected_date": "2026-07-05"}
     selected_time_state = {"hour": 5, "minute": 0}
 
     current_tab = "달력"
@@ -59,6 +59,17 @@ def main(page: ft.Page):
     
     calendar_grid = ft.Column(spacing=2)
     input_zone_container = ft.Column(spacing=2, visible=False)
+    # 🛠️ [추정] 전화번호부 전용 컨테이너 신설
+    phonebook_zone_container = ft.Column([
+        ft.Container(
+            content=ft.Column([
+                ft.Text("📞 전화번호부", size=16, weight="bold", color="#1E3A8A"),
+                ft.Divider(height=1),
+                ft.Text("자주 쓰는 연락처들을 여기에 모아둘 수 있습니다.\n(기능 준비 중)", size=14, color="black")
+            ]),
+            padding=12, border=ft.border.all(1, "#2563EB"), border_radius=10
+        )
+    ], spacing=2, visible=False)
     
     popup_date_title = ft.Text("", size=16, weight="bold", color="black", text_align="center")
     
@@ -254,31 +265,44 @@ def main(page: ft.Page):
         nonlocal current_tab
         current_tab = tab_name
         
-        # 🛠️ [확인 완료] 이미지 image_382cc3.png에 나와 있던 새로고침(.update()) 로직 전면 반영
-        btn_calendar.bgcolor = "#2563EB" if tab_name == "달력" else "grey"
-        btn_input.bgcolor = "#2563EB" if tab_name == "운행정보" else "grey"
-        btn_setting.bgcolor = "#2563EB" if tab_name == "설정" else "grey"
+        # 🛠️ [기사님 맞춤형 수정 포인트] ButtonStyle 구조로 배경색 스위칭 연동 (전화번호부 추가)
+        btn_calendar.style = ft.ButtonStyle(bgcolor="#2563EB" if tab_name == "달력" else "grey", shape=ft.RoundedRectangleBorder(radius=6))
+        btn_input.style = ft.ButtonStyle(bgcolor="#2563EB" if tab_name == "운행정보" else "grey", shape=ft.RoundedRectangleBorder(radius=6))
+        btn_phonebook.style = ft.ButtonStyle(bgcolor="#2563EB" if tab_name == "전화번호부" else "grey", shape=ft.RoundedRectangleBorder(radius=6))
+        btn_setting.style = ft.ButtonStyle(bgcolor="#2563EB" if tab_name == "설정" else "grey", shape=ft.RoundedRectangleBorder(radius=6))
         
+        # 기사님 폰 화면에 즉시 파란색 불이 켜지도록 강제 새로고침 (.update()) 명령 적용
         btn_calendar.update()
         btn_input.update()
+        btn_phonebook.update()
         btn_setting.update()
         
         if tab_name == "달력":
             calendar_grid.visible = True
             input_zone_container.visible = False
+            phonebook_zone_container.visible = False
             weeks_header.visible = True
             div_line1.visible = True
             div_line2.visible = True
         elif tab_name == "운행정보":
             calendar_grid.visible = False
             input_zone_container.visible = True
+            phonebook_zone_container.visible = False
             weeks_header.visible = False
             div_line1.visible = False
             div_line2.visible = False
             refresh_input_tab_view()
+        elif tab_name == "전화번호부":
+            calendar_grid.visible = False
+            input_zone_container.visible = False
+            phonebook_zone_container.visible = True
+            weeks_header.visible = False
+            div_line1.visible = False
+            div_line2.visible = False
         elif tab_name == "설정":
             calendar_grid.visible = False
             input_zone_container.visible = False
+            phonebook_zone_container.visible = False
             weeks_header.visible = False
             div_line1.visible = False
             div_line2.visible = False
@@ -431,33 +455,42 @@ def main(page: ft.Page):
     div_line1 = ft.Divider(height=1)
     div_line2 = ft.Divider(height=1)
 
+    # 🛠️ 상하 정중앙 센터 맞춤 버튼 삼총사 -> 사총사 체제로 개편
     btn_calendar = ft.ElevatedButton(
-        content=ft.Container(ft.Text("달력", color="white", size=14, weight="bold"), alignment=ft.alignment.center),
-        bgcolor="#2563EB", expand=1, height=40, 
-        style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=6), padding=ft.padding.symmetric(vertical=0, horizontal=0)), 
+        content=ft.Container(ft.Text("달력", color="white", size=13, weight="bold"), alignment=ft.alignment.center),
+        expand=1, height=40, 
+        style=ft.ButtonStyle(bgcolor="#2563EB", shape=ft.RoundedRectangleBorder(radius=6), padding=ft.padding.symmetric(vertical=0, horizontal=0)), 
         on_click=lambda e: change_tab("달력")
     )
     btn_input = ft.ElevatedButton(
-        content=ft.Container(ft.Text("운행정보", color="white", size=14, weight="bold"), alignment=ft.alignment.center),
-        bgcolor="grey", expand=1, height=40, 
-        style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=6), padding=ft.padding.symmetric(vertical=0, horizontal=0)), 
+        content=ft.Container(ft.Text("운행정보", color="white", size=13, weight="bold"), alignment=ft.alignment.center),
+        expand=1, height=40, 
+        style=ft.ButtonStyle(bgcolor="grey", shape=ft.RoundedRectangleBorder(radius=6), padding=ft.padding.symmetric(vertical=0, horizontal=0)), 
         on_click=lambda e: change_tab("운행정보")
     )
+    # 🛠️ [신설] 전화번호부 버튼 추가
+    btn_phonebook = ft.ElevatedButton(
+        content=ft.Container(ft.Text("전화번호부", color="white", size=12, weight="bold"), alignment=ft.alignment.center),
+        expand=1, height=40, 
+        style=ft.ButtonStyle(bgcolor="grey", shape=ft.RoundedRectangleBorder(radius=6), padding=ft.padding.symmetric(vertical=0, horizontal=0)), 
+        on_click=lambda e: change_tab("전화번호부")
+    )
     btn_setting = ft.ElevatedButton(
-        content=ft.Container(ft.Text("설정", color="white", size=14, weight="bold"), alignment=ft.alignment.center),
-        bgcolor="grey", expand=1, height=40, 
-        style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=6), padding=ft.padding.symmetric(vertical=0, horizontal=0)), 
+        content=ft.Container(ft.Text("설정", color="white", size=13, weight="bold"), alignment=ft.alignment.center),
+        expand=1, height=40, 
+        style=ft.ButtonStyle(bgcolor="grey", shape=ft.RoundedRectangleBorder(radius=6), padding=ft.padding.symmetric(vertical=0, horizontal=0)), 
         on_click=lambda e: change_tab("설정")
     )
     
-    bottom_navigation_bar = ft.Row([btn_calendar, btn_input, btn_setting], alignment="spaceAround", spacing=8)
+    bottom_navigation_bar = ft.Row([btn_calendar, btn_input, btn_phonebook, btn_setting], alignment="spaceAround", spacing=4)
 
     scrollable_content = ft.Column(
         [
             header_nav, summary_group, div_line1,
             weeks_header, div_line2,
             calendar_grid,
-            input_zone_container
+            input_zone_container,
+            phonebook_zone_container # 🛠️ 전화번호부 뷰 연동
         ],
         expand=True, scroll=ft.ScrollMode.AUTO
     )
