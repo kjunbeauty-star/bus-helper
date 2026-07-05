@@ -123,6 +123,7 @@ def main(page: ft.Page):
     month_title = ft.Text("", size=20, weight="bold", text_align="center")
     stats_text = ft.Text("", size=13, weight="bold", color="#1E3A8A")
     mangeun_text = ft.Text("", size=13, weight="bold", color="#1E3A8A")
+    mangeun_value_text = ft.Text("", size=13, weight="bold", color="#1E3A8A")
     calendar_grid = ft.Column(spacing=2)
     popup_date_title = ft.Text("", size=16, weight="bold", color="black", text_align="center")
     
@@ -136,7 +137,7 @@ def main(page: ft.Page):
         content_padding=ft.padding.symmetric(vertical=4, horizontal=10),
     )
     
-    # 만근 기준 드롭다운 값 변경 시 실시간 저장[cite: 2]
+    # 만근 기준 저장 버튼 클릭 시 현재 월 기준값을 저장합니다.
     def on_mangeun_dropdown_changed(e):
         try:
             val = int(mangeun_dropdown.value)
@@ -144,18 +145,18 @@ def main(page: ft.Page):
             MANGEUN_TARGETS[key] = val
             
             save_all_to_client_storage()
+            mangeun_popup_layer.visible = False
             rebuild_interface()
         except (ValueError, TypeError):
             pass
 
-    # "만근" 옆 숫자 선택 드롭다운 (15일 ~ 26일)
+    # 만근 기준 변경 팝업에서 사용하는 숫자 선택 드롭다운 (15일 ~ 26일)
     mangeun_dropdown = ft.Dropdown(
         options=[ft.dropdown.Option(str(i)) for i in range(15, 27)],
-        width=80,
-        height=40,
+        width=62,
+        height=36,
         text_size=12,
-        content_padding=8,
-        on_change=on_mangeun_dropdown_changed
+        content_padding=ft.padding.symmetric(vertical=4, horizontal=8),
     )
 
     # 24시간제 다이얼[cite: 2]
@@ -200,6 +201,13 @@ def main(page: ft.Page):
         expand=True
     )
 
+    mangeun_popup_layer = ft.Container(
+        visible=False,
+        bgcolor="#AA000000",
+        alignment=ft.Alignment(0, 0),
+        expand=True
+    )
+
     # 2. 데이터 제어 함수[cite: 2]
     def get_mangeun_target():
         try:
@@ -232,13 +240,18 @@ def main(page: ft.Page):
         m_target = get_mangeun_target()
         mangeun_dropdown.value = str(m_target)
         
-        stats_text.value = f"근무 {work_days}일   휴무 {off_days}일"
-        
+        # 상단 요약은 항목명과 숫자만 간단히 표시합니다.
         diff = work_days - m_target
-        if diff >= 0:
-            mangeun_text.value = f"만근 {m_target}일 · 기준보다 {diff}일 초과"
+        if diff > 0:
+            work_summary = f"근무: {work_days}(+{diff})"
+        elif diff < 0:
+            work_summary = f"근무: {work_days}({diff})"
         else:
-            mangeun_text.value = f"만근 {m_target}일 · 기준보다 {abs(diff)}일 부족"
+            work_summary = f"근무: {work_days}"
+
+        stats_text.value = work_summary
+        mangeun_text.value = f"휴무: {off_days}"
+        mangeun_value_text.value = f"만근: {m_target}"
 
         calendar_grid.controls.clear()
         cal = calendar.Calendar(firstweekday=6)
@@ -434,6 +447,42 @@ def main(page: ft.Page):
     )
     popup_layer.content = popup_card
 
+    def open_mangeun_popup(e):
+        """현재 월의 만근 기준값을 팝업 드롭다운에 맞춘 뒤 엽니다."""
+        mangeun_dropdown.value = str(get_mangeun_target())
+        mangeun_popup_layer.visible = True
+        page.update()
+
+    mangeun_popup_card = ft.Container(
+        content=ft.Column(
+            [
+                ft.Text("만근 기준 변경", size=16, weight="bold", color="black"),
+                ft.Row(
+                    [
+                        ft.Text("만근:", size=13, weight="bold", color="black"),
+                        mangeun_dropdown,
+                    ],
+                    alignment="center",
+                    spacing=10,
+                ),
+                ft.Row(
+                    [
+                        ft.TextButton("취소", on_click=lambda e: setattr(mangeun_popup_layer, "visible", False) or page.update()),
+                        ft.TextButton("저장", on_click=on_mangeun_dropdown_changed, style=ft.ButtonStyle(color="#2563EB")),
+                    ],
+                    alignment="spaceBetween",
+                ),
+            ],
+            spacing=10,
+            tight=True,
+        ),
+        bgcolor="white",
+        padding=14,
+        border_radius=12,
+        width=240,
+    )
+    mangeun_popup_layer.content = mangeun_popup_card
+
     # 상하단 레이아웃[cite: 2]
     def move_prev(e):
         current["month"] -= 1
@@ -456,11 +505,16 @@ def main(page: ft.Page):
 
     mangeun_setting_row = ft.Row(
         [
-            ft.Text("만근", size=13, weight="bold", color="black"),
-            mangeun_dropdown
+            mangeun_value_text,
+            ft.TextButton(
+                "[변경]",
+                on_click=open_mangeun_popup,
+                style=ft.ButtonStyle(color="#2563EB"),
+            ),
         ],
         alignment="start",
-        spacing=10
+        vertical_alignment="center",
+        spacing=8
     )
 
     days_letters = ["일", "월", "화", "수", "목", "금", "토"]
@@ -515,7 +569,8 @@ def main(page: ft.Page):
         ft.Stack(
             [
                 main_layout,
-                popup_layer
+                popup_layer,
+                mangeun_popup_layer
             ],
             expand=True
         )
