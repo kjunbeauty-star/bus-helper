@@ -95,7 +95,10 @@ def main(page: ft.Page):
     month_title = ft.Text("", size=20, weight="bold", text_align="center")
     stats_text = ft.Text("", size=13, weight="bold", color=COLOR_DARK_BLUE)
     mangeun_text = ft.Text("", size=13, weight="bold", color=COLOR_DARK_BLUE)
+    
+    # [수정 반영] calendar_grid에서 scroll 옵션 완전 제거
     calendar_grid = ft.Column(spacing=2)
+    
     popup_date_title = ft.Text("", size=16, weight="bold", color=COLOR_BLACK, text_align="center")
     save_status_text = ft.Text("", size=14, weight="bold", color=COLOR_SUCCESS)
 
@@ -217,8 +220,6 @@ def main(page: ft.Page):
     pb_phone_input = ft.TextField(label="전화번호", hint_text="하이픈 없이 입력 가능")
     pb_memo_input = ft.TextField(label="메모 (선택)", hint_text="예: 오전조")
     pb_feedback_text = ft.Text("", size=12, color=COLOR_SUCCESS, weight="bold")
-    
-    # [수정 반영] max_height 인자 제거
     pb_list_layout = ft.Column(spacing=4, scroll=ft.ScrollMode.AUTO)
 
     def open_phonebook_popup(e):
@@ -319,7 +320,6 @@ def main(page: ft.Page):
                 pb_feedback_text,
                 ft.Divider(height=2),
                 ft.Text("📋 등록된 동료 명단", size=12, color=COLOR_GREY, weight="bold"),
-                # [수정 반영] Column을 Container로 감싸서 height=200 제한 부여
                 ft.Container(content=pb_list_layout, height=200),
                 ft.Divider(height=1),
                 ft.Row([ft.TextButton("팝업 닫기", on_click=close_phonebook_popup)], alignment="end")
@@ -370,7 +370,6 @@ def main(page: ft.Page):
 
         stats_text.value = f"근무 {work_days}일   휴무 {off_days}일"
         
-        # [수정 반영] 중복값 표현 제거 및 초과/부족/충족 상태 명확화
         diff = work_days - m_target
         if diff > 0:
             mangeun_text.value = f"만근기준 {diff}일 초과"
@@ -533,7 +532,7 @@ def main(page: ft.Page):
         bgcolor=COLOR_FULL_TEXT,
         alignment=ft.Alignment(0, 0),
         height=38,
-                border_radius=6,
+        border_radius=6,
         on_click=lambda e: select_status_and_save(STATUS_FULL),
         visible=False,
     )
@@ -617,7 +616,6 @@ def main(page: ft.Page):
         alignment="spaceBetween",
     )
 
-    # [수정 반영] 하단 설정 영역의 라벨 기재 형식 맞춤 ('만근 기준 설정' ➔ '만근 설정')
     mangeun_setting_row = ft.Row(
         [
             ft.Text("만근 설정", size=13, weight="bold", color=COLOR_BLACK),
@@ -660,6 +658,7 @@ def main(page: ft.Page):
         vertical_alignment="center"
     )
 
+    # [수정 반영] 지정하신 구조와 속성으로 달력 화면 완벽 고정 (모든 scroll 옵션 제거)
     def get_calendar_view():
         return ft.Column(
             [
@@ -673,7 +672,6 @@ def main(page: ft.Page):
                 calendar_grid,
             ],
             expand=True,
-            scroll=ft.ScrollMode.AUTO,
         )
 
     # --- [설정 화면 구성] ---
@@ -830,7 +828,7 @@ def main(page: ft.Page):
             page.client_storage.set(STORAGE_ROUTE_NUMBER, route_field.value.strip())
             trigger_feedback("route")
 
-        vehicle_field = ft.TextField(label="오늘 운행 차량 번호", value=today_vehicle, hint_text="예: 1234호")
+        vehicle_field = ft.TextField(label="오늘 운행 차량 번호", value=today_vehicle, hint_text="예: 1234")
         
         def save_today_vehicle(e):
             v_map = load_json_from_storage(STORAGE_TODAY_VEHICLE, {})
@@ -853,7 +851,7 @@ def main(page: ft.Page):
                 return [ft.dropdown.Option("", "직접 입력 (목록에서 선택)")]
 
         front_car_field = ft.TextField(label="차량번호", value=today_neighbors.get("front_car", ""), hint_text="예: 2694")
-        front_driver_name_field = ft.TextField(label="운전자 이름", value=today_neighbors.get("front_driver_name", ""), hint_text="예: 선명구")
+        front_driver_name_field = ft.TextField(label="운전자 이름", value=today_neighbors.get("front_driver_name", ""), hint_text="예:선명구")
         front_driver_phone_field = ft.TextField(label="전화번호", value=today_neighbors.get("front_driver_phone", ""), hint_text="예: 010-0000-0000")
         
         back_car_field = ft.TextField(label="차량번호", value=today_neighbors.get("back_car", ""), hint_text="예: 2745")
