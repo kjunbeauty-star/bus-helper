@@ -239,6 +239,7 @@ def main(page: ft.Page):
             
             # 입력 탭 진입 시 1구역+2구역 통합 빌드
             refresh_input_tab_view()
+        # 이 부분이 change_tab 함수의 맨 아래쪽입니다.
         elif tab_name == "설정":
             calendar_grid.visible = False
             input_zone_container.visible = False
@@ -246,6 +247,9 @@ def main(page: ft.Page):
             div_line1.visible = False
             div_line2.visible = False
 
+        # ⭐ [이 줄을 추가해 주세요!] 겉껍질 박스도 화면 갱신 대상에 포함시킵니다.
+        scrollable_content.update() 
+        
         page.update()
 
     def rebuild_interface():
