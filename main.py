@@ -324,7 +324,7 @@ def main(page: ft.Page):
     # 4. 팝업창 제어 및 데이터 동기화 자동 저장 함수[cite: 2]
     def open_input_popup(date_key):
         current["selected_date"] = date_key
-        popup_date_title.value = f"{date_key}\n근무를 선택하거나 시간을 맞추세요"
+        popup_date_title.value = f"{date_key}\n첫탕 시간을 선택하세요"
         
         day_info = USER_SCHEDULES.get(date_key, {})
         current_time = day_info.get("start_time", "")
@@ -393,12 +393,6 @@ def main(page: ft.Page):
                 ft.Row([popup_date_title], alignment="center"),
                 ft.Divider(height=1, color="transparent"),
                 dial_row, 
-                ft.Container(
-                    content=ft.Text("선택한 시간으로 저장", size=15, weight="bold", color="white"),
-                    bgcolor="#2563EB", alignment=ft.Alignment(0, 0), height=44, border_radius=6,
-                    on_click=lambda e: select_status_and_save("자동")
-                ),
-                ft.Divider(height=2),
                 
                 # [수정] 순번 드롭다운 배치 라인
                 ft.Row(
@@ -413,24 +407,31 @@ def main(page: ft.Page):
                 
                 ft.Text("시간 없이 근무만 등록할 때:", size=11, weight="bold", color="grey"),
                 ft.Container(
-                    content=ft.Text("휴무 지정", size=15, weight="bold", color="white"),
+                    content=ft.Text("휴무", size=15, weight="bold", color="white"),
                     bgcolor="#D93025", alignment=ft.Alignment(0, 0), height=40, border_radius=6,
                     on_click=lambda e: select_status_and_save("휴무")
                 ),
+                
+                # ⭐ [변경] 저장, 오전근무, 오후근무 버튼을 사이좋게 삼등분(expand=1)하여 한 줄로 배치!
                 ft.Row(
                     [
                         ft.Container(
-                            content=ft.Text("오전조 등록", size=14, weight="bold", color="white"),
+                            content=ft.Text("저장", size=14, weight="bold", color="white"),
+                            bgcolor="#2563EB", alignment=ft.Alignment(0, 0), height=38, border_radius=6, expand=1,
+                            on_click=lambda e: select_status_and_save("자동")
+                        ),
+                        ft.Container(
+                            content=ft.Text("오전근무", size=14, weight="bold", color="white"),
                             bgcolor="#5C93E6", alignment=ft.Alignment(0, 0), height=38, border_radius=6, expand=1,
                             on_click=lambda e: select_status_and_save("오전")
                         ),
                         ft.Container(
-                            content=ft.Text("오후조 등록", size=14, weight="bold", color="white"),
+                            content=ft.Text("오후근무", size=14, weight="bold", color="white"),
                             bgcolor="#7E22CE", alignment=ft.Alignment(0, 0), height=38, border_radius=6, expand=1,
                             on_click=lambda e: select_status_and_save("오후")
                         ),
                     ],
-                    spacing=10
+                    spacing=8 # 버튼들 사이 간격을 오밀조밀하게 세팅
                 ),
                 ft.Divider(height=1, color="transparent"),
                 ft.Row(
