@@ -80,7 +80,6 @@ def main(page: ft.Page):
 
     dial_row = ft.Row([hour_picker, ft.Text(":", size=20, weight="bold", color="black"), minute_picker], alignment="center", height=100)
     
-    # 🌟 기존의 말썽 많던 투명 Container 가림막을 싹 다 지워버렸습니다.
     popup_layer = ft.Container(visible=False, bgcolor="#AA000000", alignment=ft.Alignment(0, 0), expand=True)
     mangeun_popup_layer = ft.Container(visible=False, bgcolor="#AA000000", alignment=ft.Alignment(0, 0), expand=True)
 
@@ -142,7 +141,6 @@ def main(page: ft.Page):
             padding=12, border=ft.border.all(1, "#2563EB"), border_radius=10, margin=ft.margin.only(bottom=10)
         )
 
-    # 🌟 절대로 뒤로 숨지 않는 Flet 공식 시스템 팝업창(AlertDialog) 전용 엔진 도입
     def open_info_input_popup(target_type):
         if target_type == "내차":
             tf_route = ft.TextField(label="노선번호", value=input_data_state["route"].replace("미입력",""), keyboard_type=ft.KeyboardType.NUMBER, expand=True, height=38)
@@ -151,7 +149,7 @@ def main(page: ft.Page):
             def save_my(e):
                 input_data_state["route"] = tf_route.value if tf_route.value else "미입력"
                 input_data_state["bus_no"] = f"{tf_bus_no.value}호" if tf_bus_no.value else "미입력"
-                info_dialog.open = False  # 팝업 닫기
+                info_dialog.open = False  
                 page.update()
                 rebuild_interface()
 
@@ -173,7 +171,7 @@ def main(page: ft.Page):
                 input_data_state["front_bus"] = f"{tf_f_bus.value}호" if tf_f_bus.value else "미입력"
                 input_data_state["front_driver"] = tf_f_driver.value if tf_f_driver.value else "미입력"
                 input_data_state["front_phone"] = tf_f_phone.value if tf_f_phone.value else "미입력"
-                info_dialog.open = False  # 팝업 닫기
+                info_dialog.open = False  
                 page.update()
                 rebuild_interface()
 
@@ -195,7 +193,7 @@ def main(page: ft.Page):
                 input_data_state["back_bus"] = f"{tf_b_bus.value}호" if tf_b_bus.value else "미입력"
                 input_data_state["back_driver"] = tf_b_driver.value if tf_b_driver.value else "미입력"
                 input_data_state["back_phone"] = tf_b_phone.value if tf_b_phone.value else "미입력"
-                info_dialog.open = False  # 팝업 닫기
+                info_dialog.open = False  
                 page.update()
                 rebuild_interface()
 
@@ -208,13 +206,12 @@ def main(page: ft.Page):
                 width=260, padding=4
             )
 
-        # 시스템 전용 다이얼로그에 내용물을 넣고 강제로 화면 맨 앞으로 소환합니다.
         info_dialog.content = box_content
         info_dialog.open = True
         page.update()
 
-    # 🌟 3단 박스 전용 공식 다이얼로그 무기 장착
-    info_dialog = ft.AlertDialog(modal=False)
+    # 🛠️ [수정 포인트] 텅 빈 다이얼로그 에러를 방지하기 위해 기본 컨테이너를 미리 지정해 둡니다.
+    info_dialog = ft.AlertDialog(modal=False, content=ft.Container())
     page.dialog = info_dialog
 
     def refresh_input_tab_view():
@@ -414,10 +411,8 @@ def main(page: ft.Page):
         expand=True, scroll=ft.ScrollMode.AUTO
     )
 
-    # 🌟 복잡한 Stack 구조를 완전히 깨부수고, 메인 레이아웃만 단독으로 깔끔하게 배치합니다.
     main_layout = ft.Column([scrollable_content, ft.Divider(height=1), bottom_navigation_bar], expand=True)
     
-    # 🌟 달력 팝업과 만근 팝업 레이어만 남겨 안전망을 구축합니다.
     page.add(ft.Stack([main_layout, popup_layer, mangeun_popup_layer], expand=True))
     
     change_tab("달력")
