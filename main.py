@@ -220,7 +220,7 @@ def main(page: ft.Page):
         except:
             return 22
 
-    # 3. 화면 리빌드 함수 (근무명 + 순번 결합 형태)[cite: 2]
+        # 3. 화면 리빌드 함수 (근무명 + 순번 결합 형태)
     def rebuild_interface():
         nonlocal USER_SCHEDULES, MANGEUN_TARGETS
 
@@ -240,7 +240,6 @@ def main(page: ft.Page):
         m_target = get_mangeun_target()
         mangeun_dropdown.value = str(m_target)
         
-        # 상단 요약은 항목명과 숫자만 간단히 표시합니다.
         diff = work_days - m_target
         if diff > 0:
             work_summary = f"근무: {work_days}(+{diff})"
@@ -261,6 +260,7 @@ def main(page: ft.Page):
             week_row = ft.Row(alignment="spaceAround", spacing=2)
             for day in week:
                 if day == 0:
+                    # 빈 칸의 테두리를 원하시면 border=ft.border.all(0.5, "#E0E0E0")를 넣으셔도 됩니다.
                     week_row.controls.append(ft.Container(expand=1, height=48))
                 else:
                     date_obj = datetime(current['year'], current['month'], day)
@@ -295,8 +295,9 @@ def main(page: ft.Page):
 
                     time_display = ft.Text(start_time, size=9, weight="bold", color=text_color) if start_time and status != "휴무" else ft.Container()
 
+                    # ⭐ [변경] 오늘 날짜는 굵은 파란 선, 일반 날짜는 있는 듯 없는 듯 얇은 회색 선(#E2E8F0) 적용
                     is_today = (current['year'] == today_y and current['month'] == today_m and day == today_d)
-                    day_border = ft.border.all(2, "#2563EB") if is_today else None
+                    day_border = ft.border.all(2, "#2563EB") if is_today else ft.border.all(0.5, "#E2E8F0")
 
                     day_box = ft.Container(
                         content=ft.Column(
@@ -503,6 +504,7 @@ def main(page: ft.Page):
         alignment="spaceBetween"
     )
 
+# ⭐ [변경] 만근 레이아웃의 높이를 극도로 낮추고 여백을 통제하여 윗줄들과 스페이스 정렬
     mangeun_setting_row = ft.Row(
         [
             mangeun_value_text,
@@ -511,29 +513,29 @@ def main(page: ft.Page):
                 on_click=open_mangeun_popup,
                 bgcolor="#2563EB",
                 color="white",
-                width=60, # <- 기존 75에서 '68'로 줄임 (글자가 안 깨지는 안전 마지노선!)
-                height=23, # <- 기존 32에서 '28'로 줄임 (상단 1, 2번 라인 글자들과 높이 균형이 맞춤)
+                width=68,      
+                height=22,     # 높이를 22로 낮추어 위아래 라인을 밀어내지 않음
                 style=ft.ButtonStyle(
                     shape=ft.RoundedRectangleBorder(radius=4),
                     text_style=ft.TextStyle(size=11, weight="bold"),
-                    padding=0, # ⭐ 중요: 버튼 내부 여백을 제거하여 글자가 세로로 꺾이는 문제를 완벽히 방지합니다.
+                    padding=0, # 내부 패딩 제거로 글자 잘림 방지
                 ),
             ),
         ],
         alignment="start",
         vertical_alignment="center",
         spacing=6,
-        height=32,
+        height=22, # Row 자체의 높이도 타이트하게 설정
     )
 
-    # 상단 요약 3줄만 촘촘하게 묶어 달력 구조에는 영향을 주지 않습니다.
+    # ⭐ [변경] 세 줄의 간격이 완벽하게 대칭을 이루도록 spacing 세팅
     summary_group = ft.Column(
         [
             stats_text,
             mangeun_text,
             mangeun_setting_row,
         ],
-        spacing=6,
+        spacing=6, # 3줄 모두 균일하게 6px 간격으로 배치
         tight=True,
     )
 
