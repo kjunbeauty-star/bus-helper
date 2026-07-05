@@ -393,9 +393,10 @@ def main(page: ft.Page):
     div_line1 = ft.Divider(height=1)
     div_line2 = ft.Divider(height=1)
 
+    # 하단 내비게이션 바 버튼에 탭 전환 기능(on_click) 확실하게 연결
     btn_calendar = ft.TextButton("달력", style=ft.ButtonStyle(color="#2563EB"), expand=1, height=40, on_click=lambda e: change_tab("달력"))
     btn_input = ft.TextButton("입력", style=ft.ButtonStyle(color="grey"), expand=1, height=40, on_click=lambda e: change_tab("입력"))
-    btn_setting = ft.TextButton("설정", style=ft.ButtonStyle(color="grey"), expand=1, height=40, on_click=lambda e: change_tab("설정"))
+    btn_setting = ft.TextButton("설정", style=ft.ButtonStyle(color="grey"), expand=1, height=40, on_click=lambda e: change_tab("설정"))    
     
     bottom_navigation_bar = ft.Row([btn_calendar, btn_input, btn_setting], alignment="spaceAround")
 
