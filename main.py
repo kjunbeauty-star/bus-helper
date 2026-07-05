@@ -517,6 +517,17 @@ def main(page: ft.Page):
         spacing=8
     )
 
+    # 상단 요약 3줄만 촘촘하게 묶어 달력 구조에는 영향을 주지 않습니다.
+    summary_group = ft.Column(
+        [
+            stats_text,
+            mangeun_text,
+            mangeun_setting_row,
+        ],
+        spacing=0,
+        tight=True,
+    )
+
     days_letters = ["일", "월", "화", "수", "목", "금", "토"]
     weeks_header = ft.Row(
         [
@@ -543,9 +554,7 @@ def main(page: ft.Page):
     scrollable_content = ft.Column(
         [
             header_nav,
-            stats_text,
-            mangeun_text,
-            mangeun_setting_row,
+            summary_group,
             ft.Divider(height=1),
             weeks_header,        
             ft.Divider(height=1),
