@@ -10,6 +10,8 @@ DB_FILE = "schedules.db"
 STORAGE_SCHEDULES_KEY = "bus_helper_schedules"
 STORAGE_MANGEUN_KEY = "bus_helper_mangeun_targets"
 STORAGE_INPUT_DATA_KEY = "bus_helper_input_data"
+# 💡 전화번호부 저장용 키 신설
+STORAGE_PHONEBOOK_KEY = "bus_helper_phonebook"
 
 def init_db():
     conn = sqlite3.connect(DB_FILE)
@@ -27,9 +29,12 @@ def main(page: ft.Page):
     saved_schedules = page.client_storage.get(STORAGE_SCHEDULES_KEY)
     saved_targets = page.client_storage.get(STORAGE_MANGEUN_KEY)
     saved_input_data = page.client_storage.get(STORAGE_INPUT_DATA_KEY)
+    # 💡 저장된 전화번호부 데이터 불러오기
+    saved_phonebook = page.client_storage.get(STORAGE_PHONEBOOK_KEY)
 
     USER_SCHEDULES = json.loads(saved_schedules) if saved_schedules else {}
     MANGEUN_TARGETS = json.loads(saved_targets) if saved_targets else {}
+    PHONEBOOK_LIST = json.loads(saved_phonebook) if saved_phonebook else []
     
     if saved_input_data:
         input_data_state = json.loads(saved_input_data)
@@ -45,6 +50,8 @@ def main(page: ft.Page):
         page.client_storage.set(STORAGE_SCHEDULES_KEY, json.dumps(USER_SCHEDULES, ensure_ascii=False))
         page.client_storage.set(STORAGE_MANGEUN_KEY, json.dumps(MANGEUN_TARGETS, ensure_ascii=False))
         page.client_storage.set(STORAGE_INPUT_DATA_KEY, json.dumps(input_data_state, ensure_ascii=False))
+        # 💡 전화번호부도 함께 스토리지에 저장
+        page.client_storage.set(STORAGE_PHONEBOOK_KEY, json.dumps(PHONEBOOK_LIST, ensure_ascii=False))
 
     now_kst = datetime.now(KST)
     current = {"year": now_kst.year, "month": now_kst.month, "selected_date": "2026-07-05"}
@@ -52,7 +59,6 @@ def main(page: ft.Page):
 
     current_tab = "달력"
 
-    # --- 컴포넌트 선언부를 change_tab 위쪽으로 통합 이동 ---
     month_title = ft.Text("", size=20, weight="bold", text_align="center")
     stats_text = ft.Text("", size=13, weight="bold", color="#1E3A8A")
     mangeun_text = ft.Text("", size=13, weight="bold", color="#1E3A8A")
@@ -61,26 +67,46 @@ def main(page: ft.Page):
     calendar_grid = ft.Column(spacing=2)
     input_zone_container = ft.Column(spacing=2, visible=False)
     
+    # 💡 전화번호부 리스트가 담길 내부 컴포넌트 선언
+    phonebook_items_column = ft.Column(spacing=6)
+    
+    # 💡 전화번호부 탭 UI 전면 개편
     phonebook_zone_container = ft.Column([
         ft.Container(
             content=ft.Column([
-                ft.Text("📞 전화번호", size=16, weight="bold", color="#1E3A8A"),
+                ft.Row([
+                    ft.Text("📞 전화번호부 관리", size=16, weight="bold", color="#1E3A8A"),
+                ], alignment="spaceBetween"),
                 ft.Divider(height=1),
-                ft.Text("자주 쓰는 연락처들을 여기에 모아둘 수 있습니다.\n(기능 준비 중)", size=14, color="black")
+                
+                # 연락처 입력창 폼
+                ft.Row([
+                    ft.TextField(id="pb_name", label="이름/직책", width=100, height=38, text_size=13, content_padding=8),
+                    ft.TextField(id="pb_phone", label="전화번호(숫자만)", expand=True, height=38, text_size=13, content_padding=8, keyboard_type=ft.KeyboardType.PHONE),
+                    ft.ElevatedButton(
+                        content=ft.Text("추가", size=12, weight="bold", color="white"),
+                        bgcolor="#2563EB", width=60, height=38,
+                        style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=4), padding=0),
+                        on_click=lambda e: add_phonebook_item()
+                    )
+                ], spacing=4),
+                ft.Divider(height=1, color="#E2E8F0"),
+                
+                # 연락처가 출력되는 리스트 공간
+                phonebook_items_column
             ]),
             padding=12, border=ft.border.all(1, "#2563EB"), border_radius=10
         )
     ], spacing=2, visible=False)
     
-    # 상단 전화번호부 큰 버튼 선언 위치를 앞으로 이동
+    # 상단 전화번호부 큰 버튼 (글자 크기 20, 완벽한 직사각형 스타일 유지)
     phonebook_big_button = ft.ElevatedButton(
         content=ft.Container(ft.Text("전화번호부", color="white", size=20, weight="bold"), alignment=ft.alignment.center), 
         width=150, height=70, bgcolor="#2563EB", color="white", 
         on_click=lambda e: change_tab("전화번호"),
-        # 💡 이 아래 style 부분을 추가해줍니다.
         style=ft.ButtonStyle(
-            shape=ft.RoundedRectangleBorder(radius=10), # 모서리 반지름을 10으로 주어 각진 직사각형 느낌을 냅니다.
-            padding=ft.padding.all(0) # 내부 여백을 없애서 컨테이너가 꽉 차게 만듭니다.
+            shape=ft.RoundedRectangleBorder(radius=10),
+            padding=ft.padding.all(0)
         )
     )
 
@@ -91,7 +117,7 @@ def main(page: ft.Page):
         on_click=lambda e: change_tab("달력")
     )
     btn_input = ft.ElevatedButton(
-        content=ft.Container(ft.Text("운행정보", color="white", size=11, weight="bold"), alignment=ft.alignment.center),
+        content=ft.Container(ft.Text("운행\n정보", color="white", size=11, weight="bold"), alignment=ft.alignment.center),
         expand=1, height=40, 
         style=ft.ButtonStyle(bgcolor="grey", shape=ft.RoundedRectangleBorder(radius=6), padding=ft.padding.symmetric(vertical=0, horizontal=0)), 
         on_click=lambda e: change_tab("운행정보")
@@ -108,7 +134,71 @@ def main(page: ft.Page):
 
     div_line1 = ft.Divider(height=1)
     div_line2 = ft.Divider(height=1)
-    # -----------------------------------------------------
+
+    # 💡 전화번호부 리스트를 화면에 새롭게 그려주는 기능
+    def rebuild_phonebook_view():
+        phonebook_items_column.controls.clear()
+        if not PHONEBOOK_LIST:
+            phonebook_items_column.controls.append(
+                ft.Container(
+                    content=ft.Text("등록된 연락처가 없습니다.\n자주 쓰는 번호를 상단에 등록해 보세요!", size=13, color="grey", text_align="center"),
+                    padding=20, alignment=ft.alignment.center
+                )
+            )
+        else:
+            for index, item in enumerate(PHONEBOOK_LIST):
+                name = item.get("name", "")
+                phone = item.get("phone", "")
+                
+                # 각 연락처 한 줄 레이아웃 (클릭 시 통화걸기, 우측엔 X 삭제 버튼)
+                phonebook_items_column.controls.append(
+                    ft.Container(
+                        content=ft.Row([
+                            ft.GestureDetector(
+                                content=ft.Row([
+                                    ft.Text(f"{name}", size=14, weight="bold", color="black", width=90),
+                                    ft.Text(f"{phone}", size=14, weight="bold", color="#1E3A8A"),
+                                    ft.Text("☎️", size=12, color="red")
+                                ], spacing=6, alignment="start"),
+                                on_tap=lambda e, p=phone: make_call(p),
+                                expand=True
+                            ),
+                            ft.IconButton(
+                                icon=ft.icons.CLOSE_ROUNDED,
+                                icon_color="red",
+                                icon_size=16,
+                                width=30, height=30,
+                                on_click=lambda e, idx=index: delete_phonebook_item(idx)
+                            )
+                        ], alignment="spaceBetween"),
+                        bgcolor="#F8FAFC",
+                        padding=ft.padding.symmetric(vertical=4, horizontal=8),
+                        border_radius=6,
+                        border=ft.border.all(0.5, "#E2E8F0")
+                    )
+                )
+        page.update()
+
+    # 💡 전화번호 추가 로직
+    def add_phonebook_item():
+        # 순서 보장을 위해 컨트롤 검색 후 값 추출
+        tf_name = phonebook_zone_container.controls[0].content.controls[2].controls[0]
+        tf_phone = phonebook_zone_container.controls[0].content.controls[2].controls[1]
+        
+        if tf_name.value and tf_phone.value:
+            formatted_num = final_format_phone(tf_phone.value)
+            PHONEBOOK_LIST.append({"name": tf_name.value, "phone": formatted_num})
+            save_all_to_client_storage()
+            tf_name.value = ""
+            tf_phone.value = ""
+            rebuild_phonebook_view()
+
+    # 💡 전화번호 삭제 로직
+    def delete_phonebook_item(index):
+        if 0 <= index < len(PHONEBOOK_LIST):
+            PHONEBOOK_LIST.pop(index)
+            save_all_to_client_storage()
+            rebuild_phonebook_view()
 
     def change_tab(tab_name):
         nonlocal current_tab
@@ -137,13 +227,14 @@ def main(page: ft.Page):
             div_line1.visible = False
             div_line2.visible = False
             refresh_input_tab_view()
-        elif tab_name == "전화번호":  # 상단 큰 버튼 전용 이동 탭 처리
+        elif tab_name == "전화번호":
             calendar_grid.visible = False
             input_zone_container.visible = False
             phonebook_zone_container.visible = True
             weeks_header.visible = False
             div_line1.visible = False
             div_line2.visible = False
+            rebuild_phonebook_view() # 전화번호부 탭 열릴 때 새로고침
         elif tab_name == "설정":
             calendar_grid.visible = False
             input_zone_container.visible = False
@@ -553,7 +644,6 @@ def main(page: ft.Page):
     
     page.add(ft.Stack([main_layout, popup_layer, mangeun_popup_layer], expand=True))
     
-    # 순서 변경: UI 요소를 다 그리고 난 뒤 초기 탭 지정 및 빌드를 수행합니다.
     change_tab("달력")
     rebuild_interface()
 
