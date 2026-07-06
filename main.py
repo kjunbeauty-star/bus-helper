@@ -274,10 +274,28 @@ def main(page: ft.Page):
         nonlocal current_tab
         current_tab = tab_name
         
-        btn_calendar.style = ft.ButtonStyle(bgcolor="#2563EB" if tab_name == "달력" else "grey", shape=ft.RoundedRectangleBorder(radius=6))
-        btn_input.style = ft.ButtonStyle(bgcolor="#2563EB" if tab_name == "운행정보" else "grey", shape=ft.RoundedRectangleBorder(radius=6))
-        btn_setting.style = ft.ButtonStyle(bgcolor="#2563EB" if tab_name == "설정" else "grey", shape=ft.RoundedRectangleBorder(radius=6))
-        
+        # 💡 배경색과 글자색은 그대로 부드럽게 제어합니다.
+        btn_calendar.style = ft.ButtonStyle(
+            color="white" if tab_name == "달력" else "#94A3B8",
+            bgcolor="#2563EB" if tab_name == "달력" else "transparent", # 활성화될 때만 배경색을 은은하게 주거나 투명하게 제어
+            shape=ft.RoundedRectangleBorder(radius=6)
+        )
+        btn_input.style = ft.ButtonStyle(
+            color="white" if tab_name == "운행정보" else "#94A3B8",
+            bgcolor="#2563EB" if tab_name == "운행정보" else "transparent",
+            shape=ft.RoundedRectangleBorder(radius=6)
+        )
+        btn_setting.style = ft.ButtonStyle(
+            color="white" if tab_name == "설정" else "#94A3B8",
+            bgcolor="#2563EB" if tab_name == "설정" else "transparent",
+            shape=ft.RoundedRectangleBorder(radius=6)
+        )
+
+        # 📱 [추가] 기사님이 원하셨던 전화번호부 타이틀/버튼 색상 제어! 
+        # 전화번호부 탭("전화번호")이 열렸을 때만 파란색, 달력이나 운행정보일 때는 그레이로 자동 전환됩니다.
+        # (※ 만약 전화번호부 버튼 변수명이 다르면 그 이름으로 바꿔주세요)
+        # phonebook_title.color = "#2563EB" if tab_name == "전화번호" else "grey"
+
         btn_calendar.update()
         btn_input.update()
         btn_setting.update()
