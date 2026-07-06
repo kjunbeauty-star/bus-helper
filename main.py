@@ -184,27 +184,27 @@ def main(page: ft.Page):
                     row_content = ft.Row([
                         ft.GestureDetector(
                             content=ft.Row([
-                                ft.Text(f"{name}", size=14, weight="bold", color="black", width=90),
-                                ft.Text(f"{phone}", size=14, weight="bold", color="#1E3A8A"),
+                                ft.Text(f"{name}", size=14, weight="bold", color="black", width=70), # 너비를 70으로 확보
+                                ft.Text(f"{phone}", size=13, weight="bold", color="#1E3A8A", expand=True), # expand=True로 남은 공간 다 쓰기, 글자 13으로 조절
                                 ft.Text("☎️", size=12, color="red")
-                            ], spacing=6, alignment="start"),
+                            ], spacing=4, alignment="start"),
                             on_tap=lambda e, p=phone: make_call(p),
                             expand=True
                         ),
                         ft.Row([
                             ft.ElevatedButton(
                                 content=ft.Container(ft.Text("수정", size=11, weight="bold", color="white"), alignment=ft.alignment.center),
-                                bgcolor="#2563EB", width=50, height=34, # 💡 다른 버튼들과 통일감 있는 파란색
+                                bgcolor="#2563EB", width=46, height=30, # 버튼 크기를 더 콤팩트하게 조절
                                 style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=4), padding=0),
                                 on_click=lambda e, idx=index: toggle_edit_mode(idx, True)
                             ),
                             ft.ElevatedButton(
                                 content=ft.Container(ft.Text("삭제", size=11, weight="bold", color="white"), alignment=ft.alignment.center),
-                                bgcolor="#1E3A8A", width=50, height=34, # 💡 구분을 주기 위해 살짝 더 진한 파란색 네이비
+                                bgcolor="#1E3A8A", width=46, height=30, # 버튼 크기를 더 콤팩트하게 조절
                                 style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=4), padding=0),
                                 on_click=lambda e, idx=index: delete_phonebook_item(idx)
                             )
-                        ], spacing=4)
+                        ], spacing=3)
                     ], alignment="spaceBetween")
 
                 phonebook_items_column.controls.append(
