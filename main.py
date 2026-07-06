@@ -81,8 +81,9 @@ def main(page: ft.Page):
                 
                 # 연락처 입력창 폼
                 ft.Row([
-                    ft.TextField(id="pb_name", label="이름/직책", width=100, height=38, text_size=13, content_padding=8),
-                    ft.TextField(id="pb_phone", label="전화번호(숫자만)", expand=True, height=38, text_size=13, content_padding=8, keyboard_type=ft.KeyboardType.PHONE),
+                    pb_name := ft.TextField(label="이름/직책", width=100, height=38, text_size=13, content_padding=8),
+                    pb_phone := ft.TextField(label="전화번호(숫자만)", expand=True, height=38, text_size=13, content_padding=8, keyboard_type=ft.KeyboardType.PHONE),
+
                     ft.ElevatedButton(
                         content=ft.Text("추가", size=12, weight="bold", color="white"),
                         bgcolor="#2563EB", width=60, height=38,
@@ -181,9 +182,8 @@ def main(page: ft.Page):
 
     # 💡 전화번호 추가 로직
     def add_phonebook_item():
-        # 순서 보장을 위해 컨트롤 검색 후 값 추출
-        tf_name = phonebook_zone_container.controls[0].content.controls[2].controls[0]
-        tf_phone = phonebook_zone_container.controls[0].content.controls[2].controls[1]
+        tf_name = pb_name
+        tf_phone = pb_phone
         
         if tf_name.value and tf_phone.value:
             formatted_num = final_format_phone(tf_phone.value)
