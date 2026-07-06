@@ -714,12 +714,13 @@ def main(page: ft.Page):
     
     summary_group = ft.Column([stats_text, mangeun_text, mangeun_setting_row], spacing=6, tight=True)
     summary_area = ft.Row([summary_group, phonebook_big_button], alignment="spaceBetween")
-
+    # ↓↓↓ 안내문구 추가 날짜를 터치하여 근무를 입력 또는 수정하세요 ↓↓↓
+    guide_text = ft.Container(content=ft.Text("💡 날짜를 터치하여 근무를 입력 또는 수정하세요.", size=10, color="#666666"), padding=ft.padding.only(left=8, bottom=4))
     bottom_navigation_bar = ft.Row([btn_calendar, btn_input, btn_setting], alignment="spaceAround", spacing=4)
 
     scrollable_content = ft.Column(
         [
-            header_nav, summary_area, div_line1,
+            header_nav, summary_area, guide_text, div_line1,
             weeks_header, div_line2,
             calendar_grid,
             input_zone_container,
