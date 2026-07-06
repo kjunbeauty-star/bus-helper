@@ -436,7 +436,7 @@ def main(page: ft.Page):
                     elif status == "휴무":
                         bg_color, text_color = "#FCE8E6", "#D93025"
                         status_desc = "휴무"
-                    day_number_color = "#D93025" if weekday == 6 else ("#1A73E8" if weekday == 5 else text_color)
+                    day_number_color = "#D93025" if weekday == 6 else ("#1A73E8" if weekday == 5 else "#000000")
                     time_display = ft.Text(start_time, size=9, weight="bold", color=text_color) if start_time and status != "휴무" else ft.Container()
                     is_today = (current['year'] == today_y and current['month'] == today_m and day == today_d)
                     day_border = ft.border.all(2, "#2563EB") if is_today else ft.border.all(0.5, "#E2E8F0")
