@@ -74,7 +74,7 @@ def main(page: ft.Page):
     
     # 상단 전화번호부 큰 버튼 선언 위치를 앞으로 이동
     phonebook_big_button = ft.ElevatedButton(
-        content=ft.Container(ft.Text("전화번호부", color="white", size=16, weight="bold"), alignment=ft.alignment.center), 
+        content=ft.Container(ft.Text("전화번호부", color="white", size=20, weight="bold"), alignment=ft.alignment.center), 
         width=150, height=70, bgcolor="#2563EB", color="white", 
         on_click=lambda e: change_tab("전화번호"),
         # 💡 이 아래 style 부분을 추가해줍니다.
