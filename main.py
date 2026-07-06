@@ -76,7 +76,12 @@ def main(page: ft.Page):
     phonebook_big_button = ft.ElevatedButton(
         content=ft.Container(ft.Text("전화번호부", color="white", size=16, weight="bold"), alignment=ft.alignment.center), 
         width=150, height=70, bgcolor="#2563EB", color="white", 
-        on_click=lambda e: change_tab("전화번호")
+        on_click=lambda e: change_tab("전화번호"),
+        # 💡 이 아래 style 부분을 추가해줍니다.
+        style=ft.ButtonStyle(
+            shape=ft.RoundedRectangleBorder(radius=10), # 모서리 반지름을 10으로 주어 각진 직사각형 느낌을 냅니다.
+            padding=ft.padding.all(0) # 내부 여백을 없애서 컨테이너가 꽉 차게 만듭니다.
+        )
     )
 
     btn_calendar = ft.ElevatedButton(
