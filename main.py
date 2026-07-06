@@ -304,6 +304,8 @@ def main(page: ft.Page):
             calendar_grid.visible = True
             input_zone_container.visible = False
             phonebook_zone_container.visible = False
+            # 💡 날짜 터치 안내문은 달력 화면에서만 보이게 처리
+            guide_text.visible = True
             weeks_header.visible = True
             div_line1.visible = True
             div_line2.visible = True
@@ -311,6 +313,8 @@ def main(page: ft.Page):
             calendar_grid.visible = False
             input_zone_container.visible = True
             phonebook_zone_container.visible = False
+            # 💡 운행정보 화면에서는 달력용 안내문을 숨김
+            guide_text.visible = False
             weeks_header.visible = False
             div_line1.visible = False
             div_line2.visible = False
@@ -319,6 +323,8 @@ def main(page: ft.Page):
             calendar_grid.visible = False
             input_zone_container.visible = False
             phonebook_zone_container.visible = True
+            # 💡 전화번호부 화면에서는 달력용 안내문을 숨김
+            guide_text.visible = False
             weeks_header.visible = False
             div_line1.visible = False
             div_line2.visible = False
@@ -327,6 +333,8 @@ def main(page: ft.Page):
             calendar_grid.visible = False
             input_zone_container.visible = False
             phonebook_zone_container.visible = False
+            # 💡 설정 화면에서는 달력용 안내문을 숨김
+            guide_text.visible = False
             weeks_header.visible = False
             div_line1.visible = False
             div_line2.visible = False
@@ -714,7 +722,8 @@ def main(page: ft.Page):
     
     summary_group = ft.Column([stats_text, mangeun_text, mangeun_setting_row], spacing=6, tight=True)
     summary_area = ft.Row([summary_group, phonebook_big_button], alignment="spaceBetween")
-    # ↓↓↓ 안내문구 추가 날짜를 터치하여 근무를 입력 또는 수정하세요 ↓↓↓
+    # 💡 달력 날짜를 터치해서 근무 입력/수정이 가능하다는 안내문
+    #    change_tab()에서 달력 화면일 때만 보이도록 visible 값을 제어합니다.
     guide_text = ft.Container(content=ft.Text("💡 날짜를 터치하여 근무를 입력 또는 수정하세요.", size=10, color="#666666"), padding=ft.padding.only(left=8, bottom=4))
     bottom_navigation_bar = ft.Row([btn_calendar, btn_input, btn_setting], alignment="spaceAround", spacing=4)
 
