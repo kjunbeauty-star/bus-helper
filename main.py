@@ -356,7 +356,7 @@ def main(page: ft.Page):
         
         btn_calendar.style = ft.ButtonStyle(bgcolor="#2563EB" if tab_name == "달력" else "grey", shape=ft.RoundedRectangleBorder(radius=6))
         btn_input.style = ft.ButtonStyle(bgcolor="#2563EB" if tab_name == "운행정보" else "grey", shape=ft.RoundedRectangleBorder(radius=6))
-        btn_phonebook.style = ft.ButtonStyle(bgcolor="#2563EB" if tab_name == "전화번호" else "grey", shape=ft.RoundedRectangleBorder(radius=6))
+        #btn_phonebook.style = ft.ButtonStyle(bgcolor="#2563EB" if tab_name == "전화번호" else "grey", shape=ft.RoundedRectangleBorder(radius=6))
         btn_setting.style = ft.ButtonStyle(bgcolor="#2563EB" if tab_name == "설정" else "grey", shape=ft.RoundedRectangleBorder(radius=6))
         
         btn_calendar.update()
@@ -536,6 +536,9 @@ def main(page: ft.Page):
     header_nav = ft.Row([ft.TextButton("◀ 이전", on_click=move_prev, style=ft.ButtonStyle(color="black")), month_title, ft.TextButton("다음 ▶", on_click=move_next, style=ft.ButtonStyle(color="black"))], alignment="spaceBetween")
     mangeun_setting_row = ft.Row([mangeun_value_text, ft.ElevatedButton("변경", on_click=open_mangeun_popup, bgcolor="#2563EB", color="white", width=68, height=22, style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=4), text_style=ft.TextStyle(size=11, weight="bold"), padding=0))], alignment="start", vertical_alignment="center", spacing=6, height=22)
     summary_group = ft.Column([stats_text, mangeun_text, mangeun_setting_row], spacing=6, tight=True)
+    summary_area = ft.Row([summary_group, phonebook_big_button],
+    alignment="spaceBetween"
+    )
     days_letters = ["일", "월", "화", "수", "목", "금", "토"]
     weeks_header = ft.Row([ft.Container(content=ft.Text(d, size=13, weight="bold", color="#D93025" if d=="일" else ("#1A73E8" if d=="토" else "black")), expand=1, alignment=ft.Alignment(0, 0)) for d in days_letters], alignment="spaceAround")
 
@@ -554,24 +557,36 @@ def main(page: ft.Page):
         style=ft.ButtonStyle(bgcolor="grey", shape=ft.RoundedRectangleBorder(radius=6), padding=ft.padding.symmetric(vertical=0, horizontal=0)), 
         on_click=lambda e: change_tab("운행정보")
     )
-    btn_phonebook = ft.ElevatedButton(
-        content=ft.Container(ft.Text("전화\n번호부", color="white", size=11, weight="bold"), alignment=ft.alignment.center),
-        expand=1, height=40, 
-        style=ft.ButtonStyle(bgcolor="grey", shape=ft.RoundedRectangleBorder(radius=6), padding=ft.padding.symmetric(vertical=0, horizontal=0)), 
-        on_click=lambda e: change_tab("전화번호")
+    # 하단메뉴중 전화번호부 안보이게 주석처리함
+    # btn_phonebook = ft.ElevatedButton(
+    #     content=ft.Container(ft.Text("전화\n번호부", color="white", size=11, weight="bold"), alignment=ft.alignment.center),
+    #     expand=1, height=40, 
+    #     style=ft.ButtonStyle(bgcolor="grey", shape=ft.RoundedRectangleBorder(radius=6), padding=ft.padding.symmetric(vertical=0, horizontal=0)), 
+    #     on_click=lambda e: change_tab("전화번호")
+    # )
+    phonebook_big_button = ft.ElevatedButton(
+    content=ft.Container(
+    ft.Text("전화번호부", color="white", size=16, weight="bold"),
+    alignment=ft.alignment.center
+    ),
+    width=150,
+    height=70,
+    bgcolor="#2563EB",
+    color="white",
+    on_click=lambda e: change_tab("전화번호")
     )
     btn_setting = ft.ElevatedButton(
-        content=ft.Container(ft.Text("긴급\n연락처", color="white", size=11, weight="bold"), alignment=ft.alignment.center),
+        content=ft.Container(ft.Text("긴급연락처", color="white", size=11, weight="bold"), alignment=ft.alignment.center),
         expand=1, height=40, 
         style=ft.ButtonStyle(bgcolor="grey", shape=ft.RoundedRectangleBorder(radius=6), padding=ft.padding.symmetric(vertical=0, horizontal=0)), 
         on_click=lambda e: change_tab("설정")
     )
     
-    bottom_navigation_bar = ft.Row([btn_calendar, btn_input, btn_phonebook, btn_setting], alignment="spaceAround", spacing=4)
+    bottom_navigation_bar = ft.Row([btn_calendar, btn_input, btn_setting], alignment="spaceAround", spacing=4)
 
     scrollable_content = ft.Column(
         [
-            header_nav, summary_group, div_line1,
+            header_nav, summary_area, div_line1,
             weeks_header, div_line2,
             calendar_grid,
             input_zone_container,
