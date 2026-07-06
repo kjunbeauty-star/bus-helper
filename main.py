@@ -136,7 +136,7 @@ def main(page: ft.Page):
     div_line1 = ft.Divider(height=1)
     div_line2 = ft.Divider(height=1)
 
-    # 💡 전화번호부 리스트를 화면에 새롭게 그려주는 기능
+    # 💡 [주석 자리] 전화번호부 리스트를 화면에 새롭게 그려주는 기능 (한글 수정/삭제 버튼 적용)
     def rebuild_phonebook_view():
         phonebook_items_column.controls.clear()
         if not PHONEBOOK_LIST:
@@ -150,28 +150,66 @@ def main(page: ft.Page):
             for index, item in enumerate(PHONEBOOK_LIST):
                 name = item.get("name", "")
                 phone = item.get("phone", "")
+                is_edit = item.get("is_edit", False) # 현재 수정 중인 상태인지 확인하는 값
                 
-                # 각 연락처 한 줄 레이아웃 (클릭 시 통화걸기, 우측엔 X 삭제 버튼)
-                phonebook_items_column.controls.append(
-                    ft.Container(
-                        content=ft.Row([
-                            ft.GestureDetector(
-                                content=ft.Row([
-                                    ft.Text(f"{name}", size=14, weight="bold", color="black", width=90),
-                                    ft.Text(f"{phone}", size=14, weight="bold", color="#1E3A8A"),
-                                    ft.Text("☎️", size=12, color="red")
-                                ], spacing=6, alignment="start"),
-                                on_tap=lambda e, p=phone: make_call(p),
-                                expand=True
+                if is_edit:
+                    # ✏️ [수정 모드] 입력창 및 [저장] / [취소] 한글 버튼
+                    edit_name = ft.TextField(value=name, width=90, height=34, text_size=13, content_padding=6)
+                    edit_phone = ft.TextField(value=phone.replace("-",""), expand=True, height=34, text_size=13, content_padding=6, keyboard_type=ft.KeyboardType.PHONE)
+                    
+                    def save_edit(idx, en, ep):
+                        if en.value and ep.value:
+                            PHONEBOOK_LIST[idx] = {"name": en.value, "phone": final_format_phone(ep.value), "is_edit": False}
+                            save_all_to_client_storage()
+                            rebuild_phonebook_view()
+
+                    row_content = ft.Row([
+                        edit_name,
+                        edit_phone,
+                        ft.ElevatedButton(
+                            content=ft.Container(ft.Text("저장", size=11, weight="bold", color="white"), alignment=ft.alignment.center),
+                            bgcolor="green", width=50, height=34,
+                            style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=4), padding=0),
+                            on_click=lambda e, idx=index, en=edit_name, ep=edit_phone: save_edit(idx, en, ep)
+                        ),
+                        ft.ElevatedButton(
+                            content=ft.Container(ft.Text("취소", size=11, weight="bold", color="white"), alignment=ft.alignment.center),
+                            bgcolor="grey", width=50, height=34,
+                            style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=4), padding=0),
+                            on_click=lambda e, idx=index: toggle_edit_mode(idx, False)
+                        )
+                    ], spacing=4)
+                else:
+                    # 📱 [일반 모드] 연락처 정보 및 [수정] / [삭제] 한글 파란색 버튼
+                    row_content = ft.Row([
+                        ft.GestureDetector(
+                            content=ft.Row([
+                                ft.Text(f"{name}", size=14, weight="bold", color="black", width=90),
+                                ft.Text(f"{phone}", size=14, weight="bold", color="#1E3A8A"),
+                                ft.Text("☎️", size=12, color="red")
+                            ], spacing=6, alignment="start"),
+                            on_tap=lambda e, p=phone: make_call(p),
+                            expand=True
+                        ),
+                        ft.Row([
+                            ft.ElevatedButton(
+                                content=ft.Container(ft.Text("수정", size=11, weight="bold", color="white"), alignment=ft.alignment.center),
+                                bgcolor="#2563EB", width=50, height=34, # 💡 다른 버튼들과 통일감 있는 파란색
+                                style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=4), padding=0),
+                                on_click=lambda e, idx=index: toggle_edit_mode(idx, True)
                             ),
-                            ft.IconButton(
-                                icon=ft.icons.CLOSE_ROUNDED,
-                                icon_color="red",
-                                icon_size=16,
-                                width=30, height=30,
+                            ft.ElevatedButton(
+                                content=ft.Container(ft.Text("삭제", size=11, weight="bold", color="white"), alignment=ft.alignment.center),
+                                bgcolor="#1E3A8A", width=50, height=34, # 💡 구분을 주기 위해 살짝 더 진한 파란색 네이비
+                                style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=4), padding=0),
                                 on_click=lambda e, idx=index: delete_phonebook_item(idx)
                             )
-                        ], alignment="spaceBetween"),
+                        ], spacing=4)
+                    ], alignment="spaceBetween")
+
+                phonebook_items_column.controls.append(
+                    ft.Container(
+                        content=row_content,
                         bgcolor="#F8FAFC",
                         padding=ft.padding.symmetric(vertical=4, horizontal=8),
                         border_radius=6,
@@ -198,6 +236,11 @@ def main(page: ft.Page):
         if 0 <= index < len(PHONEBOOK_LIST):
             PHONEBOOK_LIST.pop(index)
             save_all_to_client_storage()
+            rebuild_phonebook_view()
+    # 💡 전화번호 수정 모드 전환 함수
+    def toggle_edit_mode(index, status):
+        if 0 <= index < len(PHONEBOOK_LIST):
+            PHONEBOOK_LIST[index]["is_edit"] = status
             rebuild_phonebook_view()
 
     def change_tab(tab_name):
