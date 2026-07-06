@@ -420,7 +420,7 @@ def main(page: ft.Page):
             week_row = ft.Row(alignment="spaceAround", spacing=2)
             for day in week:
                 if day == 0:
-                    week_row.controls.append(ft.Container(expand=1, height=48))
+                    week_row.controls.append(ft.Container(expand=1, height=52))
                 else:
                     weekday = datetime(current['year'], current['month'], day).weekday()
                     date_key = f"{current['year']}-{current['month']:02d}-{day:02d}"
@@ -443,7 +443,7 @@ def main(page: ft.Page):
 
                     day_box = ft.Container(
                         content=ft.Column([ft.Text(f"{day}", size=12, weight="bold", color=day_number_color), ft.Text(status_desc, size=10, weight="bold", color=text_color), time_display], alignment="center", horizontal_alignment="center", spacing=0),
-                        bgcolor=bg_color, border=day_border, border_radius=4, height=48, expand=1, on_click=lambda e, dk=date_key: open_input_popup(dk)
+                        bgcolor=bg_color, border=day_border, border_radius=4, height=52, expand=1, on_click=lambda e, dk=date_key: open_input_popup(dk)
                     )
                     week_row.controls.append(day_box)
             calendar_grid.controls.append(week_row)
