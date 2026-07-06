@@ -75,14 +75,14 @@ def main(page: ft.Page):
         ft.Container(
             content=ft.Column([
                 ft.Row([
-                    ft.Text("📞 전화번호부 관리", size=16, weight="bold", color="#1E3A8A"),
+                    ft.Text("📞 전화번호부관리", size=16, weight="bold", color="#1E3A8A"),
                 ], alignment="spaceBetween"),
                 ft.Divider(height=1),
                 
                 # 연락처 입력창 폼
                 ft.Row([
-                    pb_name := ft.TextField(label="이름/직책", width=100, height=38, text_size=13, content_padding=8),
-                    pb_phone := ft.TextField(label="전화번호(숫자만)", expand=True, height=38, text_size=13, content_padding=8, keyboard_type=ft.KeyboardType.PHONE),
+                    pb_name := ft.TextField(label="이름/직책", label_style=ft.TextStyle(size=11), width=100, height=38, text_size=13, content_padding=8), # 💡 label_style 추가
+                    pb_phone := ft.TextField(label="전화번호(숫자만)", label_style=ft.TextStyle(size=11), expand=True, height=38, text_size=13, content_padding=8, keyboard_type=ft.KeyboardType.PHONE), # 💡 label_style 추가
 
                     ft.ElevatedButton(
                         content=ft.Text("추가", size=12, weight="bold", color="white"),
@@ -477,7 +477,7 @@ def main(page: ft.Page):
         elif target_type == "앞차":
             tf_f_bus = ft.TextField(label="앞차번호", value=input_data_state["front_bus"].replace("호","").replace("미입력",""), keyboard_type=ft.KeyboardType.NUMBER, expand=True, height=38)
             tf_f_driver = ft.TextField(label="기사성함", value=input_data_state["front_driver"].replace("미입력",""), expand=True, height=38)
-            tf_f_phone = ft.TextField(label="전화번호 (숫자만)", value=input_data_state["front_phone"].replace("-","").replace("미입력",""), keyboard_type=ft.KeyboardType.PHONE, expand=True, height=38)
+            tf_f_phone = ft.TextField(label="전화번호(숫자만)", value=input_data_state["front_phone"].replace("-","").replace("미입력",""), keyboard_type=ft.KeyboardType.PHONE, expand=True, height=38)
             
             def save_front(e):
                 input_data_state["front_bus"] = f"{tf_f_bus.value}호" if tf_f_bus.value else "미입력"
