@@ -207,15 +207,42 @@ def main(page: ft.Page):
                         ], spacing=3)
                     ], alignment="spaceBetween")
 
+                    # 📱 [일반 모드] 연락처 정보 및 [수정] / [삭제] 슬림 한글 버튼
+                    row_content = ft.Row([
+                        ft.GestureDetector(
+                            content=ft.Row([
+                                ft.Text(f"{name}", size=14, weight="bold", color="black", width=65), 
+                                ft.Text(f"{phone}", size=13, weight="bold", color="#1E3A8A", no_wrap=True), 
+                                ft.Text("☎️", size=11, color="red")
+                            ], spacing=4, alignment="start"),
+                            on_tap=lambda e, p=phone: make_call(p),
+                            expand=True
+                        ),
+                        ft.Row([
+                            ft.ElevatedButton(
+                                content=ft.Container(ft.Text("수정", size=10, weight="bold", color="white"), alignment=ft.alignment.center),
+                                bgcolor="#2563EB", width=40, height=28, # 💡 가로 40, 높이 28로 더 슬림하게 조절
+                                style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=4), padding=0),
+                                on_click=lambda e, idx=index: toggle_edit_mode(idx, True)
+                            ),
+                            ft.ElevatedButton(
+                                content=ft.Container(ft.Text("삭제", size=10, weight="bold", color="white"), alignment=ft.alignment.center),
+                                bgcolor="#1E3A8A", width=40, height=28, # 💡 가로 40, 높이 28로 더 슬림하게 조절
+                                style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=4), padding=0),
+                                on_click=lambda e, idx=index: delete_phonebook_item(idx)
+                            )
+                        ], spacing=3)
+                    ], alignment="spaceBetween")
+
+                # 💡 이 부분이 박스를 없애고 아래쪽 라인(밑줄)으로 넒게 정의하는 핵심 코드입니다!
                 phonebook_items_column.controls.append(
                     ft.Container(
                         content=row_content,
-                        bgcolor="#F8FAFC",
-                        padding=ft.padding.symmetric(vertical=4, horizontal=8),
-                        border_radius=6,
-                        border=ft.border.all(0.5, "#E2E8F0")
+                        padding=ft.padding.only(left=4, right=4, top=8, bottom=8), # 좌우 여백을 줄여 가로를 넓게 씀
+                        border=ft.border.Border(bottom=ft.border.BorderSide(0.5, "#E2E8F0")) # 💡 사방 박스 대신 하단 밑줄만 적용!
                     )
                 )
+
         page.update()
 
     # 💡 전화번호 추가 로직
