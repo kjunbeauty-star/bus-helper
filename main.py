@@ -275,20 +275,27 @@ def main(page: ft.Page):
         current_tab = tab_name
         
         # 💡 배경색과 글자색은 그대로 부드럽게 제어합니다.
+        # 💡 [수정] 활성화된 탭 상단에 부드러운 곡선(라운딩) 효과 적용
         btn_calendar.style = ft.ButtonStyle(
             color="white" if tab_name == "달력" else "#94A3B8",
             bgcolor="#2563EB" if tab_name == "달력" else "transparent", # 활성화될 때만 배경색을 은은하게 주거나 투명하게 제어
-            shape=ft.RoundedRectangleBorder(radius=6)
+            shape=ft.RoundedRectangleBorder(
+                radius=ft.border_radius.only(top_left=12, top_right=12) if tab_name == "달력" else 0
+            )
         )
         btn_input.style = ft.ButtonStyle(
             color="white" if tab_name == "운행정보" else "#94A3B8",
             bgcolor="#2563EB" if tab_name == "운행정보" else "transparent",
-            shape=ft.RoundedRectangleBorder(radius=6)
+            shape=ft.RoundedRectangleBorder(
+                radius=ft.border_radius.only(top_left=12, top_right=12) if tab_name == "운행정보" else 0
+            )
         )
         btn_setting.style = ft.ButtonStyle(
             color="white" if tab_name == "설정" else "#94A3B8",
             bgcolor="#2563EB" if tab_name == "설정" else "transparent",
-            shape=ft.RoundedRectangleBorder(radius=6)
+            shape=ft.RoundedRectangleBorder(
+                radius=ft.border_radius.only(top_left=12, top_right=12) if tab_name == "설정" else 0
+            )
         )
 
         # 📱 [추가] 기사님이 원하셨던 전화번호부 타이틀/버튼 색상 제어! 
@@ -304,8 +311,6 @@ def main(page: ft.Page):
             calendar_grid.visible = True
             input_zone_container.visible = False
             phonebook_zone_container.visible = False
-            # 💡 날짜 터치 안내문은 달력 화면에서만 보이게 처리
-            guide_text.visible = True
             weeks_header.visible = True
             div_line1.visible = True
             div_line2.visible = True
@@ -313,8 +318,6 @@ def main(page: ft.Page):
             calendar_grid.visible = False
             input_zone_container.visible = True
             phonebook_zone_container.visible = False
-            # 💡 운행정보 화면에서는 달력용 안내문을 숨김
-            guide_text.visible = False
             weeks_header.visible = False
             div_line1.visible = False
             div_line2.visible = False
@@ -323,8 +326,6 @@ def main(page: ft.Page):
             calendar_grid.visible = False
             input_zone_container.visible = False
             phonebook_zone_container.visible = True
-            # 💡 전화번호부 화면에서는 달력용 안내문을 숨김
-            guide_text.visible = False
             weeks_header.visible = False
             div_line1.visible = False
             div_line2.visible = False
@@ -333,8 +334,6 @@ def main(page: ft.Page):
             calendar_grid.visible = False
             input_zone_container.visible = False
             phonebook_zone_container.visible = False
-            # 💡 설정 화면에서는 달력용 안내문을 숨김
-            guide_text.visible = False
             weeks_header.visible = False
             div_line1.visible = False
             div_line2.visible = False
@@ -722,11 +721,24 @@ def main(page: ft.Page):
     
     summary_group = ft.Column([stats_text, mangeun_text, mangeun_setting_row], spacing=6, tight=True)
     summary_area = ft.Row([summary_group, phonebook_big_button], alignment="spaceBetween")
-    # 💡 달력 날짜를 터치해서 근무 입력/수정이 가능하다는 안내문
-    #    change_tab()에서 달력 화면일 때만 보이도록 visible 값을 제어합니다.
+    # ↓↓↓ 안내문구 추가 날짜를 터치하여 근무를 입력 또는 수정하세요 ↓↓↓
     guide_text = ft.Container(content=ft.Text("💡 날짜를 터치하여 근무를 입력 또는 수정하세요.", size=10, color="#666666"), padding=ft.padding.only(left=8, bottom=4))
-    bottom_navigation_bar = ft.Row([btn_calendar, btn_input, btn_setting], alignment="spaceAround", spacing=4)
+    # 하단 탭들이 들어갈 로우 (여백 제거)
+    bottom_buttons_row = ft.Row(
+        [btn_calendar, btn_input, btn_setting], 
+        alignment="spaceAround", 
+        spacing=0
+    )
+    # 💡 내비게이션 영역을 감싸서 활성화된 버튼의 상단 라운딩 곡선이 돋보이도록 구성
+    bottom_navigation_bar = ft.Container(
+        content=bottom_buttons_row,
+        padding=ft.padding.only(top=2, left=4, right=4, bottom=4), # 약간의 상단 패딩으로 곡선미 강조
+        bgcolor="#F1F5F9", # 탭 바 자체의 은은한 배경색 (비활성 탭 영역)
+        border=ft.border.Border(top=ft.border.BorderSide(1, "#E2E8F0")) # 구분선 역할을 할 상단 라인
+    )
 
+    # 스크롤 영역과 레이아웃 합치기 (기존의 중간 ft.Divider(height=1)은 제거해도 좋습니다)
+    main_layout = ft.Column([scrollable_content, bottom_navigation_bar], expand=True)
     scrollable_content = ft.Column(
         [
             header_nav, summary_area, guide_text, div_line1,
