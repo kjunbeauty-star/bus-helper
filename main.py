@@ -275,28 +275,20 @@ def main(page: ft.Page):
         current_tab = tab_name
         
         # 💡 배경색과 글자색은 그대로 부드럽게 제어합니다.
-        # 💡 [수정] 활성화된 탭 상단에 부드러운 곡선(라운딩) 효과 적용
-        # 💡 [수정] 활성화된 탭은 배경을 흰색(white)으로 만들어 상단 화면 영역과 합쳐버립니다.
         btn_calendar.style = ft.ButtonStyle(
-            color="#2563EB" if tab_name == "달력" else "#64748B", # 활성은 파란글씨, 비활성은 흐린 회색
-            bgcolor="white" if tab_name == "달력" else "transparent", # 🌟 활성화 시 흰색으로 화면과 연결!
-            shape=ft.RoundedRectangleBorder(
-                radius=ft.border_radius.only(top_left=12, top_right=12) if tab_name == "달력" else 0
-            )
+            color="white" if tab_name == "달력" else "#94A3B8",
+            bgcolor="#2563EB" if tab_name == "달력" else "transparent", # 활성화될 때만 배경색을 은은하게 주거나 투명하게 제어
+            shape=ft.RoundedRectangleBorder(radius=6)
         )
         btn_input.style = ft.ButtonStyle(
-            color="#2563EB" if tab_name == "운행정보" else "#64748B",
-            bgcolor="white" if tab_name == "운행정보" else "transparent",
-            shape=ft.RoundedRectangleBorder(
-                radius=ft.border_radius.only(top_left=12, top_right=12) if tab_name == "운행정보" else 0
-            )
+            color="white" if tab_name == "운행정보" else "#94A3B8",
+            bgcolor="#2563EB" if tab_name == "운행정보" else "transparent",
+            shape=ft.RoundedRectangleBorder(radius=6)
         )
         btn_setting.style = ft.ButtonStyle(
-            color="#2563EB" if tab_name == "설정" else "#64748B",
-            bgcolor="white" if tab_name == "설정" else "transparent",
-            shape=ft.RoundedRectangleBorder(
-                radius=ft.border_radius.only(top_left=12, top_right=12) if tab_name == "설정" else 0
-            )
+            color="white" if tab_name == "설정" else "#94A3B8",
+            bgcolor="#2563EB" if tab_name == "설정" else "transparent",
+            shape=ft.RoundedRectangleBorder(radius=6)
         )
 
         # 📱 [추가] 기사님이 원하셨던 전화번호부 타이틀/버튼 색상 제어! 
@@ -724,22 +716,8 @@ def main(page: ft.Page):
     summary_area = ft.Row([summary_group, phonebook_big_button], alignment="spaceBetween")
     # ↓↓↓ 안내문구 추가 날짜를 터치하여 근무를 입력 또는 수정하세요 ↓↓↓
     guide_text = ft.Container(content=ft.Text("💡 날짜를 터치하여 근무를 입력 또는 수정하세요.", size=10, color="#666666"), padding=ft.padding.only(left=8, bottom=4))
-   # 하단 탭들이 들어갈 로우 (여백 제거)
-    # 하단 탭들이 들어갈 로우
-    bottom_buttons_row = ft.Row(
-        [btn_calendar, btn_input, btn_setting], 
-        alignment="spaceAround", 
-        spacing=0
-    )
+    bottom_navigation_bar = ft.Row([btn_calendar, btn_input, btn_setting], alignment="spaceAround", spacing=4)
 
-    # 💡 [수정] 비활성 영역은 베이지/회색 톤으로 깔고, 활성 버튼만 위 흰색 화면과 경계선 없이 이어지게 만듭니다.
-    bottom_navigation_bar = ft.Container(
-        content=bottom_buttons_row,
-        padding=ft.padding.only(top=4, left=8, right=8, bottom=4), 
-        bgcolor="#E2E8F0", # 탭 바 베이스 배경색 (비활성화된 탭들이 앉아있을 곳)
-    )
-
-    # 1️⃣ [순서 교정] 스크롤 가능한 메인 콘텐츠 레이아웃을 '먼저' 생성합니다.
     scrollable_content = ft.Column(
         [
             header_nav, summary_area, guide_text, div_line1,
@@ -751,8 +729,7 @@ def main(page: ft.Page):
         expand=True, scroll=ft.ScrollMode.AUTO
     )
 
-    # 2️⃣ [순서 교정] 위에서 만든 scrollable_content와 탭 바를 합쳐 최종 레이아웃을 만듭니다.
-    main_layout = ft.Column([scrollable_content, bottom_navigation_bar], expand=True)
+    main_layout = ft.Column([scrollable_content, ft.Divider(height=1), bottom_navigation_bar], expand=True)
     
     page.add(ft.Stack([main_layout, popup_layer, mangeun_popup_layer], expand=True))
     
