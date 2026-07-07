@@ -321,42 +321,64 @@ def main(page: ft.Page):
         btn_setting.update()
         
         if tab_name == "달력":
+            # 🌟 [추가] 달력 탭으로 돌아오면 상단 요약 영역들을 다시 보여줍니다!
+            header_nav.visible = True
+            summary_area.visible = True
+            guide_text.visible = True
+            
             calendar_grid.visible = True
             input_zone_container.visible = False
             phonebook_zone_container.visible = False
-            setting_column.visible = False # 🌟 긴급연락처 상자 숨김 추가
+            setting_column.visible = False
             weeks_header.visible = True
             div_line1.visible = True
             div_line2.visible = True
+            
         elif tab_name == "운행정보":
+            # 🌟 [추가] 운행정보 탭에서도 상단 요약 영역들을 숨겨줍니다.
+            header_nav.visible = False
+            summary_area.visible = False
+            guide_text.visible = False
+            
             calendar_grid.visible = False
             input_zone_container.visible = True
             phonebook_zone_container.visible = False
-            setting_column.visible = False # 🌟 긴급연락처 상자 숨김 추가
+            setting_column.visible = False
             weeks_header.visible = False
             div_line1.visible = False
             div_line2.visible = False
             refresh_input_tab_view()
+            
         elif tab_name == "전화번호":
+            # 🌟 [추가] 일반 전화번호부에서도 숨겨줍니다.
+            header_nav.visible = False
+            summary_area.visible = False
+            guide_text.visible = False
+            
             calendar_grid.visible = False
             input_zone_container.visible = False
             phonebook_zone_container.visible = True
-            setting_column.visible = False # 🌟 긴급연락처 상자 숨김 추가
+            setting_column.visible = False
             weeks_header.visible = False
             div_line1.visible = False
             div_line2.visible = False
             PHONEBOOK_LIST.sort(key=lambda x: x.get("name", ""))
             rebuild_phonebook_view()
-        # 🌟 [빌드 0002 단어 교체 완전 반영] 겉과 속 모두 '긴급연락처'로 매칭 완료!
+            
         elif tab_name == "긴급연락처":
+            # 🌟 [추가] 긴급연락처 탭이 열리면 달력용 상단 요약 영역들을 싹 숨깁니다!
+            header_nav.visible = False
+            summary_area.visible = False
+            guide_text.visible = False
+            
             calendar_grid.visible = False
             input_zone_container.visible = False
             phonebook_zone_container.visible = False
-            setting_column.visible = True # 🌟 긴급연락처 상자 보이기 활성화!
+            setting_column.visible = True 
             weeks_header.visible = False
             div_line1.visible = False
             div_line2.visible = False
-            rebuild_emergency_view(setting_column) # 🌟 진짜 상자 이름인 setting_column 주입!
+            rebuild_emergency_view(setting_column)
 
         page.update()
 
