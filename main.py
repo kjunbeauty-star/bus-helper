@@ -9,6 +9,10 @@
 # v0004 (2026-07-07) - 고정 빈 창 삭제 / '사무실','정비실' 입력 시 최상단 우선 고정 정렬 및 중복 덮어쓰기 로직 반영
 # v0005 (2026-07-07) - 긴급연락처 개별 항목 '수정/저장/취소' 모드 추가 구현 / 녹색 수화기 아이콘 전체 통일 완료
 # ==========================================
+# ==========================================
+# [앱 이름: 버스헬퍼 스케줄러]
+# 현재 배포 버전: 빌드 0005 (이모지 및 여백 교정본)
+# ==========================================
 
 import os
 import sqlite3
@@ -38,7 +42,6 @@ def main(page: ft.Page):
     page.theme_mode = "light"
     page.padding = 4
 
-    # UI 컴포넌트를 담을 컨테이너 선언
     setting_column = ft.Column(spacing=2, visible=False)
 
     EMERGENCY_LIST = []
@@ -91,19 +94,12 @@ def main(page: ft.Page):
     
     phonebook_zone_container = ft.Container(
         content=ft.Column([
-            ft.Row([
-                ft.Text("📞 전화번호부관리", size=16, weight="bold", color="#1E3A8A"),
-            ], alignment="spaceBetween"),
+            ft.Row([ft.Text("📞 전화번호부관리", size=16, weight="bold", color="#1E3A8A")]),
             ft.Divider(height=1),
             ft.Row([
                 pb_name := ft.TextField(label="이름/직책", label_style=ft.TextStyle(size=11), width=100, height=38, text_size=13, content_padding=8),
                 pb_phone := ft.TextField(label="전화번호(숫자만)", label_style=ft.TextStyle(size=11), expand=True, height=38, text_size=13, content_padding=8, keyboard_type=ft.KeyboardType.PHONE),
-                ft.ElevatedButton(
-                    content=ft.Text("추가", size=12, weight="bold", color="white"),
-                    bgcolor="#2563EB", width=60, height=38,
-                    style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=4), padding=0),
-                    on_click=lambda e: add_phonebook_item()
-                )
+                ft.ElevatedButton(content=ft.Text("추가", size=12, weight="bold", color="white"), bgcolor="#2563EB", width=60, height=38, style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=4), padding=0), on_click=lambda e: add_phonebook_item())
             ], spacing=4),
             ft.Divider(height=1, color="#E2E8F0"),
             phonebook_items_column
@@ -112,30 +108,16 @@ def main(page: ft.Page):
     )
     
     phonebook_big_button = ft.ElevatedButton(
-        content=ft.Container(ft.Text("📞전화번호부", color="white", size=20, weight="bold"), alignment=ft.alignment.center), 
+        content=ft.Container(ft.Text("전화번호부", color="white", size=20, weight="bold"), alignment=ft.alignment.center), 
         width=150, height=70, bgcolor="#2563EB", color="white", 
         on_click=lambda e: change_tab("전화번호"),
         style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=10), padding=ft.padding.all(0))
     )
 
-    btn_calendar = ft.ElevatedButton(
-        content=ft.Container(ft.Text("📅 달력", color="white", size=11, weight="bold"), alignment=ft.alignment.center),
-        expand=1, height=40, 
-        style=ft.ButtonStyle(bgcolor="#2563EB", shape=ft.RoundedRectangleBorder(radius=6), padding=0)
-        on_click=lambda e: change_tab("달력")
-    )
-    btn_input = ft.ElevatedButton(
-        content=ft.Container(ft.Text("🚌운행정보", color="white", size=11, weight="bold"), alignment=ft.alignment.center),
-        expand=1, height=40, 
-        style=ft.ButtonStyle(bgcolor="grey", shape=ft.RoundedRectangleBorder(radius=6), padding=0)
-        on_click=lambda e: change_tab("운행정보")
-    )
-    btn_setting = ft.ElevatedButton(
-        content=ft.Container(ft.Text("🚨 긴급연락처", color="white", size=11, weight="bold"), alignment=ft.alignment.center),
-        expand=1, height=40, 
-        style=ft.ButtonStyle(bgcolor="grey", shape=ft.RoundedRectangleBorder(radius=6), padding=0)
-        on_click=lambda e: change_tab("긴급연락처")
-    )
+    # 🌟 [기사님 패치 구역 1] 하단 탭 버튼 한 줄 나열 및 패딩 제로 적용 완료
+    btn_calendar = ft.ElevatedButton(content=ft.Container(content=ft.Text("📅 달력", color="white", size=11, weight="bold"), alignment=ft.alignment.center), expand=1, height=40, style=ft.ButtonStyle(bgcolor="#2563EB", shape=ft.RoundedRectangleBorder(radius=6), padding=0), on_click=lambda e: change_tab("달력"))
+    btn_input = ft.ElevatedButton(content=ft.Container(content=ft.Text("🚌 운행정보", color="white", size=11, weight="bold"), alignment=ft.alignment.center), expand=1, height=40, style=ft.ButtonStyle(bgcolor="grey", shape=ft.RoundedRectangleBorder(radius=6), padding=0), on_click=lambda e: change_tab("운행정보"))
+    btn_setting = ft.ElevatedButton(content=ft.Container(content=ft.Text("🚨 긴급연락처", color="white", size=11, weight="bold"), alignment=ft.alignment.center), expand=1, height=40, style=ft.ButtonStyle(bgcolor="grey", shape=ft.RoundedRectangleBorder(radius=6), padding=0), on_click=lambda e: change_tab("긴급연락처"))
 
     days_letters = ["일", "월", "화", "수", "목", "금", "토"]
     weeks_header = ft.Row([ft.Container(content=ft.Text(d, size=13, weight="bold", color="#D93025" if d=="일" else ("#1A73E8" if d=="토" else "black")), expand=1, alignment=ft.Alignment(0, 0)) for d in days_letters], alignment="spaceAround")
@@ -146,12 +128,7 @@ def main(page: ft.Page):
     def rebuild_phonebook_view():
         phonebook_items_column.controls.clear()
         if not PHONEBOOK_LIST:
-            phonebook_items_column.controls.append(
-                ft.Container(
-                    content=ft.Text("등록된 연락처가 없습니다.\n자주 쓰는 번호를 상단에 등록해 보세요!", size=13, color="grey", text_align="center"),
-                    padding=20, alignment=ft.alignment.center
-                )
-            )
+            phonebook_items_column.controls.append(ft.Container(content=ft.Text("등록된 연락처가 없습니다.\n자주 쓰는 번호를 상단에 등록해 보세요!", size=13, color="grey", text_align="center"), padding=20, alignment=ft.alignment.center))
         else:
             for index, item in enumerate(PHONEBOOK_LIST):
                 name = item.get("name", "")
@@ -170,63 +147,24 @@ def main(page: ft.Page):
                             rebuild_phonebook_view()
 
                     row_content = ft.Row([
-                        edit_name,
-                        edit_phone,
-                        ft.ElevatedButton(
-                            content=ft.Container(ft.Text("저장", size=11, weight="bold", color="white"), alignment=ft.alignment.center),
-                            bgcolor="green", width=50, height=34,
-                            style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=4), padding=0),
-                            on_click=lambda e, idx=index, en=edit_name, ep=edit_phone: save_edit(idx, en, ep)
-                        ),
-                        ft.ElevatedButton(
-                            content=ft.Container(ft.Text("취소", size=11, weight="bold", color="white"), alignment=ft.alignment.center),
-                            bgcolor="grey", width=50, height=34,
-                            style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=4), padding=0),
-                            on_click=lambda e, idx=index: toggle_edit_mode(idx, False)
-                        )
+                        edit_name, edit_phone,
+                        ft.ElevatedButton(content=ft.Container(ft.Text("저장", size=11, weight="bold", color="white"), alignment=ft.alignment.center), bgcolor="green", width=50, height=34, style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=4), padding=0), on_click=lambda e, idx=index, en=edit_name, ep=edit_phone: save_edit(idx, en, ep)),
+                        ft.ElevatedButton(content=ft.Container(ft.Text("취소", size=11, weight="bold", color="white"), alignment=ft.alignment.center), bgcolor="grey", width=50, height=34, style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=4), padding=0), on_click=lambda e, idx=index: toggle_edit_mode(idx, False))
                     ], spacing=4)
                 else:
-                    # 🌟 [기사님 통일 패치 유지] 빨간 전화기 자리에 녹색 수화기 아이콘 반영
                     row_content = ft.Row([
-                        ft.GestureDetector(
-                            content=ft.Row([
-                                ft.Text(f"{name}", size=14, weight="bold", color="black", width=65), 
-                                ft.Text(f"{phone}", size=13, weight="bold", color="#1E3A8A", no_wrap=True), 
-                                ft.Icon(ft.icons.PHONE, color="green", size=14)
-                            ], spacing=4, alignment="start"),
-                            on_tap=lambda e, p=phone: make_call(p),
-                            expand=True
-                        ),
+                        ft.GestureDetector(content=ft.Row([ft.Text(f"{name}", size=14, weight="bold", color="black", width=65), ft.Text(f"{phone}", size=13, weight="bold", color="#1E3A8A", no_wrap=True), ft.Icon(ft.icons.PHONE, color="green", size=14)], spacing=4, alignment="start"), on_tap=lambda e, p=phone: make_call(p), expand=True),
                         ft.Row([
-                            ft.ElevatedButton(
-                                content=ft.Container(ft.Text("수정", size=10, weight="bold", color="white"), alignment=ft.alignment.center),
-                                bgcolor="#2563EB", width=40, height=28,
-                                style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=4), padding=0),
-                                on_click=lambda e, idx=index: toggle_edit_mode(idx, True)
-                            ),
-                            ft.ElevatedButton(
-                                content=ft.Container(ft.Text("삭제", size=10, weight="bold", color="white"), alignment=ft.alignment.center),
-                                bgcolor="#1E3A8A", width=40, height=28,
-                                style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=4), padding=0),
-                                on_click=lambda e, idx=index: delete_phonebook_item(idx)
-                            )
+                            ft.ElevatedButton(content=ft.Container(ft.Text("수정", size=10, weight="bold", color="white"), alignment=ft.alignment.center), bgcolor="#2563EB", width=40, height=28, style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=4), padding=0), on_click=lambda e, idx=index: toggle_edit_mode(idx, True)),
+                            ft.ElevatedButton(content=ft.Container(ft.Text("삭제", size=10, weight="bold", color="white"), alignment=ft.alignment.center), bgcolor="#1E3A8A", width=40, height=28, style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=4), padding=0), on_click=lambda e, idx=index: delete_phonebook_item(idx))
                         ], spacing=3)
                     ], alignment="spaceBetween")
 
-                phonebook_items_column.controls.append(
-                    ft.Container(
-                        content=row_content,
-                        padding=ft.padding.only(left=4, right=4, top=8, bottom=8),
-                        border=ft.border.Border(bottom=ft.border.BorderSide(0.5, "#E2E8F0"))
-                    )
-                )
+                phonebook_items_column.controls.append(ft.Container(content=row_content, padding=ft.padding.only(left=4, right=4, top=8, bottom=8), border=ft.border.Border(bottom=ft.border.BorderSide(0.5, "#E2E8F0"))))
         page.update()
 
-    # 긴급 연락처 뷰 생성 함수
     def rebuild_emergency_view(target_column):
         target_column.controls.clear()
-        
-        # 긴급연락처 입력 폼 상단 결합
         target_column.controls.append(emergency_form_container)
         
         def get_sort_key(item):
@@ -238,18 +176,12 @@ def main(page: ft.Page):
         EMERGENCY_LIST.sort(key=get_sort_key)
 
         if len(EMERGENCY_LIST) == 0:
-            target_column.controls.append(
-                ft.Container(
-                    content=ft.Text("등록된 긴급 연락처가 없습니다.\n사무실, 정비실 번호를 등록해 보세요!", size=13, color="grey", text_align="center"),
-                    padding=20, alignment=ft.alignment.center
-                )
-            )
+            target_column.controls.append(ft.Container(content=ft.Text("등록된 긴급 연락처가 없습니다.\n사무실, 정비실 번호를 등록해 보세요!", size=13, color="grey", text_align="center"), padding=20, alignment=ft.alignment.center))
         else:
             for index, item in enumerate(EMERGENCY_LIST):
                 name = item.get("name", "")
                 phone = item.get("phone", "")
                 is_edit = item.get("is_edit", False)
-                
                 is_special = name in ["사무실", "정비실"]
                 name_color = "#E65100" if is_special else "black"
                 
@@ -264,56 +196,20 @@ def main(page: ft.Page):
                             rebuild_emergency_view(setting_column)
 
                     row_content = ft.Row([
-                        edit_em_name,
-                        edit_em_phone,
-                        ft.ElevatedButton(
-                            content=ft.Container(ft.Text("저장", size=11, weight="bold", color="white"), alignment=ft.alignment.center),
-                            bgcolor="green", width=50, height=34,
-                            style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=4), padding=0),
-                            on_click=lambda e, idx=index, en=edit_em_name, ep=edit_em_phone: save_em_edit(idx, en, ep)
-                        ),
-                        ft.ElevatedButton(
-                            content=ft.Container(ft.Text("취소", size=11, weight="bold", color="white"), alignment=ft.alignment.center),
-                            bgcolor="grey", width=50, height=34,
-                            style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=4), padding=0),
-                            on_click=lambda e, idx=index: toggle_em_edit_mode(idx, False)
-                        )
+                        edit_em_name, edit_em_phone,
+                        ft.ElevatedButton(content=ft.Container(ft.Text("저장", size=11, weight="bold", color="white"), alignment=ft.alignment.center), bgcolor="green", width=50, height=34, style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=4), padding=0), on_click=lambda e, idx=index, en=edit_em_name, ep=edit_em_phone: save_em_edit(idx, en, ep)),
+                        ft.ElevatedButton(content=ft.Container(ft.Text("취소", size=11, weight="bold", color="white"), alignment=ft.alignment.center), bgcolor="grey", width=50, height=34, style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=4), padding=0), on_click=lambda e, idx=index: toggle_em_edit_mode(idx, False))
                     ], spacing=4)
                 else:
                     display_text = f"{name}: {phone}" if phone else f"{name}: (번호 없음)"
-                    
                     action_buttons = [
-                        ft.IconButton(
-                            icon=ft.icons.PHONE,
-                            icon_color="green",
-                            on_click=lambda e, ph=phone: page.launch_url(f"tel:{ph}") if ph else None
-                        ),
-                        ft.ElevatedButton(
-                            content=ft.Container(ft.Text("수정", size=10, weight="bold", color="white"), alignment=ft.alignment.center),
-                            bgcolor="#2563EB", width=40, height=28,
-                            style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=4), padding=0),
-                            on_click=lambda e, idx=index: toggle_em_edit_mode(idx, True)
-                        ),
-                        ft.ElevatedButton(
-                            content=ft.Container(ft.Text("삭제", size=10, weight="bold", color="white"), alignment=ft.alignment.center),
-                            bgcolor="#1E3A8A", width=40, height=28,
-                            style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=4), padding=0),
-                            on_click=lambda e, idx=index: delete_emergency_item(idx, target_column)
-                        )
+                        ft.IconButton(ft.icons.PHONE, icon_color="green", on_click=lambda e, ph=phone: page.launch_url(f"tel:{ph}") if ph else None),
+                        ft.ElevatedButton(content=ft.Container(ft.Text("수정", size=10, weight="bold", color="white"), alignment=ft.alignment.center), bgcolor="#2563EB", width=40, height=28, style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=4), padding=0), on_click=lambda e, idx=index: toggle_em_edit_mode(idx, True)),
+                        ft.ElevatedButton(content=ft.Container(ft.Text("삭제", size=10, weight="bold", color="white"), alignment=ft.alignment.center), bgcolor="#1E3A8A", width=40, height=28, style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=4), padding=0), on_click=lambda e, idx=index: delete_emergency_item(idx, target_column))
                     ]
-                    
-                    row_content = ft.Row([
-                        ft.Text(display_text, size=14, weight="bold" if is_special else "normal", color=name_color),
-                        ft.Row(action_buttons, spacing=3)
-                    ], alignment="spaceBetween")
+                    row_content = ft.Row([ft.Text(display_text, size=14, weight="bold" if is_special else "normal", color=name_color), ft.Row(action_buttons, spacing=3)], alignment="spaceBetween")
                 
-                target_column.controls.append(
-                    ft.Container(
-                        content=row_content,
-                        padding=ft.padding.only(left=4, right=4, top=8, bottom=8),
-                        border=ft.border.Border(bottom=ft.border.BorderSide(0.5, "#E2E8F0"))
-                    )
-                )
+                target_column.controls.append(ft.Container(content=row_content, padding=ft.padding.only(left=4, right=4, top=8, bottom=8), border=ft.border.Border(bottom=ft.border.BorderSide(0.5, "#E2E8F0"))))
         page.update()
 
     def delete_emergency_item(index, target_column):
@@ -331,18 +227,15 @@ def main(page: ft.Page):
         if em_name.value and em_phone.value:
             input_name = em_name.value.strip()
             formatted_num = final_format_phone(em_phone.value)
-            
             found_index = -1
             for i, item in enumerate(EMERGENCY_LIST):
                 if item["name"] == input_name:
                     found_index = i
                     break
-            
             if found_index != -1:
                 EMERGENCY_LIST[found_index]["phone"] = formatted_num
             else:
                 EMERGENCY_LIST.append({"name": input_name, "phone": formatted_num, "is_edit": False})
-                
             save_all_to_client_storage()
             em_name.value = ""
             em_phone.value = ""
@@ -373,82 +266,30 @@ def main(page: ft.Page):
         nonlocal current_tab
         current_tab = tab_name
         
-        btn_calendar.style = ft.ButtonStyle(
-            color="white" if tab_name == "달력" else "#94A3B8",
-            bgcolor="#2563EB" if tab_name == "달력" else "transparent",
-            shape=ft.RoundedRectangleBorder(radius=6), padding=0
-        )
-        btn_input.style = ft.ButtonStyle(
-            color="white" if tab_name == "운행정보" else "#94A3B8",
-            bgcolor="#2563EB" if tab_name == "운행정보" else "transparent",
-            shape=ft.RoundedRectangleBorder(radius=6), padding=0
-        )
-        btn_setting.style = ft.ButtonStyle(
-            color="white" if tab_name == "긴급연락처" else "#94A3B8",
-            bgcolor="#2563EB" if tab_name == "긴급연락처" else "transparent",
-            shape=ft.RoundedRectangleBorder(radius=6), padding=0
-        )
+        # 🌟 [기사님 패치 구역 2] 탭 변경 함수 내 스타일 패딩 제로 매칭 완벽 교정
+        btn_calendar.style = ft.ButtonStyle(color="white" if tab_name == "달력" else "#94A3B8", bgcolor="#2563EB" if tab_name == "달력" else "transparent", shape=ft.RoundedRectangleBorder(radius=6), padding=0)
+        btn_input.style = ft.ButtonStyle(color="white" if tab_name == "운행정보" else "#94A3B8", bgcolor="#2563EB" if tab_name == "운행정보" else "transparent", shape=ft.RoundedRectangleBorder(radius=6), padding=0)
+        btn_setting.style = ft.ButtonStyle(color="white" if tab_name == "긴급연락처" else "#94A3B8", bgcolor="#2563EB" if tab_name == "긴급연락처" else "transparent", shape=ft.RoundedRectangleBorder(radius=6), padding=0)
 
         btn_calendar.update()
         btn_input.update()
         btn_setting.update()
         
         if tab_name == "달력":
-            header_nav.visible = True
-            summary_area.visible = True
-            guide_text.visible = True
-            calendar_grid.visible = True
-            input_zone_container.visible = False
-            phonebook_zone_container.visible = False
-            setting_column.visible = False
-            weeks_header.visible = True
-            div_line1.visible = True
-            div_line2.visible = True
-            
+            header_nav.visible, summary_area.visible, guide_text.visible, calendar_grid.visible, input_zone_container.visible, phonebook_zone_container.visible, setting_column.visible, weeks_header.visible, div_line1.visible, div_line2.visible = True, True, True, True, False, False, False, True, True, True
         elif tab_name == "운행정보":
-            header_nav.visible = True
-            summary_area.visible = False
-            guide_text.visible = False
-            calendar_grid.visible = False
-            input_zone_container.visible = True
-            phonebook_zone_container.visible = False
-            setting_column.visible = False
-            weeks_header.visible = False
-            div_line1.visible = False
-            div_line2.visible = False
+            header_nav.visible, summary_area.visible, guide_text.visible, calendar_grid.visible, input_zone_container.visible, phonebook_zone_container.visible, setting_column.visible, weeks_header.visible, div_line1.visible, div_line2.visible = True, False, False, False, True, False, False, False, False, False
             refresh_input_tab_view()
-            
         elif tab_name == "전화번호":
-            header_nav.visible = True
-            summary_area.visible = False
-            guide_text.visible = False
-            calendar_grid.visible = False
-            input_zone_container.visible = False
-            phonebook_zone_container.visible = True
-            setting_column.visible = False
-            weeks_header.visible = False
-            div_line1.visible = False
-            div_line2.visible = False
+            header_nav.visible, summary_area.visible, guide_text.visible, calendar_grid.visible, input_zone_container.visible, phonebook_zone_container.visible, setting_column.visible, weeks_header.visible, div_line1.visible, div_line2.visible = True, False, False, False, False, True, False, False, False, False
             PHONEBOOK_LIST.sort(key=lambda x: x.get("name", ""))
             rebuild_phonebook_view()
-            
         elif tab_name == "긴급연락처":
-            header_nav.visible = True
-            summary_area.visible = False
-            guide_text.visible = False
-            calendar_grid.visible = False
-            input_zone_container.visible = False
-            phonebook_zone_container.visible = False
-            setting_column.visible = True 
-            weeks_header.visible = False
-            div_line1.visible = False
-            div_line2.visible = False
+            header_nav.visible, summary_area.visible, guide_text.visible, calendar_grid.visible, input_zone_container.visible, phonebook_zone_container.visible, setting_column.visible, weeks_header.visible, div_line1.visible, div_line2.visible = True, False, False, False, False, False, True, False, False, False
             rebuild_emergency_view(setting_column)
-
         page.update()
 
     popup_date_title = ft.Text("", size=16, weight="bold", color="black", text_align="center")
-    
     order_options = [ft.dropdown.Option("", "선택 안 함")] + [ft.dropdown.Option(str(i), f"{i}번") for i in range(1, 51)]
     order_dropdown = ft.Dropdown(options=order_options, width=140, height=40, text_size=13, content_padding=ft.padding.symmetric(vertical=4, horizontal=10))
     
@@ -460,11 +301,9 @@ def main(page: ft.Page):
             save_all_to_client_storage()
             mangeun_popup_layer.visible = False
             rebuild_interface()
-        except (ValueError, TypeError):
-            pass
+        except: pass
 
     mangeun_dropdown = ft.Dropdown(options=[ft.dropdown.Option(str(i)) for i in range(15, 27)], width=62, height=36, text_size=12, content_padding=ft.padding.symmetric(vertical=4, horizontal=8))
-
     hour_picker = ft.CupertinoPicker(controls=[ft.Text(f"{i:02d}", size=20) for i in range(24)], selected_index=5, on_change=lambda e: update_hour(int(e.control.selected_index)), height=100, expand=1, looping=True)
     minute_picker = ft.CupertinoPicker(controls=[ft.Text(f"{i:02d}", size=20) for i in range(60)], selected_index=0, on_change=lambda e: update_minute(int(e.control.selected_index)), height=100, expand=1, looping=True)
 
@@ -472,7 +311,6 @@ def main(page: ft.Page):
     def update_minute(val): selected_time_state["minute"] = val
 
     dial_row = ft.Row([hour_picker, ft.Text(":", size=20, weight="bold", color="black"), minute_picker], alignment="center", height=100)
-    
     popup_layer = ft.Container(visible=False, bgcolor="#AA000000", alignment=ft.Alignment(0, 0), expand=True)
     mangeun_popup_layer = ft.Container(visible=False, bgcolor="#AA000000", alignment=ft.Alignment(0, 0), expand=True)
 
@@ -481,88 +319,17 @@ def main(page: ft.Page):
             y, m = int(current['year']), int(current['month'])
             key = f"{y}_{m}"
             if key in MANGEUN_TARGETS: return int(MANGEUN_TARGETS[key])
-            days_in_month = calendar.monthrange(y, m)[1]
-            return 22 if days_in_month == 31 else (20 if m == 2 else 21)
+            return 22 if calendar.monthrange(y, m)[1] == 31 else (20 if m == 2 else 21)
         except: return 22
 
     def make_call(phone_number):
-        if phone_number and phone_number != "미입력":
-            page.launch_url(f"tel:{phone_number}")
+        if phone_number and phone_number != "미입력": page.launch_url(f"tel:{phone_number}")
 
     def build_driving_summary_zone():
-        my_card = ft.Container(
-            content=ft.Column([
-                ft.Row([
-                    ft.Text("내차 정보", size=11, color="grey", weight="bold"),
-                    ft.ElevatedButton(
-                        content=ft.Container(ft.Text("입력", size=10, weight="bold", color="white"), alignment=ft.alignment.center),
-                        on_click=lambda e: open_info_input_popup("내차"), bgcolor="#2563EB", width=55, height=22, 
-                        style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=4), padding=0)
-                    )
-                ], alignment="spaceBetween"),
-                ft.Text(f"노선: {input_data_state['route']}", size=14, weight="bold", color="black"),
-                ft.Text(f"내차: {input_data_state['bus_no']}", size=14, weight="bold", color="black"),
-                ft.Container(height=15)
-            ], spacing=2, tight=True),
-            bgcolor="#F8FAFC", border=ft.border.all(1, "#E2E8F0"), border_radius=8, padding=10, expand=1
-        )
-
-        front_card = ft.Container(
-            content=ft.Column([
-                ft.Row([
-                    ft.Text("앞차 정보", size=11, color="grey", weight="bold"),
-                    ft.ElevatedButton(
-                        content=ft.Container(ft.Text("입력", size=10, weight="bold", color="white"), alignment=ft.alignment.center),
-                        on_click=lambda e: open_info_input_popup("앞차"), bgcolor="#1E3A8A", width=55, height=22, 
-                        style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=4), padding=0)
-                    )
-                ], alignment="spaceBetween"),
-                ft.Text(input_data_state['front_bus'], size=14, weight="bold", color="black"),
-                ft.Text(input_data_state['front_driver'], size=14, weight="bold", color="black"),
-                ft.GestureDetector(
-                    content=ft.Row([
-                        ft.Text(input_data_state['front_phone'], size=13, color="#1E3A8A", weight="bold"),
-                        # 🌟 [기사님 통일 패치 유지] 앞차 구역 녹색 수화기 아이콘 반영
-                        ft.Icon(ft.icons.PHONE, color="green", size=16) if input_data_state['front_phone'] != "미입력" else ft.Container()
-                    ], spacing=4, alignment="start"),
-                    on_tap=lambda e: make_call(input_data_state['front_phone'])
-                )
-            ], spacing=2, tight=True),
-            bgcolor="#F8FAFC", border=ft.border.all(1, "#E2E8F0"), border_radius=8, padding=10, expand=1
-        )
-
-        back_card = ft.Container(
-            content=ft.Column([
-                ft.Row([
-                    ft.Text("뒷차 정보", size=11, color="grey", weight="bold"),
-                    ft.ElevatedButton(
-                        content=ft.Container(ft.Text("입력", size=10, weight="bold", color="white"), alignment=ft.alignment.center),
-                        on_click=lambda e: open_info_input_popup("뒷차"), bgcolor="#1E3A8A", width=55, height=22, 
-                        style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=4), padding=0)
-                    )
-                ], alignment="spaceBetween"),
-                ft.Text(input_data_state['back_bus'], size=14, weight="bold", color="black"),
-                ft.Text(input_data_state['back_driver'], size=14, weight="bold", color="black"),
-                ft.GestureDetector(
-                    content=ft.Row([
-                        ft.Text(input_data_state['back_phone'], size=13, color="#1E3A8A", weight="bold"),
-                        # 🌟 [기사님 통일 패치 유지] 뒷차 구역 녹색 수화기 아이콘 반영
-                        ft.Icon(ft.icons.PHONE, color="green", size=16) if input_data_state['back_phone'] != "미입력" else ft.Container()
-                    ], spacing=4, alignment="start"),
-                    on_tap=lambda e: make_call(input_data_state['back_phone'])
-                )
-            ], spacing=2, tight=True),
-            bgcolor="#F8FAFC", border=ft.border.all(1, "#E2E8F0"), border_radius=8, padding=10, expand=1
-        )
-        
-        return ft.Container(
-            content=ft.Column([
-                ft.Text("🚍 운행 정보 요약", size=14, weight="bold", color="#1E3A8A"),
-                my_card, 
-                ft.Row([front_card, back_card], spacing=8, alignment="spaceAround")
-            ], spacing=8),
-            padding=12, border=ft.border.all(1, "#2563EB"), border_radius=10, margin=ft.margin.only(bottom=10)
-        )
+        my_card = ft.Container(content=ft.Column([ft.Row([ft.Text("내차 정보", size=11, color="grey", weight="bold"), ft.ElevatedButton(content=ft.Container(ft.Text("입력", size=10, weight="bold", color="white"), alignment=ft.alignment.center), on_click=lambda e: open_info_input_popup("내차"), bgcolor="#2563EB", width=55, height=22, style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=4), padding=0))], alignment="spaceBetween"), ft.Text(f"노선: {input_data_state['route']}", size=14, weight="bold", color="black"), ft.Text(f"내차: {input_data_state['bus_no']}", size=14, weight="bold", color="black"), ft.Container(height=15)], spacing=2, tight=True), bgcolor="#F8FAFC", border=ft.border.all(1, "#E2E8F0"), border_radius=8, padding=10, expand=1)
+        front_card = ft.Container(content=ft.Column([ft.Row([ft.Text("앞차 정보", size=11, color="grey", weight="bold"), ft.ElevatedButton(content=ft.Container(ft.Text("입력", size=10, weight="bold", color="white"), alignment=ft.alignment.center), on_click=lambda e: open_info_input_popup("앞차"), bgcolor="#1E3A8A", width=55, height=22, style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=4), padding=0))], alignment="spaceBetween"), ft.Text(input_data_state['front_bus'], size=14, weight="bold", color="black"), ft.Text(input_data_state['front_driver'], size=14, weight="bold", color="black"), ft.GestureDetector(content=ft.Row([ft.Text(input_data_state['front_phone'], size=13, color="#1E3A8A", weight="bold"), ft.Icon(ft.icons.PHONE, color="green", size=16) if input_data_state['front_phone'] != "미입력" else ft.Container()], spacing=4, alignment="start"), on_tap=lambda e: make_call(input_data_state['front_phone']))], spacing=2, tight=True), bgcolor="#F8FAFC", border=ft.border.all(1, "#E2E8F0"), border_radius=8, padding=10, expand=1)
+        back_card = ft.Container(content=ft.Column([ft.Row([ft.Text("뒷차 정보", size=11, color="grey", weight="bold"), ft.ElevatedButton(content=ft.Container(ft.Text("입력", size=10, weight="bold", color="white"), alignment=ft.alignment.center), on_click=lambda e: open_info_input_popup("뒷차"), bgcolor="#1E3A8A", width=55, height=22, style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=4), padding=0))], alignment="spaceBetween"), ft.Text(input_data_state['back_bus'], size=14, weight="bold", color="black"), ft.Text(input_data_state['back_driver'], size=14, weight="bold", color="black"), ft.GestureDetector(content=ft.Row([ft.Text(input_data_state['back_phone'], size=13, color="#1E3A8A", weight="bold"), ft.Icon(ft.icons.PHONE, color="green", size=16) if input_data_state['back_phone'] != "미입력" else ft.Container()], spacing=4, alignment="start"), on_tap=lambda e: make_call(input_data_state['back_phone']))], spacing=2, tight=True), bgcolor="#F8FAFC", border=ft.border.all(1, "#E2E8F0"), border_radius=8, padding=10, expand=1)
+        return ft.Container(content=ft.Column([ft.Text("🚍 운행 정보 요약", size=14, weight="bold", color="#1E3A8A"), my_card, ft.Row([front_card, back_card], spacing=8, alignment="spaceAround")], spacing=8), padding=12, border=ft.border.all(1, "#2563EB"), border_radius=10, margin=ft.margin.only(bottom=10))
 
     def final_format_phone(raw_value):
         clean = "".join(filter(str.isdigit, raw_value))
@@ -573,110 +340,27 @@ def main(page: ft.Page):
 
     def open_info_input_popup(target_type):
         if target_type == "내차":
-            tf_route = ft.TextField(label="노선번호", value=input_data_state["route"].replace("미입력",""), keyboard_type=ft.KeyboardType.NUMBER, expand=True, height=38)
-            tf_bus_no = ft.TextField(label="내차번호", value=input_data_state["bus_no"].replace("호","").replace("미입력",""), keyboard_type=ft.KeyboardType.NUMBER, expand=True, height=38)
-            
+            tf_route, tf_bus_no = ft.TextField(label="노선번호", value=input_data_state["route"].replace("미입력",""), keyboard_type=ft.KeyboardType.NUMBER, expand=True, height=38), ft.TextField(label="내차번호", value=input_data_state["bus_no"].replace("호","").replace("미입력",""), keyboard_type=ft.KeyboardType.NUMBER, expand=True, height=38)
             def save_my(e):
-                input_data_state["route"] = tf_route.value if tf_route.value else "미입력"
-                input_data_state["bus_no"] = f"{tf_bus_no.value}호" if tf_bus_no.value else "미입력"
-                save_all_to_client_storage()
-                info_dialog.open = False  
-                page.update()
-                rebuild_interface()
-
-            box_content = ft.Container(
-                content=ft.Column([
-                    ft.Text("👤 내 차량 설정", size=14, weight="bold"),
-                    ft.Row([tf_route, tf_bus_no]),
-                    ft.Row([
-                        ft.ElevatedButton(
-                            content=ft.Container(ft.Text("확인", size=13, weight="bold", color="white"), alignment=ft.alignment.center),
-                            on_click=save_my, expand=1, height=38, bgcolor="#2563EB"
-                        ),
-                        ft.ElevatedButton(
-                            content=ft.Container(ft.Text("뒤로가기", size=13, weight="bold", color="white"), alignment=ft.alignment.center),
-                            on_click=lambda e: setattr(info_dialog, "open", False) or page.update(), expand=1, height=38, bgcolor="grey"
-                        )
-                    ], alignment="center", spacing=8)
-                ], spacing=10, tight=True),
-                width=260, padding=4
-            )
-
+                input_data_state["route"], input_data_state["bus_no"] = tf_route.value if tf_route.value else "미입력", f"{tf_bus_no.value}호" if tf_bus_no.value else "미입력"
+                save_all_to_client_storage(); info_dialog.open = False; page.update(); rebuild_interface()
+            box_content = ft.Container(content=ft.Column([ft.Text("👤 내 차량 설정", size=14, weight="bold"), ft.Row([tf_route, tf_bus_no]), ft.Row([ft.ElevatedButton(content=ft.Container(ft.Text("확인", size=13, weight="bold", color="white"), alignment=ft.alignment.center), on_click=save_my, expand=1, height=38, bgcolor="#2563EB"), ft.ElevatedButton(content=ft.Container(ft.Text("뒤로가기", size=13, weight="bold", color="white"), alignment=ft.alignment.center), on_click=lambda e: setattr(info_dialog, "open", False) or page.update(), expand=1, height=38, bgcolor="grey")], alignment="center", spacing=8)], spacing=10, tight=True), width=260, padding=4)
         elif target_type == "앞차":
-            tf_f_bus = ft.TextField(label="앞차번호", value=input_data_state["front_bus"].replace("호","").replace("미입력",""), keyboard_type=ft.KeyboardType.NUMBER, expand=True, height=38)
-            tf_f_driver = ft.TextField(label="기사성함", value=input_data_state["front_driver"].replace("미입력",""), expand=True, height=38)
-            tf_f_phone = ft.TextField(label="전화번호(숫자만)", value=input_data_state["front_phone"].replace("-","").replace("미입력",""), keyboard_type=ft.KeyboardType.PHONE, expand=True, height=38)
-            
+            tf_f_bus, tf_f_driver, tf_f_phone = ft.TextField(label="앞차번호", value=input_data_state["front_bus"].replace("호","").replace("미입력",""), keyboard_type=ft.KeyboardType.NUMBER, expand=True, height=38), ft.TextField(label="기사성함", value=input_data_state["front_driver"].replace("미입력",""), expand=True, height=38), ft.TextField(label="전화번호(숫자만)", value=input_data_state["front_phone"].replace("-","").replace("미입력",""), keyboard_type=ft.KeyboardType.PHONE, expand=True, height=38)
             def save_front(e):
-                input_data_state["front_bus"] = f"{tf_f_bus.value}호" if tf_f_bus.value else "미입력"
-                input_data_state["front_driver"] = tf_f_driver.value if tf_f_driver.value else "미입력"
-                input_data_state["front_phone"] = final_format_phone(tf_f_phone.value) if tf_f_phone.value else "미입력"
-                save_all_to_client_storage()
-                info_dialog.open = False  
-                page.update()
-                rebuild_interface()
-
-            box_content = ft.Container(
-                content=ft.Column([
-                    ft.Text("◀ 앞차 정보 입력", size=14, weight="bold"),
-                    tf_f_bus, tf_f_driver, tf_f_phone,
-                    ft.Row([
-                        ft.ElevatedButton(
-                            content=ft.Container(ft.Text("확인", size=13, weight="bold", color="white"), alignment=ft.alignment.center),
-                            on_click=save_front, expand=1, height=38, bgcolor="#1E3A8A"
-                        ),
-                        ft.ElevatedButton(
-                            content=ft.Container(ft.Text("뒤로가기", size=13, weight="bold", color="white"), alignment=ft.alignment.center),
-                            on_click=lambda e: setattr(info_dialog, "open", False) or page.update(), expand=1, height=38, bgcolor="grey"
-                        )
-                    ], alignment="center", spacing=8)
-                ], spacing=10, tight=True),
-                width=260, padding=4
-            )
-
+                input_data_state["front_bus"], input_data_state["front_driver"], input_data_state["front_phone"] = f"{tf_f_bus.value}호" if tf_f_bus.value else "미입력", tf_f_driver.value if tf_f_driver.value else "미입력", final_format_phone(tf_f_phone.value) if tf_f_phone.value else "미입력"
+                save_all_to_client_storage(); info_dialog.open = False; page.update(); rebuild_interface()
+            box_content = ft.Container(content=ft.Column([ft.Text("◀ 앞차 정보 입력", size=14, weight="bold"), tf_f_bus, tf_f_driver, tf_f_phone, ft.Row([ft.ElevatedButton(content=ft.Container(ft.Text("확인", size=13, weight="bold", color="white"), alignment=ft.alignment.center), on_click=save_front, expand=1, height=38, bgcolor="#1E3A8A"), ft.ElevatedButton(content=ft.Container(ft.Text("뒤로가기", size=13, weight="bold", color="white"), alignment=ft.alignment.center), on_click=lambda e: setattr(info_dialog, "open", False) or page.update(), expand=1, height=38, bgcolor="grey")], alignment="center", spacing=8)], spacing=10, tight=True), width=260, padding=4)
         elif target_type == "뒷차":
-            tf_b_bus = ft.TextField(label="뒷차번호", value=input_data_state["back_bus"].replace("호","").replace("미입력",""), keyboard_type=ft.KeyboardType.NUMBER, expand=True, height=38)
-            tf_b_driver = ft.TextField(label="기사성함", value=input_data_state["back_driver"].replace("미입력",""), expand=True, height=38)
-            tf_b_phone = ft.TextField(label="전화번호 (숫자만)", value=input_data_state["back_phone"].replace("-","").replace("미입력",""), keyboard_type=ft.KeyboardType.PHONE, expand=True, height=38)
-            
+            tf_b_bus, tf_b_driver, tf_b_phone = ft.TextField(label="뒷차번호", value=input_data_state["back_bus"].replace("호","").replace("미입력",""), keyboard_type=ft.KeyboardType.NUMBER, expand=True, height=38), ft.TextField(label="기사성함", value=input_data_state["back_driver"].replace("미입력",""), expand=True, height=38), ft.TextField(label="전화번호 (숫자만)", value=input_data_state["back_phone"].replace("-","").replace("미입력",""), keyboard_type=ft.KeyboardType.PHONE, expand=True, height=38)
             def save_back(e):
-                input_data_state["back_bus"] = f"{tf_b_bus.value}호" if tf_b_bus.value else "미입력"
-                input_data_state["back_driver"] = tf_b_driver.value if tf_b_driver.value else "미입력"
-                input_data_state["back_phone"] = final_format_phone(tf_b_phone.value) if tf_b_phone.value else "미입력"
-                save_all_to_client_storage()
-                info_dialog.open = False  
-                page.update()
-                rebuild_interface()
+                input_data_state["back_bus"], input_data_state["back_driver"], input_data_state["back_phone"] = f"{tf_b_bus.value}호" if tf_b_bus.value else "미입력", tf_b_driver.value if tf_b_driver.value else "미입력", final_format_phone(tf_b_phone.value) if tf_b_phone.value else "미입력"
+                save_all_to_client_storage(); info_dialog.open = False; page.update(); rebuild_interface()
+            box_content = ft.Container(content=ft.Column([ft.Text("▶ 뒷차 정보 입력", size=14, weight="bold"), tf_b_bus, tf_b_driver, tf_b_phone, ft.Row([ft.ElevatedButton(content=ft.Container(ft.Text("확인", size=13, weight="bold", color="white"), alignment=ft.alignment.center), on_click=save_back, expand=1, height=38, bgcolor="#1E3A8A"), ft.ElevatedButton(content=ft.Container(ft.Text("뒤로가기", size=13, weight="bold", color="white"), alignment=ft.alignment.center), on_click=lambda e: setattr(info_dialog, "open", False) or page.update(), expand=1, height=38, bgcolor="grey")], alignment="center", spacing=8)], spacing=10, tight=True), width=260, padding=4)
+        info_dialog.content = box_content; info_dialog.open = True; page.update()
 
-            box_content = ft.Container(
-                content=ft.Column([
-                    ft.Text("▶ 뒷차 정보 입력", size=14, weight="bold"),
-                    tf_b_bus, tf_b_driver, tf_b_phone,
-                    ft.Row([
-                        ft.ElevatedButton(
-                            content=ft.Container(ft.Text("확인", size=13, weight="bold", color="white"), alignment=ft.alignment.center),
-                            on_click=save_back, expand=1, height=38, bgcolor="#1E3A8A"
-                        ),
-                        ft.ElevatedButton(
-                            content=ft.Container(ft.Text("뒤로가기", size=13, weight="bold", color="white"), alignment=ft.alignment.center),
-                            on_click=lambda e: setattr(info_dialog, "open", False) or page.update(), expand=1, height=38, bgcolor="grey"
-                        )
-                    ], alignment="center", spacing=8)
-                ], spacing=10, tight=True),
-                width=260, padding=4
-            )
-
-        info_dialog.content = box_content
-        info_dialog.open = True
-        page.update()
-
-    info_dialog = ft.AlertDialog(modal=False, content=ft.Container())
-    page.dialog = info_dialog
-
-    def refresh_input_tab_view():
-        input_zone_container.controls.clear()
-        input_zone_container.controls.append(build_driving_summary_zone())
-        page.update()
+    info_dialog = ft.AlertDialog(modal=False, content=ft.Container()); page.dialog = info_dialog
+    def refresh_input_tab_view(): input_zone_container.controls.clear(); input_zone_container.controls.append(build_driving_summary_zone()); page.update()
 
     def rebuild_interface():
         nonlocal USER_SCHEDULES, MANGEUN_TARGETS
@@ -685,57 +369,34 @@ def main(page: ft.Page):
         month_title.value = f"{current['year']}년 {current['month']}월"
         month_prefix = f"{current['year']}-{current['month']:02d}"
         month_data = {k: v for k, v in USER_SCHEDULES.items() if k.startswith(month_prefix)}
-        work_days = sum(1 for d in month_data.values() if d.get("status") in ["오전", "오후", "전일"])
-        off_days = sum(1 for d in month_data.values() if d.get("status") == "휴무")
-        m_target = get_mangeun_target()
-        mangeun_dropdown.value = str(m_target)
+        work_days, off_days = sum(1 for d in month_data.values() if d.get("status") in ["오전", "오후", "전일"]), sum(1 for d in month_data.values() if d.get("status") == "휴무")
+        m_target = get_mangeun_target(); mangeun_dropdown.value = str(m_target)
         diff = work_days - m_target
-        work_summary = f"근무: {work_days}(+{diff})" if diff > 0 else (f"근무: {work_days}({diff})" if diff < 0 else f"근무: {work_days}")
-        stats_text.value = work_summary
-        mangeun_text.value = f"휴무: {off_days}"
-        mangeun_value_text.value = f"만근: {m_target}"
+        stats_text.value = f"근무: {work_days}(+{diff})" if diff > 0 else (f"근무: {work_days}({diff})" if diff < 0 else f"근무: {work_days}")
+        mangeun_text.value, mangeun_value_text.value = f"휴무: {off_days}", f"만근: {m_target}"
 
         calendar_grid.controls.clear()
         cal = calendar.Calendar(firstweekday=6)
-        month_weeks = cal.monthdayscalendar(current['year'], current['month'])
-        for week in month_weeks:
+        for week in cal.monthdayscalendar(current['year'], current['month']):
             week_row = ft.Row(alignment="spaceAround", spacing=2)
             for day in week:
-                if day == 0:
-                    week_row.controls.append(ft.Container(expand=1, height=52))
+                if day == 0: week_row.controls.append(ft.Container(expand=1, height=52))
                 else:
                     weekday = datetime(current['year'], current['month'], day).weekday()
                     date_key = f"{current['year']}-{current['month']:02d}-{day:02d}"
                     day_info = month_data.get(date_key, {"status": "", "start_time": "", "order_no": ""})
                     status, start_time, order_no = day_info.get("status", ""), day_info.get("start_time", ""), day_info.get("order_no", "")
                     bg_color, text_color, status_desc = "#FFFFFF", "#000000", ""
-                    if status == "오전":
-                        bg_color, text_color = "#D2E3FC", "#1A73E8"
-                        status_desc = f"오전({order_no})" if order_no else "오전"
-                    elif status == "오후":
-                        bg_color, text_color = "#E9D5FF", "#7E22CE"
-                        status_desc = f"오후({order_no})" if order_no else "오후"
-                    elif status == "전일":
-                        bg_color, text_color = "#E6F4EA", "#137333"
-                        status_desc = f"전일({order_no})" if order_no else "전일"
-                    elif status == "휴무":
-                        bg_color, text_color = "#FCE8E6", "#D93025"
-                        status_desc = "휴무"
+                    if status == "오전": bg_color, text_color, status_desc = "#D2E3FC", "#1A73E8", f"오전({order_no})" if order_no else "오전"
+                    elif status == "오후": bg_color, text_color, status_desc = "#E9D5FF", "#7E22CE", f"오후({order_no})" if order_no else "오후"
+                    elif status == "전일": bg_color, text_color, status_desc = "#E6F4EA", "#137333", f"전일({order_no})" if order_no else "전일"
+                    elif status == "휴무": bg_color, text_color, status_desc = "#FCE8E6", "#D93025", "휴무"
                     day_number_color = "#D93025" if weekday == 6 else ("#1A73E8" if weekday == 5 else "#000000")
                     time_display = ft.Text(start_time, size=9, weight="bold", color=text_color) if start_time and status != "휴무" else ft.Container()
-                    is_today = (current['year'] == today_y and current['month'] == today_m and day == today_d)
-                    day_border = ft.border.all(2, "#2563EB") if is_today else ft.border.all(0.5, "#E2E8F0")
-
-                    day_box = ft.Container(
-                        content=ft.Column([ft.Text(f"{day}", size=12, weight="bold", color=day_number_color), ft.Text(status_desc, size=10, weight="bold", color=text_color), time_display], alignment="center", horizontal_alignment="center", spacing=0),
-                        bgcolor=bg_color, border=day_border, border_radius=4, height=52, expand=1, on_click=lambda e, dk=date_key: open_input_popup(dk)
-                    )
+                    day_box = ft.Container(content=ft.Column([ft.Text(f"{day}", size=12, weight="bold", color=day_number_color), ft.Text(status_desc, size=10, weight="bold", color=text_color), time_display], alignment="center", horizontal_alignment="center", spacing=0), bgcolor=bg_color, border=ft.border.all(2, "#2563EB") if (current['year'] == today_y and current['month'] == today_m and day == today_d) else ft.border.all(0.5, "#E2E8F0"), border_radius=4, height=52, expand=1, on_click=lambda e, dk=date_key: open_input_popup(dk))
                     week_row.controls.append(day_box)
             calendar_grid.controls.append(week_row)
-         
-        if current_tab == "운행정보":
-            refresh_input_tab_view()
-
+        if current_tab == "운행정보": refresh_input_tab_view()
         page.update()
 
     def open_input_popup(date_key):
@@ -749,75 +410,35 @@ def main(page: ft.Page):
             selected_time_state["hour"], selected_time_state["minute"] = h, m
             hour_picker.selected_index, minute_picker.selected_index = h, m
         else:
-            selected_time_state["hour"], selected_time_state["minute"] = 5, 0
-            hour_picker.selected_index, minute_picker.selected_index = 5, 0
-        
-        popup_layer.content = popup_card
-        popup_layer.visible = True
-        page.update()
+            selected_time_state["hour"], selected_time_state["minute"], hour_picker.selected_index, minute_picker.selected_index = 5, 0, 5, 0
+        popup_layer.content, popup_layer.visible = popup_card, True; page.update()
 
     def select_status_and_save(status_value):
         target_date = current["selected_date"]
         if status_value == "선택취소":
-            USER_SCHEDULES.pop(target_date, None)
-            save_all_to_client_storage()
-            popup_layer.visible = False
-            rebuild_interface()
-            return
-            
+            USER_SCHEDULES.pop(target_date, None); save_all_to_client_storage(); popup_layer.visible = False; rebuild_interface(); return
         final_time = ""
         if status_value == "자동":
             h, m = selected_time_state["hour"], selected_time_state["minute"]
-            existing_info = USER_SCHEDULES.get(target_date, {})
-            if existing_info.get("status") == "전일":
-                status_value = "전일"
-            else:
-                status_value = "오후" if h >= 12 else "오전"
-                
+            status_value = "전일" if USER_SCHEDULES.get(target_date, {}).get("status") == "전일" else ("오후" if h >= 12 else "오전")
             final_time = f"{h:02d}:{m:02d}"
-            
-        input_order = "" if status_value == "휴무" else (order_dropdown.value if order_dropdown.value else "")
-        USER_SCHEDULES[target_date] = {"status": status_value, "start_time": final_time, "order_no": input_order}
-        save_all_to_client_storage()
-        popup_layer.visible = False
-        rebuild_interface()
+        USER_SCHEDULES[target_date] = {"status": status_value, "start_time": final_time, "order_no": "" if status_value == "휴무" else (order_dropdown.value if order_dropdown.value else "")}
+        save_all_to_client_storage(); popup_layer.visible = False; rebuild_interface()
 
-    # 🌟 [빌드 0005 롤백 완료] 말썽부린 알람설정 버튼을 지우고 원래 깔끔한 단일 저장 구역으로 원상복구
     popup_card = ft.Container(
         content=ft.Column([
-            ft.Row([popup_date_title], alignment="center"), 
-            ft.Divider(height=1, color="transparent"),
-            ft.Text("시간 없이 근무만 등록할 때:", size=11, weight="bold", color="grey"),
-            ft.Row([
-                ft.Container(content=ft.Text("휴무", size=14, weight="bold", color="white"), bgcolor="#D93025", alignment=ft.Alignment(0, 0), height=38, border_radius=6, expand=1, on_click=lambda e: select_status_and_save("휴무")),
-                ft.Container(content=ft.Text("오전", size=14, weight="bold", color="white"), bgcolor="#5C93E6", alignment=ft.Alignment(0, 0), height=38, border_radius=6, expand=1, on_click=lambda e: select_status_and_save("오전")),
-                ft.Container(content=ft.Text("오후", size=14, weight="bold", color="white"), bgcolor="#7E22CE", alignment=ft.Alignment(0, 0), height=38, border_radius=6, expand=1, on_click=lambda e: select_status_and_save("오후")),
-                ft.Container(content=ft.Text("전일", size=14, weight="bold", color="white"), bgcolor="#10B981", alignment=ft.Alignment(0, 0), height=38, border_radius=6, expand=1, on_click=lambda e: select_status_and_save("전일"))
-            ], spacing=4),
-            dial_row,
-            ft.Row([ft.Text("근무 순번:", size=12, weight="bold", color="black"), order_dropdown], alignment="center", spacing=10),
-            ft.Divider(height=2), 
-            ft.Row([ft.Container(content=ft.Text("저장", size=14, weight="bold", color="white"), bgcolor="#2563EB", alignment=ft.Alignment(0, 0), width=160, height=38, border_radius=6, on_click=lambda e: select_status_and_save("자동"))], alignment="center"),
-            ft.Divider(height=1, color="transparent"),
+            ft.Row([popup_date_title], alignment="center"), ft.Divider(height=1, color="transparent"), ft.Text("시간 없이 근무만 등록할 때:", size=11, weight="bold", color="grey"),
+            ft.Row([ft.Container(content=ft.Text("휴무", size=14, weight="bold", color="white"), bgcolor="#D93025", alignment=ft.Alignment(0, 0), height=38, border_radius=6, expand=1, on_click=lambda e: select_status_and_save("휴무")), ft.Container(content=ft.Text("오전", size=14, weight="bold", color="white"), bgcolor="#5C93E6", alignment=ft.Alignment(0, 0), height=38, border_radius=6, expand=1, on_click=lambda e: select_status_and_save("오전")), ft.Container(content=ft.Text("오후", size=14, weight="bold", color="white"), bgcolor="#7E22CE", alignment=ft.Alignment(0, 0), height=38, border_radius=6, expand=1, on_click=lambda e: select_status_and_save("오후")), ft.Container(content=ft.Text("전일", size=14, weight="bold", color="white"), bgcolor="#10B981", alignment=ft.Alignment(0, 0), height=38, border_radius=6, expand=1, on_click=lambda e: select_status_and_save("전일"))], spacing=4),
+            dial_row, ft.Row([ft.Text("근무 순번:", size=12, weight="bold", color="black"), order_dropdown], alignment="center", spacing=10), ft.Divider(height=2),
+            ft.Row([ft.Container(content=ft.Text("저장", size=14, weight="bold", color="white"), bgcolor="#2563EB", alignment=ft.Alignment(0, 0), width=160, height=38, border_radius=6, on_click=lambda e: select_status_and_save("자동"))], alignment="center"), ft.Divider(height=1, color="transparent"),
             ft.Row([ft.TextButton("선택취소(삭제)", on_click=lambda e: select_status_and_save("선택취소"), style=ft.ButtonStyle(color="red")), ft.TextButton("닫기", on_click=lambda e: setattr(popup_layer, "visible", False) or page.update())], alignment="spaceBetween")
-        ], spacing=6, tight=True),
-        bgcolor="white", padding=12, border_radius=12, width=300
+        ], spacing=6, tight=True), bgcolor="white", padding=12, border_radius=12, width=300
     )
 
-    def open_mangeun_popup(e):
-        mangeun_dropdown.value = str(get_mangeun_target())
-        mangeun_popup_layer.visible = True
-        page.update()
-
-    mangeun_popup_card = ft.Container(
-        content=ft.Column([
-            ft.Text("만근 기준 변경", size=16, weight="bold", color="black"),
-            ft.Row([ft.Text("만근:", size=13, weight="bold", color="black"), mangeun_dropdown], alignment="center", spacing=10),
-            ft.Row([ft.TextButton("취소", on_click=lambda e: setattr(mangeun_popup_layer, "visible", False) or page.update()), ft.TextButton("저장", on_click=on_mangeun_dropdown_changed, style=ft.ButtonStyle(color="#2563EB"))], alignment="spaceBetween")
-        ], spacing=10, tight=True),
-        bgcolor="white", padding=14, border_radius=12, width=240
-    )
-    mangeun_popup_layer.content = mangeun_popup_card
+    header_nav = ft.Row([ft.TextButton("◀ 이전", on_click=lambda e: move_prev(e), style=ft.ButtonStyle(color="black")), month_title, ft.TextButton("다음 ▶", on_click=lambda e: move_next(e), style=ft.ButtonStyle(color="black"))], alignment="spaceBetween")
+    mangeun_setting_row = ft.Row([mangeun_value_text, ft.ElevatedButton("변경", on_click=lambda e: setattr(mangeun_popup_layer, "visible", True) or page.update(), bgcolor="#2563EB", color="white", width=68, height=22, style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=4), text_style=ft.TextStyle(size=11, weight="bold"), padding=0))], alignment="start", vertical_alignment="center", spacing=6, height=22)
+    
+    mangeun_popup_layer.content = ft.Container(content=ft.Column([ft.Text("만근 기준 변경", size=16, weight="bold", color="black"), ft.Row([ft.Text("만근:", size=13, weight="bold", color="black"), mangeun_dropdown], alignment="center", spacing=10), ft.Row([ft.TextButton("취소", on_click=lambda e: setattr(mangeun_popup_layer, "visible", False) or page.update()), ft.TextButton("저장", on_click=on_mangeun_dropdown_changed, style=ft.ButtonStyle(color="#2563EB"))], alignment="spaceBetween")], spacing=10, tight=True), bgcolor="white", padding=14, border_radius=12, width=240)
 
     def move_prev(e):
         current["month"] -= 1
@@ -829,57 +450,15 @@ def main(page: ft.Page):
         if current["month"] == 13: current["month"] = 1; current["year"] += 1
         rebuild_interface()
 
-    header_nav = ft.Row([ft.TextButton("◀ 이전", on_click=move_prev, style=ft.ButtonStyle(color="black")), month_title, ft.TextButton("다음 ▶", on_click=move_next, style=ft.ButtonStyle(color="black"))], alignment="spaceBetween")
-    mangeun_setting_row = ft.Row([mangeun_value_text, ft.ElevatedButton("변경", on_click=open_mangeun_popup, bgcolor="#2563EB", color="white", width=68, height=22, style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=4), text_style=ft.TextStyle(size=11, weight="bold"), padding=0))], alignment="start", vertical_alignment="center", spacing=6, height=22)
-    
-    summary_group = ft.Column([stats_text, mangeun_text, mangeun_setting_row], spacing=6, tight=True)
-    summary_area = ft.Row([summary_group, phonebook_big_button], alignment="spaceBetween")
+    summary_area = ft.Row([ft.Column([stats_text, mangeun_text, mangeun_setting_row], spacing=6, tight=True), phonebook_big_button], alignment="spaceBetween")
     guide_text = ft.Container(content=ft.Text("💡 날짜를 터치하여 근무를 입력 또는 수정하세요.", size=10, color="#666666"), padding=ft.padding.only(left=8, bottom=4))
    
-    # 긴급연락처 컴포넌트 선언
-    em_name = ft.TextField(label="이름/서비스명", label_style=ft.TextStyle(size=11), width=100, height=38, text_size=13, content_padding=8)
-    em_phone = ft.TextField(label="전화번호(숫자만)", label_style=ft.TextStyle(size=11), expand=True, height=38, text_size=13, content_padding=8, keyboard_type=ft.KeyboardType.PHONE)
-    
-    emergency_form_container = ft.Container(
-        content=ft.Column([
-            ft.Row([
-                ft.Text("🚨 긴급 연락처 관리", size=16, weight="bold", color="#1E3A8A"),
-            ], alignment="spaceBetween"),
-            ft.Divider(height=1),
-            ft.Row([
-                em_name,
-                em_phone,
-                ft.ElevatedButton(
-                    content=ft.Text("등록", size=12, weight="bold", color="white"),
-                    bgcolor="#2563EB", width=60, height=38,
-                    style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=4), padding=0),
-                    on_click=lambda e: add_emergency_item() 
-                )
-            ], spacing=4),
-            ft.Divider(height=1, color="#E2E8F0"),
-        ])
-    )
+    emergency_form_container = ft.Container(content=ft.Column([ft.Row([ft.Text("🚨 긴급 연락처 관리", size=16, weight="bold", color="#1E3A8A")]), ft.Divider(height=1), ft.Row([em_name := ft.TextField(label="이름/서비스명", label_style=ft.TextStyle(size=11), width=100, height=38, text_size=13, content_padding=8), em_phone := ft.TextField(label="전화번호(숫자만)", label_style=ft.TextStyle(size=11), expand=True, height=38, text_size=13, content_padding=8, keyboard_type=ft.KeyboardType.PHONE), ft.ElevatedButton(content=ft.Text("등록", size=12, weight="bold", color="white"), bgcolor="#2563EB", width=60, height=38, style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=4), padding=0), on_click=lambda e: add_emergency_item())], spacing=4), ft.Divider(height=1, color="#E2E8F0")]))
 
-    bottom_navigation_bar = ft.Row([btn_calendar, btn_input, btn_setting], alignment="spaceAround", spacing=4)
-
-    scrollable_content = ft.Column(
-        [
-            header_nav, summary_area, guide_text, div_line1,
-            weeks_header, div_line2,
-            calendar_grid,
-            input_zone_container,
-            phonebook_zone_container,
-            setting_column 
-        ],
-        expand=True, scroll=ft.ScrollMode.AUTO
-    )
-
-    main_layout = ft.Column([scrollable_content, ft.Divider(height=1), bottom_navigation_bar], expand=True)
+    scrollable_content = ft.Column([header_nav, summary_area, guide_text, div_line1, weeks_header, div_line2, calendar_grid, input_zone_container, phonebook_zone_container, setting_column], expand=True, scroll=ft.ScrollMode.AUTO)
+    page.add(ft.Stack([ft.Column([scrollable_content, ft.Divider(height=1), ft.Row([btn_calendar, btn_input, btn_setting], alignment="spaceAround", spacing=4)], expand=True), popup_layer, mangeun_popup_layer], expand=True))
     
-    page.add(ft.Stack([main_layout, popup_layer, mangeun_popup_layer], expand=True))
-    
-    change_tab("달력")
-    rebuild_interface()
+    change_tab("달력"); rebuild_interface()
 
 init_db()
 ft.app(target=main, port=int(os.environ.get("PORT", 8080)), view=ft.AppView.WEB_BROWSER)
