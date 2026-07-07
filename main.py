@@ -376,17 +376,17 @@ def main(page: ft.Page):
         btn_calendar.style = ft.ButtonStyle(
             color="white" if tab_name == "달력" else "#94A3B8",
             bgcolor="#2563EB" if tab_name == "달력" else "transparent",
-            shape=ft.RoundedRectangleBorder(radius=6)
+            shape=ft.RoundedRectangleBorder(radius=6), padding=0
         )
         btn_input.style = ft.ButtonStyle(
             color="white" if tab_name == "운행정보" else "#94A3B8",
             bgcolor="#2563EB" if tab_name == "운행정보" else "transparent",
-            shape=ft.RoundedRectangleBorder(radius=6)
+            shape=ft.RoundedRectangleBorder(radius=6), padding=0
         )
         btn_setting.style = ft.ButtonStyle(
             color="white" if tab_name == "긴급연락처" else "#94A3B8",
             bgcolor="#2563EB" if tab_name == "긴급연락처" else "transparent",
-            shape=ft.RoundedRectangleBorder(radius=6)
+            shape=ft.RoundedRectangleBorder(radius=6), padding=0
         )
 
         btn_calendar.update()
