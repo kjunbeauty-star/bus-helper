@@ -678,15 +678,11 @@ def main(page: ft.Page):
 
     popup_card = ft.Container(
         content=ft.Column([
-            # 1️⃣ 날짜 타이틀 (맨 위 유지)
+            # 1️⃣ 날짜 타이틀 (맨 위)
             ft.Row([popup_date_title], alignment="center"), 
             ft.Divider(height=1, color="transparent"),
             
-            # 2️⃣ [위로 이동] 근무 순번 선택
-            ft.Row([ft.Text("근무 순번:", size=12, weight="bold", color="black"), order_dropdown], alignment="center", spacing=10),
-            ft.Divider(height=2), 
-            
-            # 3️⃣ [위로 이동] 시간 없이 근무만 등록하는 버튼들 (휴무 / 오전근무 / 오후근무)
+            # 2️⃣ [상단 배치] 시간 없이 근무만 등록하는 버튼들
             ft.Text("시간 없이 근무만 등록할 때:", size=11, weight="bold", color="grey"),
             ft.Row([
                 ft.Container(content=ft.Text("휴무", size=14, weight="bold", color="white"), bgcolor="#D93025", alignment=ft.Alignment(0, 0), height=38, border_radius=6, expand=1, on_click=lambda e: select_status_and_save("휴무")),
@@ -695,13 +691,17 @@ def main(page: ft.Page):
             ], spacing=6),
             ft.Divider(height=4),
 
-            # 4 Horn [아래로 이동] 첫탕 시간을 정하는 시계 바퀴 (CupertinoPicker)
+            # 3️⃣ 첫탕 시간을 정하는 시계 바퀴 (CupertinoPicker)
             dial_row,
             
-            # 5️⃣ [아래로 이동] 시간 선택 후 누르는 파란색 저장 버튼
+            # 4️⃣ [위치 교정] 시계 바퀴 바로 아래로 내려온 근무 순번 선택 영역
+            ft.Row([ft.Text("근무 순번:", size=12, weight="bold", color="black"), order_dropdown], alignment="center", spacing=10),
+            ft.Divider(height=2), 
+            
+            # 5️⃣ 파란색 저장 버튼 (순번 바로 밑으로)
             ft.Row([ft.Container(content=ft.Text("저장", size=14, weight="bold", color="white"), bgcolor="#2563EB", alignment=ft.Alignment(0, 0), width=160, height=38, border_radius=6, on_click=lambda e: select_status_and_save("자동"))], alignment="center"),
             
-            # 6️⃣ 맨 아래 삭제 및 닫기 버튼 (유지)
+            # 6️⃣ 맨 아래 취소/닫기 영역
             ft.Divider(height=1, color="transparent"),
             ft.Row([ft.TextButton("선택취소(삭제)", on_click=lambda e: select_status_and_save("선택취소"), style=ft.ButtonStyle(color="red")), ft.TextButton("닫기", on_click=lambda e: setattr(popup_layer, "visible", False) or page.update())], alignment="spaceBetween")
         ], spacing=6, tight=True),
