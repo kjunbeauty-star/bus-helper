@@ -490,22 +490,25 @@ def main(page: ft.Page):
         if phone_number and phone_number != "미입력":
             page.launch_url(f"tel:{phone_number}")
 
-    # 🌟 [빌드 0007 수정] 웹 브라우저 차단과 먹통 현상을 우회하는 안드로이드 공식 알람 인텐트 주소 표준형 교정
+    # 💡 브라우저가 새 창을 열어 멈추는 현상을 방지하는 안드로이드 공식 인텐트 교정 규격
     def set_device_alarm(e):
         h = selected_time_state["hour"]
         m = selected_time_state["minute"]
         
-        # 💡 intent:#Intent 액션 스펙을 완벽히 맞추어 폰 내부 시계앱 등록화면으로 다이렉트 연동 처리합니다.
-        alarm_intent = (
+        # 🌟 안드로이드 시스템 시계(AlarmClock)를 직접 타겟팅하는 공식 웹-앱 연동 규격입니다.
+        alarm_url = (
             f"intent:#Intent;"
             f"action=android.intent.action.SET_ALARM;"
             f"i;android.intent.extra.alarm.HOUR={h};"
             f"i;android.intent.extra.alarm.MINUTES={m};"
             f"s;android.intent.extra.alarm.MESSAGE=버스첫탕출근;"
             f"b;android.intent.extra.alarm.SKIP_UI=false;"
+            f"package=com.google.android.deskclock;" # 기본 시계 앱 패키지 지정 (우회 보장)
             f"end"
         )
-        page.launch_url(alarm_intent)
+        
+        # 🌟 flet 웹뷰 환경에서 새 탭(_blank)을 띄우지 않고 현재 명령을 폰 시스템에 바로 던지도록 세팅
+        page.launch_url(url=alarm_url, web_window_name="_self")
 
     def build_driving_summary_zone():
         my_card = ft.Container(
