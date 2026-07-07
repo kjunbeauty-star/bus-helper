@@ -1,6 +1,6 @@
 # ==========================================
 # [앱 이름: 버스헬퍼 스케줄러]
-# 현재 배포 버전: 빌드 0005
+# 현재 배포 버전: 빌드 0006
 # ==========================================
 # [빌드 기록]
 # v0001 (2026-07-06) - 전일 근무 형태 및 고정 로직 추가
@@ -8,6 +8,7 @@
 # v0003 (2026-07-07) - 사무실/정비실 등 긴급연락처 입력가능 및 global 선언문/등록버튼 크래시 버그 수정
 # v0004 (2026-07-07) - 고정 빈 창 삭제 / '사무실','정비실' 입력 시 최상단 우선 고정 정렬 및 중복 덮어쓰기 로직 반영
 # v0005 (2026-07-07) - 긴급연락처 개별 항목 '수정/저장/취소' 모드 추가 구현
+# v0006 (2026-07-07) - 안심 알람 기능 추가 (스마트폰 자체 알람 앱 연동 로직 구현), 녹색 수화기 아이콘 전체 통일 반영
 # ==========================================
 
 import os
@@ -186,6 +187,7 @@ def main(page: ft.Page):
                         )
                     ], spacing=4)
                 else:
+                    # 🌟 [기사님 통일 패치 완료] 빨간 전화기를 세련된 녹색 수화기 아이콘으로 변경
                     row_content = ft.Row([
                         ft.GestureDetector(
                             content=ft.Row([
@@ -228,7 +230,6 @@ def main(page: ft.Page):
         # 긴급연락처 입력 폼 상단 결합
         target_column.controls.append(emergency_form_container)
         
-        # 🌟 정렬 상태 유지 보조 함수 (수정 모드가 켜져 있어도 이름 기준 올바른 위치에 오게 함)
         def get_sort_key(item):
             name = item.get("name", "")
             if name == "사무실": return (0, "")
@@ -253,7 +254,6 @@ def main(page: ft.Page):
                 is_special = name in ["사무실", "정비실"]
                 name_color = "#E65100" if is_special else "black"
                 
-                # 🌟 [빌드 0005 추가] 긴급연락처 자체 수정 모듈 활성화
                 if is_edit:
                     edit_em_name = ft.TextField(value=name, width=90, height=34, text_size=13, content_padding=6)
                     edit_em_phone = ft.TextField(value=phone.replace("-",""), expand=True, height=34, text_size=13, content_padding=6, keyboard_type=ft.KeyboardType.PHONE)
@@ -289,7 +289,6 @@ def main(page: ft.Page):
                             icon_color="green",
                             on_click=lambda e, ph=phone: page.launch_url(f"tel:{ph}") if ph else None
                         ),
-                        # 🌟 [빌드 0005 추가] 일반 연락처처럼 수정 버튼 신설 배치
                         ft.ElevatedButton(
                             content=ft.Container(ft.Text("수정", size=10, weight="bold", color="white"), alignment=ft.alignment.center),
                             bgcolor="#2563EB", width=40, height=28,
@@ -324,7 +323,6 @@ def main(page: ft.Page):
             save_all_to_client_storage()
             rebuild_emergency_view(target_column)
 
-    # 🌟 [빌드 0005 신설] 긴급연락처 행 수정 모드 스위칭용 함수
     def toggle_em_edit_mode(index, status):
         if 0 <= index < len(EMERGENCY_LIST):
             EMERGENCY_LIST[index]["is_edit"] = status
@@ -492,6 +490,14 @@ def main(page: ft.Page):
         if phone_number and phone_number != "미입력":
             page.launch_url(f"tel:{phone_number}")
 
+    # 🌟 [빌드 0006 신설] 디바이스 자체 알람 앱 연동 링크 생성기
+    def set_device_alarm(e):
+        h = selected_time_state["hour"]
+        m = selected_time_state["minute"]
+        # 안드로이드 및 iOS 표준 알람 앱 연동 인텐트 규격 주소 생성
+        alarm_url = f"intent://back_to_work#Intent;action=android.intent.action.SET_ALARM;i;android.intent.extra.alarm.HOUR={h};i;android.intent.extra.alarm.MINUTES={m};b;android.intent.extra.alarm.SKIP_UI=false;end"
+        page.launch_url(alarm_url)
+
     def build_driving_summary_zone():
         my_card = ft.Container(
             content=ft.Column([
@@ -525,7 +531,8 @@ def main(page: ft.Page):
                 ft.GestureDetector(
                     content=ft.Row([
                         ft.Text(input_data_state['front_phone'], size=13, color="#1E3A8A", weight="bold"),
-                        ft.Icon(ft.icons.PHONE, color="green", size=14) if input_data_state['front_phone'] != "미입력" else ft.Container()
+                        # 🌟 [기사님 통일 패치 완료] 세련된 녹색 수화기 아이콘 반영
+                        ft.Icon(ft.icons.PHONE, color="green", size=16) if input_data_state['front_phone'] != "미입력" else ft.Container()
                     ], spacing=4, alignment="start"),
                     on_tap=lambda e: make_call(input_data_state['front_phone'])
                 )
@@ -548,7 +555,8 @@ def main(page: ft.Page):
                 ft.GestureDetector(
                     content=ft.Row([
                         ft.Text(input_data_state['back_phone'], size=13, color="#1E3A8A", weight="bold"),
-                        ft.Icon(ft.icons.PHONE, color="green", size=14) if input_data_state['back_phone'] != "미입력" else ft.Container()
+                        # 🌟 [기사님 통일 패치 완료] 세련된 녹색 수화기 아이콘 반영
+                        ft.Icon(ft.icons.PHONE, color="green", size=16) if input_data_state['back_phone'] != "미입력" else ft.Container()
                     ], spacing=4, alignment="start"),
                     on_tap=lambda e: make_call(input_data_state['back_phone'])
                 )
@@ -797,7 +805,21 @@ def main(page: ft.Page):
             dial_row,
             ft.Row([ft.Text("근무 순번:", size=12, weight="bold", color="black"), order_dropdown], alignment="center", spacing=10),
             ft.Divider(height=2), 
-            ft.Row([ft.Container(content=ft.Text("저장", size=14, weight="bold", color="white"), bgcolor="#2563EB", alignment=ft.Alignment(0, 0), width=160, height=38, border_radius=6, on_click=lambda e: select_status_and_save("자동"))], alignment="center"),
+            
+            # 🌟 [빌드 0006 핵심 수정] 저장 버튼 바로 옆에 100% 확실한 [휴대폰 알람 설정] 버튼 배치 연동
+            ft.Row([
+                ft.ElevatedButton(
+                    content=ft.Container(ft.Text("저장", size=14, weight="bold", color="white"), alignment=ft.alignment.center), 
+                    bgcolor="#2563EB", width=130, height=38, style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=6)),
+                    on_click=lambda e: select_status_and_save("자동")
+                ),
+                ft.ElevatedButton(
+                    content=ft.Container(ft.Text("⏰ 알람 앱 연동", size=12, weight="bold", color="white"), alignment=ft.alignment.center), 
+                    bgcolor="#E65100", width=130, height=38, style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=6)),
+                    on_click=set_device_alarm
+                )
+            ], alignment="center", spacing=8),
+            
             ft.Divider(height=1, color="transparent"),
             ft.Row([ft.TextButton("선택취소(삭제)", on_click=lambda e: select_status_and_save("선택취소"), style=ft.ButtonStyle(color="red")), ft.TextButton("닫기", on_click=lambda e: setattr(popup_layer, "visible", False) or page.update())], alignment="spaceBetween")
         ], spacing=6, tight=True),
