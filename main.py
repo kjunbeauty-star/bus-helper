@@ -5,6 +5,15 @@ from datetime import datetime, timedelta, timezone
 import flet as ft
 import json
 
+# ==========================================
+# [앱 이름: 버스헬퍼 스케줄러]
+# 현재 배포 버전: 빌드 0002
+# ==========================================
+# [빌드 기록]
+# v0001 (2026-07-06) - 전일 근무 형태 및 고정 로직 추가
+# v0002 (2026-07-07) - 메뉴명을 '긴급연락처'로 통일하고 사무실/정비실 고정 뷰 신설
+# ==========================================
+
 KST = timezone(timedelta(hours=9))
 DB_FILE = "schedules.db"
 STORAGE_SCHEDULES_KEY = "bus_helper_schedules"
@@ -396,12 +405,16 @@ def main(page: ft.Page):
             PHONEBOOK_LIST.sort(key=lambda x: x.get("name", ""))
             rebuild_phonebook_view() # 전화번호부 탭 열릴 때 새로고침
         elif tab_name == "긴급연락처":
+            global setting_column # 🌟 [이것만 추가] 아래쪽에 있는 setting_column을 가져와서 쓰겠다는 뜻입니다!
             calendar_grid.visible = False
             input_zone_container.visible = False
             phonebook_zone_container.visible = False
             weeks_header.visible = False
             div_line1.visible = False
             div_line2.visible = False
+            setting_column.visible = True # 이제 컴퓨터가 에러 안 내고 잘 알아듣습니다!
+            
+            rebuild_emergency_view(setting_column)
 
         page.update()
 
