@@ -1,15 +1,13 @@
 # ==========================================
 # [앱 이름: 버스헬퍼 스케줄러]
-# 현재 배포 버전: 빌드 0007
+# 현재 배포 버전: 빌드 0005 (Rollback & Clean)
 # ==========================================
 # [빌드 기록]
 # v0001 (2026-07-06) - 전일 근무 형태 및 고정 로직 추가
 # v0002 (2026-07-07) - 메뉴명을 '긴급연락처'로 통일하고 사무실/정비실 고정 뷰 신설
 # v0003 (2026-07-07) - 사무실/정비실 등 긴급연락처 입력가능 및 global 선언문/등록버튼 크래시 버그 수정
 # v0004 (2026-07-07) - 고정 빈 창 삭제 / '사무실','정비실' 입력 시 최상단 우선 고정 정렬 및 중복 덮어쓰기 로직 반영
-# v0005 (2026-07-07) - 긴급연락처 개별 항목 '수정/저장/취소' 모드 추가 구현
-# v0006 (2026-07-07) - 안심 알람 기능 추가 (스마트폰 자체 알람 앱 연동 로직 구현), 녹색 수화기 아이콘 전체 통일 반영
-# v0007 (2026-07-07) - 알람 앱 연동 시 빈 브라우저 먹통 오류 수정 (안드로이드 공식 시계 인텐트 표준 규격으로 교정)
+# v0005 (2026-07-07) - 긴급연락처 개별 항목 '수정/저장/취소' 모드 추가 구현 / 녹색 수화기 아이콘 전체 통일 완료
 # ==========================================
 
 import os
@@ -188,6 +186,7 @@ def main(page: ft.Page):
                         )
                     ], spacing=4)
                 else:
+                    # 🌟 [기사님 통일 패치 유지] 빨간 전화기 자리에 녹색 수화기 아이콘 반영
                     row_content = ft.Row([
                         ft.GestureDetector(
                             content=ft.Row([
@@ -490,26 +489,6 @@ def main(page: ft.Page):
         if phone_number and phone_number != "미입력":
             page.launch_url(f"tel:{phone_number}")
 
-    # 💡 브라우저가 새 창을 열어 멈추는 현상을 방지하는 안드로이드 공식 인텐트 교정 규격
-    def set_device_alarm(e):
-        h = selected_time_state["hour"]
-        m = selected_time_state["minute"]
-        
-        # 🌟 안드로이드 시스템 시계(AlarmClock)를 직접 타겟팅하는 공식 웹-앱 연동 규격입니다.
-        alarm_url = (
-            f"intent:#Intent;"
-            f"action=android.intent.action.SET_ALARM;"
-            f"i;android.intent.extra.alarm.HOUR={h};"
-            f"i;android.intent.extra.alarm.MINUTES={m};"
-            f"s;android.intent.extra.alarm.MESSAGE=버스첫탕출근;"
-            f"b;android.intent.extra.alarm.SKIP_UI=false;"
-            f"package=com.google.android.deskclock;" # 기본 시계 앱 패키지 지정 (우회 보장)
-            f"end"
-        )
-        
-        # 🌟 flet 웹뷰 환경에서 새 탭(_blank)을 띄우지 않고 현재 명령을 폰 시스템에 바로 던지도록 세팅
-        page.launch_url(url=alarm_url, web_window_name="_self")
-
     def build_driving_summary_zone():
         my_card = ft.Container(
             content=ft.Column([
@@ -543,6 +522,7 @@ def main(page: ft.Page):
                 ft.GestureDetector(
                     content=ft.Row([
                         ft.Text(input_data_state['front_phone'], size=13, color="#1E3A8A", weight="bold"),
+                        # 🌟 [기사님 통일 패치 유지] 앞차 구역 녹색 수화기 아이콘 반영
                         ft.Icon(ft.icons.PHONE, color="green", size=16) if input_data_state['front_phone'] != "미입력" else ft.Container()
                     ], spacing=4, alignment="start"),
                     on_tap=lambda e: make_call(input_data_state['front_phone'])
@@ -566,6 +546,7 @@ def main(page: ft.Page):
                 ft.GestureDetector(
                     content=ft.Row([
                         ft.Text(input_data_state['back_phone'], size=13, color="#1E3A8A", weight="bold"),
+                        # 🌟 [기사님 통일 패치 유지] 뒷차 구역 녹색 수화기 아이콘 반영
                         ft.Icon(ft.icons.PHONE, color="green", size=16) if input_data_state['back_phone'] != "미입력" else ft.Container()
                     ], spacing=4, alignment="start"),
                     on_tap=lambda e: make_call(input_data_state['back_phone'])
@@ -801,6 +782,7 @@ def main(page: ft.Page):
         popup_layer.visible = False
         rebuild_interface()
 
+    # 🌟 [빌드 0005 롤백 완료] 말썽부린 알람설정 버튼을 지우고 원래 깔끔한 단일 저장 구역으로 원상복구
     popup_card = ft.Container(
         content=ft.Column([
             ft.Row([popup_date_title], alignment="center"), 
@@ -815,20 +797,7 @@ def main(page: ft.Page):
             dial_row,
             ft.Row([ft.Text("근무 순번:", size=12, weight="bold", color="black"), order_dropdown], alignment="center", spacing=10),
             ft.Divider(height=2), 
-            
-            ft.Row([
-                ft.ElevatedButton(
-                    content=ft.Container(ft.Text("저장", size=14, weight="bold", color="white"), alignment=ft.alignment.center), 
-                    bgcolor="#2563EB", width=130, height=38, style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=6)),
-                    on_click=lambda e: select_status_and_save("자동")
-                ),
-                ft.ElevatedButton(
-                    content=ft.Container(ft.Text("⏰ 알람설정", size=12, weight="bold", color="white"), alignment=ft.alignment.center), 
-                    bgcolor="#E65100", width=130, height=38, style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=6)),
-                    on_click=set_device_alarm
-                )
-            ], alignment="center", spacing=8),
-            
+            ft.Row([ft.Container(content=ft.Text("저장", size=14, weight="bold", color="white"), bgcolor="#2563EB", alignment=ft.Alignment(0, 0), width=160, height=38, border_radius=6, on_click=lambda e: select_status_and_save("자동"))], alignment="center"),
             ft.Divider(height=1, color="transparent"),
             ft.Row([ft.TextButton("선택취소(삭제)", on_click=lambda e: select_status_and_save("선택취소"), style=ft.ButtonStyle(color="red")), ft.TextButton("닫기", on_click=lambda e: setattr(popup_layer, "visible", False) or page.update())], alignment="spaceBetween")
         ], spacing=6, tight=True),
