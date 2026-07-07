@@ -191,7 +191,7 @@ def main(page: ft.Page):
                             content=ft.Row([
                                 ft.Text(f"{name}", size=14, weight="bold", color="black", width=65), 
                                 ft.Text(f"{phone}", size=13, weight="bold", color="#1E3A8A", no_wrap=True), 
-                                ft.Text("☎️", size=11, color="red")
+                                ft.Icon(ft.icons.PHONE, color="green", size=14)
                             ], spacing=4, alignment="start"),
                             on_tap=lambda e, p=phone: make_call(p),
                             expand=True
@@ -525,7 +525,7 @@ def main(page: ft.Page):
                 ft.GestureDetector(
                     content=ft.Row([
                         ft.Text(input_data_state['front_phone'], size=13, color="#1E3A8A", weight="bold"),
-                        ft.Text("☎️", size=13, color="red") if input_data_state['front_phone'] != "미입력" else ft.Container()
+                        ft.Icon(ft.icons.PHONE, color="green", size=14) if input_data_state['front_phone'] != "미입력" else ft.Container()
                     ], spacing=4, alignment="start"),
                     on_tap=lambda e: make_call(input_data_state['front_phone'])
                 )
@@ -548,7 +548,7 @@ def main(page: ft.Page):
                 ft.GestureDetector(
                     content=ft.Row([
                         ft.Text(input_data_state['back_phone'], size=13, color="#1E3A8A", weight="bold"),
-                        ft.Text("☎️", size=13, color="red") if input_data_state['back_phone'] != "미입력" else ft.Container()
+                        ft.Icon(ft.icons.PHONE, color="green", size=14) if input_data_state['back_phone'] != "미입력" else ft.Container()
                     ], spacing=4, alignment="start"),
                     on_tap=lambda e: make_call(input_data_state['back_phone'])
                 )
