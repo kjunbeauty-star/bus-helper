@@ -778,13 +778,33 @@ def main(page: ft.Page):
     summary_area = ft.Row([summary_group, phonebook_big_button], alignment="spaceBetween")
     guide_text = ft.Container(content=ft.Text("💡 날짜를 터치하여 근무를 입력 또는 수정하세요.", size=10, color="#666666"), padding=ft.padding.only(left=8, bottom=4))
    
-    # 🌟 [설정 디자인 구역] 기사님이 468번 줄에 설계해 두셨던 setting_column입니다.
+    # 🌟 [빌드 0002 교정] 일반 전화번호부처럼 입력창과 등록 버튼이 나타나도록 UI 전면 개편
     setting_column = ft.Column([
         ft.Container(
-            content=ft.Text("⚠️ 긴급 연락처 기능 레이아웃 구성 중...", size=14, color="grey"),
-            padding=20
+            content=ft.Column([
+                ft.Row([
+                    ft.Text("🚨 긴급 연락처 관리", size=16, weight="bold", color="#1E3A8A"),
+                ], alignment="spaceBetween"),
+                ft.Divider(height=1),
+                
+                # 📱 일반 전화번호부와 똑같은 형태의 긴급연락처 입력창 폼 세트
+                ft.Row([
+                    em_name := ft.TextField(label="이름/서비스명", label_style=ft.TextStyle(size=11), width=100, height=38, text_size=13, content_padding=8),
+                    em_phone := ft.TextField(label="전화번호(숫자만)", label_style=ft.TextStyle(size=11), expand=True, height=38, text_size=13, content_padding=8, keyboard_type=ft.KeyboardType.PHONE),
+                    ft.ElevatedButton(
+                        content=ft.Text("등록", size=12, weight="bold", color="white"),
+                        bgcolor="#2563EB", width=60, height=38,
+                        style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=4), padding=0),
+                        on_click=lambda e: add_emergency_item() # 등록 버튼 누르면 아래 함수 실행
+                    )
+                ], spacing=4),
+                ft.Divider(height=1, color="#E2E8F0"),
+                
+                # 이 아래로 사무실, 정비실 및 기사님이 추가하신 AS 번호들이 쌓입니다.
+            ]),
+            padding=12, border=ft.border.all(1, "#2563EB"), border_radius=10
         )
-    ], visible=False)
+    ], spacing=2, visible=False)
 
     bottom_navigation_bar = ft.Row([btn_calendar, btn_input, btn_setting], alignment="spaceAround", spacing=4)
 
