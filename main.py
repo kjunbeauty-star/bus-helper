@@ -1,12 +1,13 @@
 # ==========================================
 # [앱 이름: 버스헬퍼 스케줄러]
-# 현재 배포 버전: 빌드 0004
+# 현재 배포 버전: 빌드 0005
 # ==========================================
 # [빌드 기록]
 # v0001 (2026-07-06) - 전일 근무 형태 및 고정 로직 추가
 # v0002 (2026-07-07) - 메뉴명을 '긴급연락처'로 통일하고 사무실/정비실 고정 뷰 신설
 # v0003 (2026-07-07) - 사무실/정비실 등 긴급연락처 입력가능 및 global 선언문/등록버튼 크래시 버그 수정
 # v0004 (2026-07-07) - 고정 빈 창 삭제 / '사무실','정비실' 입력 시 최상단 우선 고정 정렬 및 중복 덮어쓰기 로직 반영
+# v0005 (2026-07-07) - 긴급연락처 개별 항목 '수정/저장/취소' 모드 추가 구현
 # ==========================================
 
 import os
@@ -40,7 +41,6 @@ def main(page: ft.Page):
     # UI 컴포넌트를 담을 컨테이너 선언
     setting_column = ft.Column(spacing=2, visible=False)
 
-    # 🌟 [빌드 0004 수정] 빈 고정창을 없애고 처음에는 빈 리스트로 시작합니다.
     EMERGENCY_LIST = []
 
     saved_schedules = page.client_storage.get(STORAGE_SCHEDULES_KEY)
@@ -228,16 +228,12 @@ def main(page: ft.Page):
         # 긴급연락처 입력 폼 상단 결합
         target_column.controls.append(emergency_form_container)
         
-        # 🌟 [빌드 0004 정렬 로직] 
-        # 1순위: 이름이 '사무실'인 것 -> 2순위: 이름이 '정비실'인 것 -> 3순위: 나머지 가나다순 정렬
+        # 🌟 정렬 상태 유지 보조 함수 (수정 모드가 켜져 있어도 이름 기준 올바른 위치에 오게 함)
         def get_sort_key(item):
             name = item.get("name", "")
-            if name == "사무실":
-                return (0, "")
-            elif name == "정비실":
-                return (1, "")
-            else:
-                return (2, name)
+            if name == "사무실": return (0, "")
+            elif name == "정비실": return (1, "")
+            else: return (2, name)
 
         EMERGENCY_LIST.sort(key=get_sort_key)
 
@@ -252,31 +248,66 @@ def main(page: ft.Page):
             for index, item in enumerate(EMERGENCY_LIST):
                 name = item.get("name", "")
                 phone = item.get("phone", "")
+                is_edit = item.get("is_edit", False)
                 
-                # 🌟 [빌드 0004] 사무실, 정비실은 기사님 말씀대로 주황색 계열로 강조 포인트를 줍니다.
                 is_special = name in ["사무실", "정비실"]
                 name_color = "#E65100" if is_special else "black"
                 
-                display_text = f"{name}: {phone}" if phone else f"{name}: (번호 없음)"
-                
-                action_buttons = [
-                    ft.IconButton(
-                        icon=ft.icons.PHONE,
-                        icon_color="green",
-                        on_click=lambda e, ph=phone: page.launch_url(f"tel:{ph}") if ph else None
-                    ),
-                    ft.ElevatedButton(
-                        content=ft.Container(ft.Text("삭제", size=10, weight="bold", color="white"), alignment=ft.alignment.center),
-                        bgcolor="#1E3A8A", width=40, height=28,
-                        style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=4), padding=0),
-                        on_click=lambda e, idx=index: delete_emergency_item(idx, target_column)
-                    )
-                ]
-                
-                row_content = ft.Row([
-                    ft.Text(display_text, size=14, weight="bold" if is_special else "normal", color=name_color),
-                    ft.Row(action_buttons, spacing=3)
-                ], alignment="spaceBetween")
+                # 🌟 [빌드 0005 추가] 긴급연락처 자체 수정 모듈 활성화
+                if is_edit:
+                    edit_em_name = ft.TextField(value=name, width=90, height=34, text_size=13, content_padding=6)
+                    edit_em_phone = ft.TextField(value=phone.replace("-",""), expand=True, height=34, text_size=13, content_padding=6, keyboard_type=ft.KeyboardType.PHONE)
+                    
+                    def save_em_edit(idx, en, ep):
+                        if en.value and ep.value:
+                            EMERGENCY_LIST[idx] = {"name": en.value.strip(), "phone": final_format_phone(ep.value), "is_edit": False}
+                            save_all_to_client_storage()
+                            rebuild_emergency_view(setting_column)
+
+                    row_content = ft.Row([
+                        edit_em_name,
+                        edit_em_phone,
+                        ft.ElevatedButton(
+                            content=ft.Container(ft.Text("저장", size=11, weight="bold", color="white"), alignment=ft.alignment.center),
+                            bgcolor="green", width=50, height=34,
+                            style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=4), padding=0),
+                            on_click=lambda e, idx=index, en=edit_em_name, ep=edit_em_phone: save_em_edit(idx, en, ep)
+                        ),
+                        ft.ElevatedButton(
+                            content=ft.Container(ft.Text("취소", size=11, weight="bold", color="white"), alignment=ft.alignment.center),
+                            bgcolor="grey", width=50, height=34,
+                            style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=4), padding=0),
+                            on_click=lambda e, idx=index: toggle_em_edit_mode(idx, False)
+                        )
+                    ], spacing=4)
+                else:
+                    display_text = f"{name}: {phone}" if phone else f"{name}: (번호 없음)"
+                    
+                    action_buttons = [
+                        ft.IconButton(
+                            icon=ft.icons.PHONE,
+                            icon_color="green",
+                            on_click=lambda e, ph=phone: page.launch_url(f"tel:{ph}") if ph else None
+                        ),
+                        # 🌟 [빌드 0005 추가] 일반 연락처처럼 수정 버튼 신설 배치
+                        ft.ElevatedButton(
+                            content=ft.Container(ft.Text("수정", size=10, weight="bold", color="white"), alignment=ft.alignment.center),
+                            bgcolor="#2563EB", width=40, height=28,
+                            style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=4), padding=0),
+                            on_click=lambda e, idx=index: toggle_em_edit_mode(idx, True)
+                        ),
+                        ft.ElevatedButton(
+                            content=ft.Container(ft.Text("삭제", size=10, weight="bold", color="white"), alignment=ft.alignment.center),
+                            bgcolor="#1E3A8A", width=40, height=28,
+                            style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=4), padding=0),
+                            on_click=lambda e, idx=index: delete_emergency_item(idx, target_column)
+                        )
+                    ]
+                    
+                    row_content = ft.Row([
+                        ft.Text(display_text, size=14, weight="bold" if is_special else "normal", color=name_color),
+                        ft.Row(action_buttons, spacing=3)
+                    ], alignment="spaceBetween")
                 
                 target_column.controls.append(
                     ft.Container(
@@ -293,13 +324,17 @@ def main(page: ft.Page):
             save_all_to_client_storage()
             rebuild_emergency_view(target_column)
 
-    # 🌟 [빌드 0004 수정] 사무실/정비실 중복 차단 및 덮어쓰기 로직 반영
+    # 🌟 [빌드 0005 신설] 긴급연락처 행 수정 모드 스위칭용 함수
+    def toggle_em_edit_mode(index, status):
+        if 0 <= index < len(EMERGENCY_LIST):
+            EMERGENCY_LIST[index]["is_edit"] = status
+            rebuild_emergency_view(setting_column)
+
     def add_emergency_item():
         if em_name.value and em_phone.value:
             input_name = em_name.value.strip()
             formatted_num = final_format_phone(em_phone.value)
             
-            # 목록 내에 동일한 이름이 있는지 먼저 검사합니다.
             found_index = -1
             for i, item in enumerate(EMERGENCY_LIST):
                 if item["name"] == input_name:
@@ -307,11 +342,9 @@ def main(page: ft.Page):
                     break
             
             if found_index != -1:
-                # 덮어쓰기 (기존 번호 수정)
                 EMERGENCY_LIST[found_index]["phone"] = formatted_num
             else:
-                # 새로 추가
-                EMERGENCY_LIST.append({"name": input_name, "phone": formatted_num})
+                EMERGENCY_LIST.append({"name": input_name, "phone": formatted_num, "is_edit": False})
                 
             save_all_to_client_storage()
             em_name.value = ""
@@ -321,7 +354,7 @@ def main(page: ft.Page):
     def add_phonebook_item():
         if pb_name.value and pb_phone.value:
             formatted_num = final_format_phone(pb_phone.value)
-            PHONEBOOK_LIST.append({"name": pb_name.value, "phone": formatted_num})
+            PHONEBOOK_LIST.append({"name": pb_name.value, "phone": formatted_num, "is_edit": False})
             PHONEBOOK_LIST.sort(key=lambda x: x.get("name", ""))
             save_all_to_client_storage()
             pb_name.value = ""
