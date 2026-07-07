@@ -160,6 +160,10 @@ def main(page: ft.Page):
                     def save_edit(idx, en, ep):
                         if en.value and ep.value:
                             PHONEBOOK_LIST[idx] = {"name": en.value, "phone": final_format_phone(ep.value), "is_edit": False}
+                            
+                            # 🌟 [여기에 추가] 이름(name)을 기준으로 가나다순 정렬
+                            PHONEBOOK_LIST.sort(key=lambda x: x.get("name", ""))
+                            
                             save_all_to_client_storage()
                             rebuild_phonebook_view()
 
@@ -253,6 +257,10 @@ def main(page: ft.Page):
         if tf_name.value and tf_phone.value:
             formatted_num = final_format_phone(tf_phone.value)
             PHONEBOOK_LIST.append({"name": tf_name.value, "phone": formatted_num})
+            
+            # 🌟 [여기에 추가] 이름(name)을 기준으로 가나다순 정렬
+            PHONEBOOK_LIST.sort(key=lambda x: x.get("name", ""))
+            
             save_all_to_client_storage()
             tf_name.value = ""
             tf_phone.value = ""
