@@ -276,23 +276,24 @@ def main(page: ft.Page):
         
         # 💡 배경색과 글자색은 그대로 부드럽게 제어합니다.
         # 💡 [수정] 활성화된 탭 상단에 부드러운 곡선(라운딩) 효과 적용
+        # 💡 [수정] 활성화된 탭은 배경을 흰색(white)으로 만들어 상단 화면 영역과 합쳐버립니다.
         btn_calendar.style = ft.ButtonStyle(
-            color="white" if tab_name == "달력" else "#94A3B8",
-            bgcolor="#2563EB" if tab_name == "달력" else "transparent", # 활성화될 때만 배경색을 은은하게 주거나 투명하게 제어
+            color="#2563EB" if tab_name == "달력" else "#64748B", # 활성은 파란글씨, 비활성은 흐린 회색
+            bgcolor="white" if tab_name == "달력" else "transparent", # 🌟 활성화 시 흰색으로 화면과 연결!
             shape=ft.RoundedRectangleBorder(
                 radius=ft.border_radius.only(top_left=12, top_right=12) if tab_name == "달력" else 0
             )
         )
         btn_input.style = ft.ButtonStyle(
-            color="white" if tab_name == "운행정보" else "#94A3B8",
-            bgcolor="#2563EB" if tab_name == "운행정보" else "transparent",
+            color="#2563EB" if tab_name == "운행정보" else "#64748B",
+            bgcolor="white" if tab_name == "운행정보" else "transparent",
             shape=ft.RoundedRectangleBorder(
                 radius=ft.border_radius.only(top_left=12, top_right=12) if tab_name == "운행정보" else 0
             )
         )
         btn_setting.style = ft.ButtonStyle(
-            color="white" if tab_name == "설정" else "#94A3B8",
-            bgcolor="#2563EB" if tab_name == "설정" else "transparent",
+            color="#2563EB" if tab_name == "설정" else "#64748B",
+            bgcolor="white" if tab_name == "설정" else "transparent",
             shape=ft.RoundedRectangleBorder(
                 radius=ft.border_radius.only(top_left=12, top_right=12) if tab_name == "설정" else 0
             )
@@ -724,18 +725,18 @@ def main(page: ft.Page):
     # ↓↓↓ 안내문구 추가 날짜를 터치하여 근무를 입력 또는 수정하세요 ↓↓↓
     guide_text = ft.Container(content=ft.Text("💡 날짜를 터치하여 근무를 입력 또는 수정하세요.", size=10, color="#666666"), padding=ft.padding.only(left=8, bottom=4))
    # 하단 탭들이 들어갈 로우 (여백 제거)
+    # 하단 탭들이 들어갈 로우
     bottom_buttons_row = ft.Row(
         [btn_calendar, btn_input, btn_setting], 
         alignment="spaceAround", 
         spacing=0
     )
-    
-    # 💡 내비게이션 영역을 감싸서 활성화된 버튼의 상단 라운딩 곡선이 돋보이도록 구성
+
+    # 💡 [수정] 비활성 영역은 베이지/회색 톤으로 깔고, 활성 버튼만 위 흰색 화면과 경계선 없이 이어지게 만듭니다.
     bottom_navigation_bar = ft.Container(
         content=bottom_buttons_row,
-        padding=ft.padding.only(top=2, left=4, right=4, bottom=4), # 약간의 상단 패딩으로 곡선미 강조
-        bgcolor="#F1F5F9", # 탭 바 자체의 은은한 배경색 (비활성 탭 영역)
-        border=ft.border.Border(top=ft.border.BorderSide(1, "#E2E8F0")) # 구분선 역할을 할 상단 라인
+        padding=ft.padding.only(top=4, left=8, right=8, bottom=4), 
+        bgcolor="#E2E8F0", # 탭 바 베이스 배경색 (비활성화된 탭들이 앉아있을 곳)
     )
 
     # 1️⃣ [순서 교정] 스크롤 가능한 메인 콘텐츠 레이아웃을 '먼저' 생성합니다.
