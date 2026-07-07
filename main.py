@@ -1,17 +1,6 @@
 # ==========================================
 # [앱 이름: 버스헬퍼 스케줄러]
-# 현재 배포 버전: 빌드 0005 (Rollback & Clean)
-# ==========================================
-# [빌드 기록]
-# v0001 (2026-07-06) - 전일 근무 형태 및 고정 로직 추가
-# v0002 (2026-07-07) - 메뉴명을 '긴급연락처'로 통일하고 사무실/정비실 고정 뷰 신설
-# v0003 (2026-07-07) - 사무실/정비실 등 긴급연락처 입력가능 및 global 선언문/등록버튼 크래시 버그 수정
-# v0004 (2026-07-07) - 고정 빈 창 삭제 / '사무실','정비실' 입력 시 최상단 우선 고정 정렬 및 중복 덮어쓰기 로직 반영
-# v0005 (2026-07-07) - 긴급연락처 개별 항목 '수정/저장/취소' 모드 추가 구현 / 녹색 수화기 아이콘 전체 통일 완료
-# ==========================================
-# ==========================================
-# [앱 이름: 버스헬퍼 스케줄러]
-# 현재 배포 버전: 빌드 0005 (이모지 및 여백 교정본)
+# 현재 배포 버전: 빌드 0005 (주석 및 이모지 완벽 복구본)
 # ==========================================
 
 import os
@@ -21,6 +10,7 @@ from datetime import datetime, timedelta, timezone
 import flet as ft
 import json
 
+# 한국 표준시(KST) 및 데이터베이스/저장소 키 설정
 KST = timezone(timedelta(hours=9))
 DB_FILE = "schedules.db"
 STORAGE_SCHEDULES_KEY = "bus_helper_schedules"
@@ -29,6 +19,7 @@ STORAGE_INPUT_DATA_KEY = "bus_helper_input_data"
 STORAGE_PHONEBOOK_KEY = "bus_helper_phonebook"
 STORAGE_EMERGENCY_KEY = "bus_helper_emergency" 
 
+# 구버전 호환용 SQLite 초기화 (현재는 클라이언트 스토리지를 주력으로 사용)
 def init_db():
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
@@ -42,10 +33,13 @@ def main(page: ft.Page):
     page.theme_mode = "light"
     page.padding = 4
 
+    # 긴급연락처 화면을 담을 메인 기둥 레이아웃
     setting_column = ft.Column(spacing=2, visible=False)
 
+    # 메모리 상의 긴급연락처 리스트 변수
     EMERGENCY_LIST = []
 
+    # 스마트폰 내부 저장소(Client Storage)에서 기존 데이터 불러오기
     saved_schedules = page.client_storage.get(STORAGE_SCHEDULES_KEY)
     saved_targets = page.client_storage.get(STORAGE_MANGEUN_KEY)
     saved_input_data = page.client_storage.get(STORAGE_INPUT_DATA_KEY)
@@ -59,6 +53,7 @@ def main(page: ft.Page):
     MANGEUN_TARGETS = json.loads(saved_targets) if saved_targets else {}
     PHONEBOOK_LIST = json.loads(saved_phonebook) if saved_phonebook else []
     
+    # 운행정보(내차/앞차/뒷차) 초기값 세팅
     if saved_input_data:
         input_data_state = json.loads(saved_input_data)
     else:
@@ -69,6 +64,7 @@ def main(page: ft.Page):
             "back_bus": "미입력", "back_driver": "미입력", "back_phone": "미입력"
         }
 
+    # 데이터 변경 시 스마트폰 저장소에 즉시 통합 저장하는 함수
     def save_all_to_client_storage():
         page.client_storage.set(STORAGE_SCHEDULES_KEY, json.dumps(USER_SCHEDULES, ensure_ascii=False))
         page.client_storage.set(STORAGE_MANGEUN_KEY, json.dumps(MANGEUN_TARGETS, ensure_ascii=False))
@@ -76,12 +72,14 @@ def main(page: ft.Page):
         page.client_storage.set(STORAGE_PHONEBOOK_KEY, json.dumps(PHONEBOOK_LIST, ensure_ascii=False))
         page.client_storage.set(STORAGE_EMERGENCY_KEY, json.dumps(EMERGENCY_LIST, ensure_ascii=False))
 
+    # 앱 켜질 때 오늘 날짜 및 시간 제어용 초기값 설정
     now_kst = datetime.now(KST)
     current = {"year": now_kst.year, "month": now_kst.month, "selected_date": f"{now_kst.year}-{now_kst.month:02d}-{now_kst.day:02d}"}
     selected_time_state = {"hour": 5, "minute": 0}
 
     current_tab = "달력"
 
+    # 메인 상단 텍스트 레이블 선언
     month_title = ft.Text("", size=20, weight="bold", text_align="center")
     stats_text = ft.Text("", size=13, weight="bold", color="#1E3A8A")
     mangeun_text = ft.Text("", size=13, weight="bold", color="#1E3A8A")
@@ -92,6 +90,7 @@ def main(page: ft.Page):
     
     phonebook_items_column = ft.Column(spacing=6)
     
+    # [화면 구역] 📞 전화번호부 관리 페이지 레이아웃
     phonebook_zone_container = ft.Container(
         content=ft.Column([
             ft.Row([ft.Text("📞 전화번호부관리", size=16, weight="bold", color="#1E3A8A")]),
@@ -107,24 +106,27 @@ def main(page: ft.Page):
         padding=12, border=ft.border.all(1, "#2563EB"), border_radius=10, visible=False
     )
     
+    # [버튼] 달력 화면 우측 상단에 배치되는 거대한 '📞 전화번호부' 바로가기 버튼 (복구 완료!)
     phonebook_big_button = ft.ElevatedButton(
-        content=ft.Container(ft.Text("전화번호부", color="white", size=20, weight="bold"), alignment=ft.alignment.center), 
+        content=ft.Container(ft.Text("📞 전화번호부", color="white", size=20, weight="bold"), alignment=ft.alignment.center), 
         width=150, height=70, bgcolor="#2563EB", color="white", 
         on_click=lambda e: change_tab("전화번호"),
         style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=10), padding=ft.padding.all(0))
     )
 
-    # 🌟 [기사님 패치 구역 1] 하단 탭 버튼 한 줄 나열 및 패딩 제로 적용 완료
+    # [하단 탭 메뉴 버튼] 기사님 디자인 피드백 반영 (텍스트 이모지 장착 및 한여름의 패딩 제거 버전)
     btn_calendar = ft.ElevatedButton(content=ft.Container(content=ft.Text("📅 달력", color="white", size=11, weight="bold"), alignment=ft.alignment.center), expand=1, height=40, style=ft.ButtonStyle(bgcolor="#2563EB", shape=ft.RoundedRectangleBorder(radius=6), padding=0), on_click=lambda e: change_tab("달력"))
     btn_input = ft.ElevatedButton(content=ft.Container(content=ft.Text("🚌 운행정보", color="white", size=11, weight="bold"), alignment=ft.alignment.center), expand=1, height=40, style=ft.ButtonStyle(bgcolor="grey", shape=ft.RoundedRectangleBorder(radius=6), padding=0), on_click=lambda e: change_tab("운행정보"))
     btn_setting = ft.ElevatedButton(content=ft.Container(content=ft.Text("🚨 긴급연락처", color="white", size=11, weight="bold"), alignment=ft.alignment.center), expand=1, height=40, style=ft.ButtonStyle(bgcolor="grey", shape=ft.RoundedRectangleBorder(radius=6), padding=0), on_click=lambda e: change_tab("긴급연락처"))
 
+    # 달력 최상단 요일 표시줄 (일~토)
     days_letters = ["일", "월", "화", "수", "목", "금", "토"]
     weeks_header = ft.Row([ft.Container(content=ft.Text(d, size=13, weight="bold", color="#D93025" if d=="일" else ("#1A73E8" if d=="토" else "black")), expand=1, alignment=ft.Alignment(0, 0)) for d in days_letters], alignment="spaceAround")
 
     div_line1 = ft.Divider(height=1)
     div_line2 = ft.Divider(height=1)
 
+    # 📞 전화번호부 목록을 화면에 다시 그려주는 함수 (일반연락처용)
     def rebuild_phonebook_view():
         phonebook_items_column.controls.clear()
         if not PHONEBOOK_LIST:
@@ -163,6 +165,7 @@ def main(page: ft.Page):
                 phonebook_items_column.controls.append(ft.Container(content=row_content, padding=ft.padding.only(left=4, right=4, top=8, bottom=8), border=ft.border.Border(bottom=ft.border.BorderSide(0.5, "#E2E8F0"))))
         page.update()
 
+    # 🚨 긴급연락처 목록을 화면에 다시 그려주는 함수 (사무실/정비실 최상단 고정 정렬 기능 포함)
     def rebuild_emergency_view(target_column):
         target_column.controls.clear()
         target_column.controls.append(emergency_form_container)
@@ -212,6 +215,7 @@ def main(page: ft.Page):
                 target_column.controls.append(ft.Container(content=row_content, padding=ft.padding.only(left=4, right=4, top=8, bottom=8), border=ft.border.Border(bottom=ft.border.BorderSide(0.5, "#E2E8F0"))))
         page.update()
 
+    # 연락처 관리 관련 내부 기능 함수들 (삭제/토글/추가 등)
     def delete_emergency_item(index, target_column):
         if 0 <= index < len(EMERGENCY_LIST):
             EMERGENCY_LIST.pop(index)
@@ -262,11 +266,11 @@ def main(page: ft.Page):
             PHONEBOOK_LIST[index]["is_edit"] = status
             rebuild_phonebook_view()
 
+    # 🔄 [메인 함수] 하단 메뉴 탭 전환 마스터 제어 함수 (여백 패딩 제로 깔끔 동기화 버전)
     def change_tab(tab_name):
         nonlocal current_tab
         current_tab = tab_name
         
-        # 🌟 [기사님 패치 구역 2] 탭 변경 함수 내 스타일 패딩 제로 매칭 완벽 교정
         btn_calendar.style = ft.ButtonStyle(color="white" if tab_name == "달력" else "#94A3B8", bgcolor="#2563EB" if tab_name == "달력" else "transparent", shape=ft.RoundedRectangleBorder(radius=6), padding=0)
         btn_input.style = ft.ButtonStyle(color="white" if tab_name == "운행정보" else "#94A3B8", bgcolor="#2563EB" if tab_name == "운행정보" else "transparent", shape=ft.RoundedRectangleBorder(radius=6), padding=0)
         btn_setting.style = ft.ButtonStyle(color="white" if tab_name == "긴급연락처" else "#94A3B8", bgcolor="#2563EB" if tab_name == "긴급연락처" else "transparent", shape=ft.RoundedRectangleBorder(radius=6), padding=0)
@@ -289,6 +293,7 @@ def main(page: ft.Page):
             rebuild_emergency_view(setting_column)
         page.update()
 
+    # 달력 날짜 클릭 시 튀어나오는 첫탕 근무등록 팝업창 세팅들
     popup_date_title = ft.Text("", size=16, weight="bold", color="black", text_align="center")
     order_options = [ft.dropdown.Option("", "선택 안 함")] + [ft.dropdown.Option(str(i), f"{i}번") for i in range(1, 51)]
     order_dropdown = ft.Dropdown(options=order_options, width=140, height=40, text_size=13, content_padding=ft.padding.symmetric(vertical=4, horizontal=10))
@@ -314,6 +319,7 @@ def main(page: ft.Page):
     popup_layer = ft.Container(visible=False, bgcolor="#AA000000", alignment=ft.Alignment(0, 0), expand=True)
     mangeun_popup_layer = ft.Container(visible=False, bgcolor="#AA000000", alignment=ft.Alignment(0, 0), expand=True)
 
+    # 매월 유동적으로 변하는 자동 만근 일수 계산 로직
     def get_mangeun_target():
         try:
             y, m = int(current['year']), int(current['month'])
@@ -322,15 +328,18 @@ def main(page: ft.Page):
             return 22 if calendar.monthrange(y, m)[1] == 31 else (20 if m == 2 else 21)
         except: return 22
 
+    # 번호 터치 시 스마트폰 기본 전화 다이얼로 즉시 토스해 주는 함수
     def make_call(phone_number):
         if phone_number and phone_number != "미입력": page.launch_url(f"tel:{phone_number}")
 
+    # 🚍 운행정보 탭 내부의 내차/앞차/뒷차 요약 카드뷰 빌드
     def build_driving_summary_zone():
         my_card = ft.Container(content=ft.Column([ft.Row([ft.Text("내차 정보", size=11, color="grey", weight="bold"), ft.ElevatedButton(content=ft.Container(ft.Text("입력", size=10, weight="bold", color="white"), alignment=ft.alignment.center), on_click=lambda e: open_info_input_popup("내차"), bgcolor="#2563EB", width=55, height=22, style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=4), padding=0))], alignment="spaceBetween"), ft.Text(f"노선: {input_data_state['route']}", size=14, weight="bold", color="black"), ft.Text(f"내차: {input_data_state['bus_no']}", size=14, weight="bold", color="black"), ft.Container(height=15)], spacing=2, tight=True), bgcolor="#F8FAFC", border=ft.border.all(1, "#E2E8F0"), border_radius=8, padding=10, expand=1)
         front_card = ft.Container(content=ft.Column([ft.Row([ft.Text("앞차 정보", size=11, color="grey", weight="bold"), ft.ElevatedButton(content=ft.Container(ft.Text("입력", size=10, weight="bold", color="white"), alignment=ft.alignment.center), on_click=lambda e: open_info_input_popup("앞차"), bgcolor="#1E3A8A", width=55, height=22, style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=4), padding=0))], alignment="spaceBetween"), ft.Text(input_data_state['front_bus'], size=14, weight="bold", color="black"), ft.Text(input_data_state['front_driver'], size=14, weight="bold", color="black"), ft.GestureDetector(content=ft.Row([ft.Text(input_data_state['front_phone'], size=13, color="#1E3A8A", weight="bold"), ft.Icon(ft.icons.PHONE, color="green", size=16) if input_data_state['front_phone'] != "미입력" else ft.Container()], spacing=4, alignment="start"), on_tap=lambda e: make_call(input_data_state['front_phone']))], spacing=2, tight=True), bgcolor="#F8FAFC", border=ft.border.all(1, "#E2E8F0"), border_radius=8, padding=10, expand=1)
         back_card = ft.Container(content=ft.Column([ft.Row([ft.Text("뒷차 정보", size=11, color="grey", weight="bold"), ft.ElevatedButton(content=ft.Container(ft.Text("입력", size=10, weight="bold", color="white"), alignment=ft.alignment.center), on_click=lambda e: open_info_input_popup("뒷차"), bgcolor="#1E3A8A", width=55, height=22, style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=4), padding=0))], alignment="spaceBetween"), ft.Text(input_data_state['back_bus'], size=14, weight="bold", color="black"), ft.Text(input_data_state['back_driver'], size=14, weight="bold", color="black"), ft.GestureDetector(content=ft.Row([ft.Text(input_data_state['back_phone'], size=13, color="#1E3A8A", weight="bold"), ft.Icon(ft.icons.PHONE, color="green", size=16) if input_data_state['back_phone'] != "미입력" else ft.Container()], spacing=4, alignment="start"), on_tap=lambda e: make_call(input_data_state['back_phone']))], spacing=2, tight=True), bgcolor="#F8FAFC", border=ft.border.all(1, "#E2E8F0"), border_radius=8, padding=10, expand=1)
         return ft.Container(content=ft.Column([ft.Text("🚍 운행 정보 요약", size=14, weight="bold", color="#1E3A8A"), my_card, ft.Row([front_card, back_card], spacing=8, alignment="spaceAround")], spacing=8), padding=12, border=ft.border.all(1, "#2563EB"), border_radius=10, margin=ft.margin.only(bottom=10))
 
+    # 하이픈(-) 자동 정렬 마법의 번호 교정 포맷 함수
     def final_format_phone(raw_value):
         clean = "".join(filter(str.isdigit, raw_value))
         if len(clean) <= 3: return clean
@@ -338,6 +347,7 @@ def main(page: ft.Page):
         elif len(clean) <= 10: return f"{clean[:3]}-{clean[3:6]}-{clean[6:]}"
         else: return f"{clean[:3]}-{clean[3:7]}-{clean[7:11]}"
 
+    # 앞차/뒷차/내차 세부 입력용 팝업 조립 레이아웃 구역
     def open_info_input_popup(target_type):
         if target_type == "내차":
             tf_route, tf_bus_no = ft.TextField(label="노선번호", value=input_data_state["route"].replace("미입력",""), keyboard_type=ft.KeyboardType.NUMBER, expand=True, height=38), ft.TextField(label="내차번호", value=input_data_state["bus_no"].replace("호","").replace("미입력",""), keyboard_type=ft.KeyboardType.NUMBER, expand=True, height=38)
@@ -362,6 +372,7 @@ def main(page: ft.Page):
     info_dialog = ft.AlertDialog(modal=False, content=ft.Container()); page.dialog = info_dialog
     def refresh_input_tab_view(): input_zone_container.controls.clear(); input_zone_container.controls.append(build_driving_summary_zone()); page.update()
 
+    # 📅 [캘린더 렌더러] 매달 달력 날짜 그리드 및 실시간 만근 카운트 일체 갱신 함수
     def rebuild_interface():
         nonlocal USER_SCHEDULES, MANGEUN_TARGETS
         today = datetime.now(KST)
@@ -399,6 +410,7 @@ def main(page: ft.Page):
         if current_tab == "운행정보": refresh_input_tab_view()
         page.update()
 
+    # 날짜 다이얼로그 호출 및 휠 스크롤 시간 초기화 매칭 함수
     def open_input_popup(date_key):
         current["selected_date"] = date_key
         popup_date_title.value = f"{date_key}\n첫탕 시간을 선택하세요"
@@ -413,6 +425,7 @@ def main(page: ft.Page):
             selected_time_state["hour"], selected_time_state["minute"], hour_picker.selected_index, minute_picker.selected_index = 5, 0, 5, 0
         popup_layer.content, popup_layer.visible = popup_card, True; page.update()
 
+    # 근무 선택 및 저장/삭제 공통 로직 처리 함수
     def select_status_and_save(status_value):
         target_date = current["selected_date"]
         if status_value == "선택취소":
@@ -425,6 +438,7 @@ def main(page: ft.Page):
         USER_SCHEDULES[target_date] = {"status": status_value, "start_time": final_time, "order_no": "" if status_value == "휴무" else (order_dropdown.value if order_dropdown.value else "")}
         save_all_to_client_storage(); popup_layer.visible = False; rebuild_interface()
 
+    # 팝업 내부 스크롤뷰 레이아웃 구조체
     popup_card = ft.Container(
         content=ft.Column([
             ft.Row([popup_date_title], alignment="center"), ft.Divider(height=1, color="transparent"), ft.Text("시간 없이 근무만 등록할 때:", size=11, weight="bold", color="grey"),
@@ -435,6 +449,7 @@ def main(page: ft.Page):
         ], spacing=6, tight=True), bgcolor="white", padding=12, border_radius=12, width=300
     )
 
+    # 상단 내비게이션 바 (이전달 / 다음달 이동) 버튼 컴포넌트
     header_nav = ft.Row([ft.TextButton("◀ 이전", on_click=lambda e: move_prev(e), style=ft.ButtonStyle(color="black")), month_title, ft.TextButton("다음 ▶", on_click=lambda e: move_next(e), style=ft.ButtonStyle(color="black"))], alignment="spaceBetween")
     mangeun_setting_row = ft.Row([mangeun_value_text, ft.ElevatedButton("변경", on_click=lambda e: setattr(mangeun_popup_layer, "visible", True) or page.update(), bgcolor="#2563EB", color="white", width=68, height=22, style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=4), text_style=ft.TextStyle(size=11, weight="bold"), padding=0))], alignment="start", vertical_alignment="center", spacing=6, height=22)
     
@@ -453,8 +468,10 @@ def main(page: ft.Page):
     summary_area = ft.Row([ft.Column([stats_text, mangeun_text, mangeun_setting_row], spacing=6, tight=True), phonebook_big_button], alignment="spaceBetween")
     guide_text = ft.Container(content=ft.Text("💡 날짜를 터치하여 근무를 입력 또는 수정하세요.", size=10, color="#666666"), padding=ft.padding.only(left=8, bottom=4))
    
+    # 긴급연락처 신규 등록 폼 컴포넌트
     emergency_form_container = ft.Container(content=ft.Column([ft.Row([ft.Text("🚨 긴급 연락처 관리", size=16, weight="bold", color="#1E3A8A")]), ft.Divider(height=1), ft.Row([em_name := ft.TextField(label="이름/서비스명", label_style=ft.TextStyle(size=11), width=100, height=38, text_size=13, content_padding=8), em_phone := ft.TextField(label="전화번호(숫자만)", label_style=ft.TextStyle(size=11), expand=True, height=38, text_size=13, content_padding=8, keyboard_type=ft.KeyboardType.PHONE), ft.ElevatedButton(content=ft.Text("등록", size=12, weight="bold", color="white"), bgcolor="#2563EB", width=60, height=38, style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=4), padding=0), on_click=lambda e: add_emergency_item())], spacing=4), ft.Divider(height=1, color="#E2E8F0")]))
 
+    # 화면 스크롤 가능 구역 및 전체 인터페이스 초기 패치 주입 구역
     scrollable_content = ft.Column([header_nav, summary_area, guide_text, div_line1, weeks_header, div_line2, calendar_grid, input_zone_container, phonebook_zone_container, setting_column], expand=True, scroll=ft.ScrollMode.AUTO)
     page.add(ft.Stack([ft.Column([scrollable_content, ft.Divider(height=1), ft.Row([btn_calendar, btn_input, btn_setting], alignment="spaceAround", spacing=4)], expand=True), popup_layer, mangeun_popup_layer], expand=True))
     
