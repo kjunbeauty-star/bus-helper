@@ -723,12 +723,13 @@ def main(page: ft.Page):
     summary_area = ft.Row([summary_group, phonebook_big_button], alignment="spaceBetween")
     # ↓↓↓ 안내문구 추가 날짜를 터치하여 근무를 입력 또는 수정하세요 ↓↓↓
     guide_text = ft.Container(content=ft.Text("💡 날짜를 터치하여 근무를 입력 또는 수정하세요.", size=10, color="#666666"), padding=ft.padding.only(left=8, bottom=4))
-    # 하단 탭들이 들어갈 로우 (여백 제거)
+   # 하단 탭들이 들어갈 로우 (여백 제거)
     bottom_buttons_row = ft.Row(
         [btn_calendar, btn_input, btn_setting], 
         alignment="spaceAround", 
         spacing=0
     )
+    
     # 💡 내비게이션 영역을 감싸서 활성화된 버튼의 상단 라운딩 곡선이 돋보이도록 구성
     bottom_navigation_bar = ft.Container(
         content=bottom_buttons_row,
@@ -737,8 +738,7 @@ def main(page: ft.Page):
         border=ft.border.Border(top=ft.border.BorderSide(1, "#E2E8F0")) # 구분선 역할을 할 상단 라인
     )
 
-    # 스크롤 영역과 레이아웃 합치기 (기존의 중간 ft.Divider(height=1)은 제거해도 좋습니다)
-    main_layout = ft.Column([scrollable_content, bottom_navigation_bar], expand=True)
+    # 1️⃣ [순서 교정] 스크롤 가능한 메인 콘텐츠 레이아웃을 '먼저' 생성합니다.
     scrollable_content = ft.Column(
         [
             header_nav, summary_area, guide_text, div_line1,
@@ -750,7 +750,8 @@ def main(page: ft.Page):
         expand=True, scroll=ft.ScrollMode.AUTO
     )
 
-    main_layout = ft.Column([scrollable_content, ft.Divider(height=1), bottom_navigation_bar], expand=True)
+    # 2️⃣ [순서 교정] 위에서 만든 scrollable_content와 탭 바를 합쳐 최종 레이아웃을 만듭니다.
+    main_layout = ft.Column([scrollable_content, bottom_navigation_bar], expand=True)
     
     page.add(ft.Stack([main_layout, popup_layer, mangeun_popup_layer], expand=True))
     
