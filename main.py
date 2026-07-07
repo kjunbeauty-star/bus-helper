@@ -112,20 +112,20 @@ def main(page: ft.Page):
     )
     
     phonebook_big_button = ft.ElevatedButton(
-        content=ft.Container(ft.Text("전화번호부", color="white", size=20, weight="bold"), alignment=ft.alignment.center), 
+        content=ft.Container(ft.Text("📞전화번호부", color="white", size=20, weight="bold"), alignment=ft.alignment.center), 
         width=150, height=70, bgcolor="#2563EB", color="white", 
         on_click=lambda e: change_tab("전화번호"),
         style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=10), padding=ft.padding.all(0))
     )
 
     btn_calendar = ft.ElevatedButton(
-        content=ft.Container(ft.Text("달력", color="white", size=11, weight="bold"), alignment=ft.alignment.center),
+        content=ft.Container(ft.Text("📅달력", color="white", size=11, weight="bold"), alignment=ft.alignment.center),
         expand=1, height=40, 
         style=ft.ButtonStyle(bgcolor="#2563EB", shape=ft.RoundedRectangleBorder(radius=6)), 
         on_click=lambda e: change_tab("달력")
     )
     btn_input = ft.ElevatedButton(
-        content=ft.Container(ft.Text("운행정보", color="white", size=11, weight="bold"), alignment=ft.alignment.center),
+        content=ft.Container(ft.Text("🚌운행정보", color="white", size=11, weight="bold"), alignment=ft.alignment.center),
         expand=1, height=40, 
         style=ft.ButtonStyle(bgcolor="grey", shape=ft.RoundedRectangleBorder(radius=6)), 
         on_click=lambda e: change_tab("운행정보")
@@ -134,7 +134,7 @@ def main(page: ft.Page):
         content=ft.Container(ft.Text("긴급연락처", color="white", size=11, weight="bold"), alignment=ft.alignment.center),
         expand=1, height=40, 
         style=ft.ButtonStyle(bgcolor="grey", shape=ft.RoundedRectangleBorder(radius=6)), 
-        on_click=lambda e: change_tab("긴급연락처")
+        on_click=lambda e: change_tab("🚨긴급연락처")
     )
 
     days_letters = ["일", "월", "화", "수", "목", "금", "토"]
