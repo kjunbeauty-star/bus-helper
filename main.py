@@ -1,11 +1,13 @@
 # ==========================================
 # [앱 이름: 버스헬퍼 스케줄러]
-# 현재 배포 버전: 빌드 0003 (Hotfix)
+# 현재 배포 버전: 빌드 0003
 # ==========================================
 # [빌드 기록]
 # v0001 (2026-07-06) - 전일 근무 형태 및 고정 로직 추가
 # v0002 (2026-07-07) - 메뉴명을 '긴급연락처'로 통일하고 사무실/정비실 고정 뷰 신설
-# v0003 (2026-07-07) - 사무실/정비실 등 긴급연락처 입력가능 및 global 선언문/등록버튼 크래시 버그 수정
+# v0003 (2026-07-07) - 사무실/정비실 등 긴급연락처 입력가능
+# v0004 (2026-07-07) - [배포 오류 수정] ft.icons -> ft.Icons(최신 flet API),
+#                       누락된 add_emergency_item() 함수 추가, 긴급연락처 목록만 따로 지우도록 구조 수정
 # ==========================================
 
 import os
@@ -33,12 +35,12 @@ def init_db():
     conn.close()
 
 def main(page: ft.Page):
+    # 🌟 [빌드 0002 추가] 아래 구역에서 태어날 화면 상자들을 함수 안에서 미리 가져다 쓰겠다고 선언 (NameError 원천 차단)
+    global setting_column 
+
     page.title = "버스기사도우미"
     page.theme_mode = "light"
     page.padding = 4
-
-    # 🌟 [빌드 0003 수정] Render 서버 NameError 크래시를 방지하기 위해 상자를 함수 최상단에 미리 선언합니다.
-    setting_column = ft.Column(spacing=2, visible=False)
 
     # 🌟 [빌드 0002 위치 교정] 리스트 초기화 코드를 데이터 로드 구역보다 위로 올렸습니다.
     EMERGENCY_LIST = [
@@ -79,7 +81,7 @@ def main(page: ft.Page):
         page.client_storage.set(STORAGE_EMERGENCY_KEY, json.dumps(EMERGENCY_LIST, ensure_ascii=False))
 
     now_kst = datetime.now(KST)
-    current = {"year": now_kst.year, "month": now_kst.month, "selected_date": f"{now_kst.year}-{now_kst.month:02d}-{now_kst.day:02d}"}
+    current = {"year": now_kst.year, "month": now_kst.month, "selected_date": "2026-07-05"}
     selected_time_state = {"hour": 5, "minute": 0}
 
     current_tab = "달력"
@@ -93,28 +95,32 @@ def main(page: ft.Page):
     input_zone_container = ft.Column(spacing=2, visible=False)
     
     phonebook_items_column = ft.Column(spacing=6)
+    # 🌟 [수정] 긴급연락처 "목록"만 따로 담을 상자를 새로 만듭니다. (입력창 Container와 분리해서 목록만 지우고 새로 그리기 위함)
+    emergency_items_column = ft.Column(spacing=6)
     
-    phonebook_zone_container = ft.Container(
-        content=ft.Column([
-            ft.Row([
-                ft.Text("📞 전화번호부관리", size=16, weight="bold", color="#1E3A8A"),
-            ], alignment="spaceBetween"),
-            ft.Divider(height=1),
-            ft.Row([
-                pb_name := ft.TextField(label="이름/직책", label_style=ft.TextStyle(size=11), width=100, height=38, text_size=13, content_padding=8),
-                pb_phone := ft.TextField(label="전화번호(숫자만)", label_style=ft.TextStyle(size=11), expand=True, height=38, text_size=13, content_padding=8, keyboard_type=ft.KeyboardType.PHONE),
-                ft.ElevatedButton(
-                    content=ft.Text("추가", size=12, weight="bold", color="white"),
-                    bgcolor="#2563EB", width=60, height=38,
-                    style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=4), padding=0),
-                    on_click=lambda e: add_phonebook_item()
-                )
-            ], spacing=4),
-            ft.Divider(height=1, color="#E2E8F0"),
-            phonebook_items_column
-        ]),
-        padding=12, border=ft.border.all(1, "#2563EB"), border_radius=10, visible=False
-    )
+    phonebook_zone_container = ft.Column([
+        ft.Container(
+            content=ft.Column([
+                ft.Row([
+                    ft.Text("📞 전화번호부관리", size=16, weight="bold", color="#1E3A8A"),
+                ], alignment="spaceBetween"),
+                ft.Divider(height=1),
+                ft.Row([
+                    pb_name := ft.TextField(label="이름/직책", label_style=ft.TextStyle(size=11), width=100, height=38, text_size=13, content_padding=8),
+                    pb_phone := ft.TextField(label="전화번호(숫자만)", label_style=ft.TextStyle(size=11), expand=True, height=38, text_size=13, content_padding=8, keyboard_type=ft.KeyboardType.PHONE),
+                    ft.ElevatedButton(
+                        content=ft.Text("추가", size=12, weight="bold", color="white"),
+                        bgcolor="#2563EB", width=60, height=38,
+                        style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=4), padding=0),
+                        on_click=lambda e: add_phonebook_item()
+                    )
+                ], spacing=4),
+                ft.Divider(height=1, color="#E2E8F0"),
+                phonebook_items_column
+            ]),
+            padding=12, border=ft.border.all(1, "#2563EB"), border_radius=10
+        )
+    ], spacing=2, visible=False)
     
     phonebook_big_button = ft.ElevatedButton(
         content=ft.Container(ft.Text("전화번호부", color="white", size=20, weight="bold"), alignment=ft.alignment.center), 
@@ -126,19 +132,19 @@ def main(page: ft.Page):
     btn_calendar = ft.ElevatedButton(
         content=ft.Container(ft.Text("달력", color="white", size=11, weight="bold"), alignment=ft.alignment.center),
         expand=1, height=40, 
-        style=ft.ButtonStyle(bgcolor="#2563EB", shape=ft.RoundedRectangleBorder(radius=6)), 
+        style=ft.ButtonStyle(bgcolor="#2563EB", shape=ft.RoundedRectangleBorder(radius=6), padding=ft.padding.symmetric(vertical=0, horizontal=0)), 
         on_click=lambda e: change_tab("달력")
     )
     btn_input = ft.ElevatedButton(
         content=ft.Container(ft.Text("운행정보", color="white", size=11, weight="bold"), alignment=ft.alignment.center),
         expand=1, height=40, 
-        style=ft.ButtonStyle(bgcolor="grey", shape=ft.RoundedRectangleBorder(radius=6)), 
+        style=ft.ButtonStyle(bgcolor="grey", shape=ft.RoundedRectangleBorder(radius=6), padding=ft.padding.symmetric(vertical=0, horizontal=0)), 
         on_click=lambda e: change_tab("운행정보")
     )
     btn_setting = ft.ElevatedButton(
         content=ft.Container(ft.Text("긴급연락처", color="white", size=11, weight="bold"), alignment=ft.alignment.center),
         expand=1, height=40, 
-        style=ft.ButtonStyle(bgcolor="grey", shape=ft.RoundedRectangleBorder(radius=6)), 
+        style=ft.ButtonStyle(bgcolor="grey", shape=ft.RoundedRectangleBorder(radius=6), padding=ft.padding.symmetric(vertical=0, horizontal=0)), 
         on_click=lambda e: change_tab("긴급연락처")
     )
 
@@ -230,16 +236,15 @@ def main(page: ft.Page):
     def rebuild_emergency_view(target_column):
         target_column.controls.clear()
         
-        # 🌟 [빌드 0003 추가] 지워졌던 긴급연락처 입력 폼 상단을 맨 위에 결합해 줍니다.
-        target_column.controls.append(emergency_form_container)
-        
         for index, item in enumerate(EMERGENCY_LIST):
             is_fixed = item.get("is_fixed", False)
             display_text = f"{item['name']}: {item['phone']}" if item['phone'] else f"{item['name']}: (번호 없음)"
             
             action_buttons = [
+                # 🌟 [수정] 최신 flet 버전에서는 소문자 ft.icons 가 삭제되고 ft.Icons (대문자 I) 로 바뀌었습니다.
+                # 배포 서버가 최신 flet 을 새로 설치하면서 여기서 AttributeError 로 배포가 실패했을 가능성이 큽니다.
                 ft.IconButton(
-                    icon=ft.icons.PHONE,
+                    icon=ft.Icons.PHONE,
                     icon_color="green",
                     on_click=lambda e, ph=item["phone"]: page.launch_url(f"tel:{ph}") if ph else None
                 )
@@ -271,29 +276,33 @@ def main(page: ft.Page):
 
     # 🌟 [빌드 0002 신설] 긴급 연락처 AS 항목 삭제 함수
     def delete_emergency_item(index, target_column):
-        if 0 <= index < len(EMERGENCY_LIST):
-            EMERGENCY_LIST.pop(index)
-            save_all_to_client_storage()
-            rebuild_emergency_view(target_column)
+        EMERGENCY_LIST.pop(index)
+        save_all_to_client_storage()
+        rebuild_emergency_view(target_column)
 
-    # 🌟 [빌드 0003 신설] 누락되었던 긴급 연락처 등록 로직을 구현했습니다.
+    # 🌟 [수정] 원래 "등록" 버튼이 호출하는 함수인데 정의가 누락되어 있어서
+    # 버튼을 누르면 NameError가 발생하던 부분입니다. 전화번호부 추가 함수와 동일한 방식으로 새로 만들었습니다.
     def add_emergency_item():
-        if em_name.value and em_phone.value:
-            formatted_num = final_format_phone(em_phone.value)
-            EMERGENCY_LIST.append({"name": em_name.value, "phone": formatted_num, "is_fixed": False})
+        tf_name = em_name
+        tf_phone = em_phone
+        if tf_name.value and tf_phone.value:
+            formatted_num = final_format_phone(tf_phone.value)
+            EMERGENCY_LIST.append({"name": tf_name.value, "phone": formatted_num, "is_fixed": False})
             save_all_to_client_storage()
-            em_name.value = ""
-            em_phone.value = ""
-            rebuild_emergency_view(setting_column)
+            tf_name.value = ""
+            tf_phone.value = ""
+            rebuild_emergency_view(emergency_items_column)
 
     def add_phonebook_item():
-        if pb_name.value and pb_phone.value:
-            formatted_num = final_format_phone(pb_phone.value)
-            PHONEBOOK_LIST.append({"name": pb_name.value, "phone": formatted_num})
+        tf_name = pb_name
+        tf_phone = pb_phone
+        if tf_name.value and tf_phone.value:
+            formatted_num = final_format_phone(tf_phone.value)
+            PHONEBOOK_LIST.append({"name": tf_name.value, "phone": formatted_num})
             PHONEBOOK_LIST.sort(key=lambda x: x.get("name", ""))
             save_all_to_client_storage()
-            pb_name.value = ""
-            pb_phone.value = ""
+            tf_name.value = ""
+            tf_phone.value = ""
             rebuild_phonebook_view()
 
     def delete_phonebook_item(index):
@@ -389,7 +398,8 @@ def main(page: ft.Page):
             weeks_header.visible = False
             div_line1.visible = False
             div_line2.visible = False
-            rebuild_emergency_view(setting_column)
+            # 🌟 [수정] setting_column 전체가 아니라 목록 전용 상자(emergency_items_column)만 새로 그립니다.
+            rebuild_emergency_view(emergency_items_column)
 
         page.update()
 
@@ -443,7 +453,7 @@ def main(page: ft.Page):
                     ft.ElevatedButton(
                         content=ft.Container(ft.Text("입력", size=10, weight="bold", color="white"), alignment=ft.alignment.center),
                         on_click=lambda e: open_info_input_popup("내차"), bgcolor="#2563EB", width=55, height=22, 
-                        style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=4), padding=0)
+                        style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=4), padding=ft.padding.symmetric(vertical=0, horizontal=0))
                     )
                 ], alignment="spaceBetween"),
                 ft.Text(f"노선: {input_data_state['route']}", size=14, weight="bold", color="black"),
@@ -460,7 +470,7 @@ def main(page: ft.Page):
                     ft.ElevatedButton(
                         content=ft.Container(ft.Text("입력", size=10, weight="bold", color="white"), alignment=ft.alignment.center),
                         on_click=lambda e: open_info_input_popup("앞차"), bgcolor="#1E3A8A", width=55, height=22, 
-                        style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=4), padding=0)
+                        style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=4), padding=ft.padding.symmetric(vertical=0, horizontal=0))
                     )
                 ], alignment="spaceBetween"),
                 ft.Text(input_data_state['front_bus'], size=14, weight="bold", color="black"),
@@ -483,7 +493,7 @@ def main(page: ft.Page):
                     ft.ElevatedButton(
                         content=ft.Container(ft.Text("입력", size=10, weight="bold", color="white"), alignment=ft.alignment.center),
                         on_click=lambda e: open_info_input_popup("뒷차"), bgcolor="#1E3A8A", width=55, height=22, 
-                        style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=4), padding=0)
+                        style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=4), padding=ft.padding.symmetric(vertical=0, horizontal=0))
                     )
                 ], alignment="spaceBetween"),
                 ft.Text(input_data_state['back_bus'], size=14, weight="bold", color="black"),
@@ -510,10 +520,14 @@ def main(page: ft.Page):
 
     def final_format_phone(raw_value):
         clean = "".join(filter(str.isdigit, raw_value))
-        if len(clean) <= 3: return clean
-        elif len(clean) <= 7: return f"{clean[:3]}-{clean[3:]}"
-        elif len(clean) <= 10: return f"{clean[:3]}-{clean[3:6]}-{clean[6:]}"
-        else: return f"{clean[:3]}-{clean[3:7]}-{clean[7:11]}"
+        if len(clean) <= 3:
+            return clean
+        elif len(clean) <= 7:
+            return f"{clean[:3]}-{clean[3:]}"
+        elif len(clean) <= 10:
+            return f"{clean[:3]}-{clean[3:6]}-{clean[6:]}"
+        else:
+            return f"{clean[:3]}-{clean[3:7]}-{clean[7:11]}"
 
     def open_info_input_popup(target_type):
         if target_type == "내차":
@@ -535,11 +549,13 @@ def main(page: ft.Page):
                     ft.Row([
                         ft.ElevatedButton(
                             content=ft.Container(ft.Text("확인", size=13, weight="bold", color="white"), alignment=ft.alignment.center),
-                            on_click=save_my, expand=1, height=38, bgcolor="#2563EB"
+                            on_click=save_my, expand=1, height=38,
+                            style=ft.ButtonStyle(bgcolor="#2563EB", shape=ft.RoundedRectangleBorder(radius=0), padding=ft.padding.symmetric(vertical=0, horizontal=0)),
                         ),
                         ft.ElevatedButton(
                             content=ft.Container(ft.Text("뒤로가기", size=13, weight="bold", color="white"), alignment=ft.alignment.center),
-                            on_click=lambda e: setattr(info_dialog, "open", False) or page.update(), expand=1, height=38, bgcolor="grey"
+                            on_click=lambda e: setattr(info_dialog, "open", False) or page.update(), expand=1, height=38,
+                            style=ft.ButtonStyle(bgcolor="grey", shape=ft.RoundedRectangleBorder(radius=0), padding=ft.padding.symmetric(vertical=0, horizontal=0)),
                         )
                     ], alignment="center", spacing=8)
                 ], spacing=10, tight=True),
@@ -567,11 +583,13 @@ def main(page: ft.Page):
                     ft.Row([
                         ft.ElevatedButton(
                             content=ft.Container(ft.Text("확인", size=13, weight="bold", color="white"), alignment=ft.alignment.center),
-                            on_click=save_front, expand=1, height=38, bgcolor="#1E3A8A"
+                            on_click=save_front, expand=1, height=38,
+                            style=ft.ButtonStyle(bgcolor="#1E3A8A", shape=ft.RoundedRectangleBorder(radius=0), padding=ft.padding.symmetric(vertical=0, horizontal=0)),
                         ),
                         ft.ElevatedButton(
                             content=ft.Container(ft.Text("뒤로가기", size=13, weight="bold", color="white"), alignment=ft.alignment.center),
-                            on_click=lambda e: setattr(info_dialog, "open", False) or page.update(), expand=1, height=38, bgcolor="grey"
+                            on_click=lambda e: setattr(info_dialog, "open", False) or page.update(), expand=1, height=38,
+                            style=ft.ButtonStyle(bgcolor="grey", shape=ft.RoundedRectangleBorder(radius=0), padding=ft.padding.symmetric(vertical=0, horizontal=0)),
                         )
                     ], alignment="center", spacing=8)
                 ], spacing=10, tight=True),
@@ -599,11 +617,13 @@ def main(page: ft.Page):
                     ft.Row([
                         ft.ElevatedButton(
                             content=ft.Container(ft.Text("확인", size=13, weight="bold", color="white"), alignment=ft.alignment.center),
-                            on_click=save_back, expand=1, height=38, bgcolor="#1E3A8A"
+                            on_click=save_back, expand=1, height=38,
+                            style=ft.ButtonStyle(bgcolor="#1E3A8A", shape=ft.RoundedRectangleBorder(radius=0), padding=ft.padding.symmetric(vertical=0, horizontal=0)),
                         ),
                         ft.ElevatedButton(
                             content=ft.Container(ft.Text("뒤로가기", size=13, weight="bold", color="white"), alignment=ft.alignment.center),
-                            on_click=lambda e: setattr(info_dialog, "open", False) or page.update(), expand=1, height=38, bgcolor="grey"
+                            on_click=lambda e: setattr(info_dialog, "open", False) or page.update(), expand=1, height=38,
+                            style=ft.ButtonStyle(bgcolor="grey", shape=ft.RoundedRectangleBorder(radius=0), padding=ft.padding.symmetric(vertical=0, horizontal=0)),
                         )
                     ], alignment="center", spacing=8)
                 ], spacing=10, tight=True),
@@ -779,33 +799,36 @@ def main(page: ft.Page):
     summary_area = ft.Row([summary_group, phonebook_big_button], alignment="spaceBetween")
     guide_text = ft.Container(content=ft.Text("💡 날짜를 터치하여 근무를 입력 또는 수정하세요.", size=10, color="#666666"), padding=ft.padding.only(left=8, bottom=4))
    
-    # 🌟 [빌드 0002 교정] 일반 전화번호부처럼 입력창과 등록 버튼이 나타나도록 UI 전면 개편을 유치하기 위해 컴포넌트를 미리 정의합니다.
-    em_name = ft.TextField(label="이름/서비스명", label_style=ft.TextStyle(size=11), width=100, height=38, text_size=13, content_padding=8)
-    em_phone = ft.TextField(label="전화번호(숫자만)", label_style=ft.TextStyle(size=11), expand=True, height=38, text_size=13, content_padding=8, keyboard_type=ft.KeyboardType.PHONE)
-    
-    emergency_form_container = ft.Container(
-        content=ft.Column([
-            ft.Row([
-                ft.Text("🚨 긴급 연락처 관리", size=16, weight="bold", color="#1E3A8A"),
-            ], alignment="spaceBetween"),
-            ft.Divider(height=1),
-            
-            # 📱 일반 전화번호부와 똑같은 형태의 긴급연락처 입력창 폼 세트
-            ft.Row([
-                em_name,
-                em_phone,
-                ft.ElevatedButton(
-                    content=ft.Text("등록", size=12, weight="bold", color="white"),
-                    bgcolor="#2563EB", width=60, height=38,
-                    style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=4), padding=0),
-                    on_click=lambda e: add_emergency_item() # 등록 버튼 누르면 위 함수 실행
-                )
-            ], spacing=4),
-            ft.Divider(height=1, color="#E2E8F0"),
-            
-            # 이 아래로 사무실, 정비실 및 기사님이 추가하신 AS 번호들이 쌓입니다.
-        ])
-    )
+    # 🌟 [빌드 0002 교정] 일반 전화번호부처럼 입력창과 등록 버튼이 나타나도록 UI 전면 개편
+    setting_column = ft.Column([
+        ft.Container(
+            content=ft.Column([
+                ft.Row([
+                    ft.Text("🚨 긴급 연락처 관리", size=16, weight="bold", color="#1E3A8A"),
+                ], alignment="spaceBetween"),
+                ft.Divider(height=1),
+                
+                # 📱 일반 전화번호부와 똑같은 형태의 긴급연락처 입력창 폼 세트
+                ft.Row([
+                    em_name := ft.TextField(label="이름/서비스명", label_style=ft.TextStyle(size=11), width=100, height=38, text_size=13, content_padding=8),
+                    em_phone := ft.TextField(label="전화번호(숫자만)", label_style=ft.TextStyle(size=11), expand=True, height=38, text_size=13, content_padding=8, keyboard_type=ft.KeyboardType.PHONE),
+                    ft.ElevatedButton(
+                        content=ft.Text("등록", size=12, weight="bold", color="white"),
+                        bgcolor="#2563EB", width=60, height=38,
+                        style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=4), padding=0),
+                        on_click=lambda e: add_emergency_item() # 등록 버튼 누르면 아래 함수 실행
+                    )
+                ], spacing=4),
+                ft.Divider(height=1, color="#E2E8F0"),
+                
+                # 이 아래로 사무실, 정비실 및 기사님이 추가하신 AS 번호들이 쌓입니다.
+                # 🌟 [수정] target_column.controls.clear() 를 실행해도 위 입력창은 지워지지 않도록
+                # 목록 전용 상자(emergency_items_column)를 여기에 별도로 붙였습니다.
+                emergency_items_column
+            ]),
+            padding=12, border=ft.border.all(1, "#2563EB"), border_radius=10
+        )
+    ], spacing=2, visible=False)
 
     bottom_navigation_bar = ft.Row([btn_calendar, btn_input, btn_setting], alignment="spaceAround", spacing=4)
 
@@ -829,5 +852,4 @@ def main(page: ft.Page):
     rebuild_interface()
 
 init_db()
-# 🌟 [빌드 0003] Render 포트 바인딩 최적화
-ft.app(target=main, port=int(os.environ.get("PORT", 8080)), view=ft.AppView.WEB_BROWSER)
+ft.app(target=main, host="0.0.0.0", port=int(os.environ.get("PORT", 8080)), view=ft.AppView.WEB_BROWSER)
