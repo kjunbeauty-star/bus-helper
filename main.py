@@ -31,10 +31,20 @@ def main(page: ft.Page):
     saved_input_data = page.client_storage.get(STORAGE_INPUT_DATA_KEY)
     # 💡 저장된 전화번호부 데이터 불러오기
     saved_phonebook = page.client_storage.get(STORAGE_PHONEBOOK_KEY)
+    # 🌟 [빌드 0002 추가] 저장된 긴급 연락처 데이터 불러오기
+    saved_emergency = page.client_storage.get(STORAGE_EMERGENCY_KEY)
+    if saved_emergency:
+        EMERGENCY_LIST = json.loads(saved_emergency)
 
     USER_SCHEDULES = json.loads(saved_schedules) if saved_schedules else {}
     MANGEUN_TARGETS = json.loads(saved_targets) if saved_targets else {}
     PHONEBOOK_LIST = json.loads(saved_phonebook) if saved_phonebook else []
+    # 🌟 [빌드 0002 추가] 긴급 연락처 리스트 (사무실, 정비실은 고정 값으로 기본 세팅)
+    EMERGENCY_LIST = [
+    {"name": "사무실", "phone": "", "is_fixed": True},
+    {"name": "정비실", "phone": "", "is_fixed": True}
+    ]
+    STORAGE_EMERGENCY_KEY = "bus_helper_emergency" # 저장용 키 신설
     
     if saved_input_data:
         input_data_state = json.loads(saved_input_data)
@@ -52,6 +62,8 @@ def main(page: ft.Page):
         page.client_storage.set(STORAGE_INPUT_DATA_KEY, json.dumps(input_data_state, ensure_ascii=False))
         # 💡 전화번호부도 함께 스토리지에 저장
         page.client_storage.set(STORAGE_PHONEBOOK_KEY, json.dumps(PHONEBOOK_LIST, ensure_ascii=False))
+        # 🌟 [빌드 0002 추가] 긴급 연락처도 함께 저장
+        page.client_storage.set(STORAGE_EMERGENCY_KEY, json.dumps(EMERGENCY_LIST))
 
     now_kst = datetime.now(KST)
     current = {"year": now_kst.year, "month": now_kst.month, "selected_date": "2026-07-05"}
@@ -127,7 +139,7 @@ def main(page: ft.Page):
         content=ft.Container(ft.Text("긴급연락처", color="white", size=11, weight="bold"), alignment=ft.alignment.center),
         expand=1, height=40, 
         style=ft.ButtonStyle(bgcolor="grey", shape=ft.RoundedRectangleBorder(radius=6), padding=ft.padding.symmetric(vertical=0, horizontal=0)), 
-        on_click=lambda e: change_tab("설정")
+        on_click=lambda e: change_tab("긴급연락처")
     )
 
     days_letters = ["일", "월", "화", "수", "목", "금", "토"]
@@ -249,6 +261,56 @@ def main(page: ft.Page):
 
         page.update()
 
+    # 🌟 [교정] 함수 괄호 안에 target_column을 넣어서 안전하게 상자를 전달받습니다.
+    def rebuild_emergency_view(target_column):
+        # 이제 외부에서 넘겨받은 상자를 깨끗이 비웁니다. 노란 줄이 사라집니다!
+        target_column.controls.clear()
+        
+        for index, item in enumerate(EMERGENCY_LIST):
+            is_fixed = item.get("is_fixed", False)
+            
+            display_text = f"{item['name']}: {item['phone']}" if item['phone'] else f"{item['name']}: (번호 없음)"
+            
+            action_buttons = [
+                ft.IconButton(
+                    icon=ft.icons.PHONE,
+                    icon_color="green",
+                    on_click=lambda e, ph=item["phone"]: page.launch_url(f"tel:{ph}") if ph else None
+                )
+            ]
+            
+            if not is_fixed:
+                action_buttons.append(
+                    ft.ElevatedButton(
+                        content=ft.Container(ft.Text("삭제", size=10, weight="bold", color="white"), alignment=ft.alignment.center),
+                        bgcolor="#1E3A8A", width=40, height=28,
+                        style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=4), padding=0),
+                        on_click=lambda e, idx=index: delete_emergency_item(idx, target_column) # 삭제할 때도 상자 전달
+                    )
+                )
+            
+            row_content = ft.Row([
+                ft.Text(display_text, size=14, weight="bold" if is_fixed else "normal", color="black"),
+                ft.Row(action_buttons, spacing=3)
+            ], alignment="spaceBetween")
+            
+            # 전달받은 상자에 차곡차곡 추가
+            target_column.controls.append(
+                ft.Container(
+                    content=row_content,
+                    padding=ft.padding.only(left=4, right=4, top=8, bottom=8),
+                    border=ft.border.Border(bottom=ft.border.BorderSide(0.5, "#E2E8F0"))
+                )
+            )
+            
+        page.update()
+
+    # 🌟 [교정] 삭제 함수도 상자를 같이 넘겨받도록 수정
+    def delete_emergency_item(index, target_column):
+        EMERGENCY_LIST.pop(index)
+        save_all_to_client_storage()
+        rebuild_emergency_view(target_column) # 삭제 후 새로고침할 때 상자 전달
+
     # 💡 전화번호 추가 로직
     def add_phonebook_item():
         tf_name = pb_name
@@ -294,8 +356,8 @@ def main(page: ft.Page):
             shape=ft.RoundedRectangleBorder(radius=6)
         )
         btn_setting.style = ft.ButtonStyle(
-            color="white" if tab_name == "설정" else "#94A3B8",
-            bgcolor="#2563EB" if tab_name == "설정" else "transparent",
+            color="white" if tab_name == "긴급연락처" else "#94A3B8",
+            bgcolor="#2563EB" if tab_name == "긴급연락처" else "transparent",
             shape=ft.RoundedRectangleBorder(radius=6)
         )
 
@@ -333,7 +395,7 @@ def main(page: ft.Page):
             # 💡 기존 전화번호부 데이터도 탭을 열 때 가나다순으로 자동 정렬
             PHONEBOOK_LIST.sort(key=lambda x: x.get("name", ""))
             rebuild_phonebook_view() # 전화번호부 탭 열릴 때 새로고침
-        elif tab_name == "설정":
+        elif tab_name == "긴급연락처":
             calendar_grid.visible = False
             input_zone_container.visible = False
             phonebook_zone_container.visible = False
