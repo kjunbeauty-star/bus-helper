@@ -330,6 +330,8 @@ def main(page: ft.Page):
             weeks_header.visible = False
             div_line1.visible = False
             div_line2.visible = False
+            # 💡 기존 전화번호부 데이터도 탭을 열 때 가나다순으로 자동 정렬
+            PHONEBOOK_LIST.sort(key=lambda x: x.get("name", ""))
             rebuild_phonebook_view() # 전화번호부 탭 열릴 때 새로고침
         elif tab_name == "설정":
             calendar_grid.visible = False
