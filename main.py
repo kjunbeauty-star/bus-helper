@@ -1,6 +1,6 @@
 # ==========================================
 # [앱 이름: 버스헬퍼 스케줄러]
-# 현재 배포 버전: 빌드 0006
+# 현재 배포 버전: 빌드 0007
 # ==========================================
 # [빌드 기록]
 # v0001 (2026-07-06) - 전일 근무 형태 및 고정 로직 추가
@@ -9,6 +9,7 @@
 # v0004 (2026-07-07) - 고정 빈 창 삭제 / '사무실','정비실' 입력 시 최상단 우선 고정 정렬 및 중복 덮어쓰기 로직 반영
 # v0005 (2026-07-07) - 긴급연락처 개별 항목 '수정/저장/취소' 모드 추가 구현
 # v0006 (2026-07-07) - 안심 알람 기능 추가 (스마트폰 자체 알람 앱 연동 로직 구현), 녹색 수화기 아이콘 전체 통일 반영
+# v0007 (2026-07-07) - 알람 앱 연동 시 빈 브라우저 먹통 오류 수정 (안드로이드 공식 시계 인텐트 표준 규격으로 교정)
 # ==========================================
 
 import os
@@ -187,7 +188,6 @@ def main(page: ft.Page):
                         )
                     ], spacing=4)
                 else:
-                    # 🌟 [기사님 통일 패치 완료] 빨간 전화기를 세련된 녹색 수화기 아이콘으로 변경
                     row_content = ft.Row([
                         ft.GestureDetector(
                             content=ft.Row([
@@ -490,13 +490,22 @@ def main(page: ft.Page):
         if phone_number and phone_number != "미입력":
             page.launch_url(f"tel:{phone_number}")
 
-    # 🌟 [빌드 0006 신설] 디바이스 자체 알람 앱 연동 링크 생성기
+    # 🌟 [빌드 0007 수정] 웹 브라우저 차단과 먹통 현상을 우회하는 안드로이드 공식 알람 인텐트 주소 표준형 교정
     def set_device_alarm(e):
         h = selected_time_state["hour"]
         m = selected_time_state["minute"]
-        # 안드로이드 및 iOS 표준 알람 앱 연동 인텐트 규격 주소 생성
-        alarm_url = f"intent://back_to_work#Intent;action=android.intent.action.SET_ALARM;i;android.intent.extra.alarm.HOUR={h};i;android.intent.extra.alarm.MINUTES={m};b;android.intent.extra.alarm.SKIP_UI=false;end"
-        page.launch_url(alarm_url)
+        
+        # 💡 intent:#Intent 액션 스펙을 완벽히 맞추어 폰 내부 시계앱 등록화면으로 다이렉트 연동 처리합니다.
+        alarm_intent = (
+            f"intent:#Intent;"
+            f"action=android.intent.action.SET_ALARM;"
+            f"i;android.intent.extra.alarm.HOUR={h};"
+            f"i;android.intent.extra.alarm.MINUTES={m};"
+            f"s;android.intent.extra.alarm.MESSAGE=버스첫탕출근;"
+            f"b;android.intent.extra.alarm.SKIP_UI=false;"
+            f"end"
+        )
+        page.launch_url(alarm_intent)
 
     def build_driving_summary_zone():
         my_card = ft.Container(
@@ -531,7 +540,6 @@ def main(page: ft.Page):
                 ft.GestureDetector(
                     content=ft.Row([
                         ft.Text(input_data_state['front_phone'], size=13, color="#1E3A8A", weight="bold"),
-                        # 🌟 [기사님 통일 패치 완료] 세련된 녹색 수화기 아이콘 반영
                         ft.Icon(ft.icons.PHONE, color="green", size=16) if input_data_state['front_phone'] != "미입력" else ft.Container()
                     ], spacing=4, alignment="start"),
                     on_tap=lambda e: make_call(input_data_state['front_phone'])
@@ -555,7 +563,6 @@ def main(page: ft.Page):
                 ft.GestureDetector(
                     content=ft.Row([
                         ft.Text(input_data_state['back_phone'], size=13, color="#1E3A8A", weight="bold"),
-                        # 🌟 [기사님 통일 패치 완료] 세련된 녹색 수화기 아이콘 반영
                         ft.Icon(ft.icons.PHONE, color="green", size=16) if input_data_state['back_phone'] != "미입력" else ft.Container()
                     ], spacing=4, alignment="start"),
                     on_tap=lambda e: make_call(input_data_state['back_phone'])
@@ -806,7 +813,6 @@ def main(page: ft.Page):
             ft.Row([ft.Text("근무 순번:", size=12, weight="bold", color="black"), order_dropdown], alignment="center", spacing=10),
             ft.Divider(height=2), 
             
-            # 🌟 [빌드 0006 핵심 수정] 저장 버튼 바로 옆에 100% 확실한 [휴대폰 알람 설정] 버튼 배치 연동
             ft.Row([
                 ft.ElevatedButton(
                     content=ft.Container(ft.Text("저장", size=14, weight="bold", color="white"), alignment=ft.alignment.center), 
@@ -814,7 +820,7 @@ def main(page: ft.Page):
                     on_click=lambda e: select_status_and_save("자동")
                 ),
                 ft.ElevatedButton(
-                    content=ft.Container(ft.Text("⏰ 알람 앱 연동", size=12, weight="bold", color="white"), alignment=ft.alignment.center), 
+                    content=ft.Container(ft.Text("⏰ 알람설정", size=12, weight="bold", color="white"), alignment=ft.alignment.center), 
                     bgcolor="#E65100", width=130, height=38, style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=6)),
                     on_click=set_device_alarm
                 )
