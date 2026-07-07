@@ -119,7 +119,7 @@ def main(page: ft.Page):
     )
 
     btn_calendar = ft.ElevatedButton(
-        content=ft.Container(content=ft.Row([ft.Icon(ft.icons.CALENDAR_MONTH, color="white", size=18), ft.Text("달력", color="white", size=11, weight="bold")], alignment=ft.MainAxisAlignment.CENTER, spacing=4), alignment=ft.alignment.center)
+        content=ft.Container(ft.Text("달력", color="white", size=11, weight="bold"), alignment=ft.alignment.center),
         expand=1, height=40, 
         style=ft.ButtonStyle(bgcolor="#2563EB", shape=ft.RoundedRectangleBorder(radius=6)), 
         on_click=lambda e: change_tab("달력")
