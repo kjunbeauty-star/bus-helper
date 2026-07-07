@@ -589,7 +589,8 @@ def main(page: ft.Page):
         month_title.value = f"{current['year']}년 {current['month']}월"
         month_prefix = f"{current['year']}-{current['month']:02d}"
         month_data = {k: v for k, v in USER_SCHEDULES.items() if k.startswith(month_prefix)}
-        work_days = sum(1 for d in month_data.values() if d.get("status") in ["오전", "오후"])
+        # 🌟 [수정] 근무 일수 계산할 때 "전일"도 근무 날짜에 포함시킵니다.
+        work_days = sum(1 for d in month_data.values() if d.get("status") in ["오전", "오후", "전일"])
         off_days = sum(1 for d in month_data.values() if d.get("status") == "휴무")
         m_target = get_mangeun_target()
         mangeun_dropdown.value = str(m_target)
@@ -619,6 +620,10 @@ def main(page: ft.Page):
                     elif status == "오후":
                         bg_color, text_color = "#E9D5FF", "#7E22CE"
                         status_desc = f"오후({order_no})" if order_no else "오후"
+                    # 🌟 [추가] '전일' 근무일 때 달력 칸을 연한 녹색 바탕에 진한 녹색 글씨로 표시
+                    elif status == "전일":
+                        bg_color, text_color = "#E6F4EA", "#137333"
+                        status_desc = f"전일({order_no})" if order_no else "전일"
                     elif status == "휴무":
                         bg_color, text_color = "#FCE8E6", "#D93025"
                         status_desc = "휴무"
@@ -665,11 +670,20 @@ def main(page: ft.Page):
             popup_layer.visible = False
             rebuild_interface()
             return
+            
         final_time = ""
         if status_value == "자동":
             h, m = selected_time_state["hour"], selected_time_state["minute"]
-            status_value = "오후" if h >= 12 else "오전"
+            
+            # 🌟 [로직 수정] 기존 상태가 '전일'인 상태에서 시간만 바꾼 거라면, 오전/오후로 분류하지 않고 '전일' 유지!
+            existing_info = USER_SCHEDULES.get(target_date, {})
+            if existing_info.get("status") == "전일":
+                status_value = "전일"
+            else:
+                status_value = "오후" if h >= 12 else "오전"
+                
             final_time = f"{h:02d}:{m:02d}"
+            
         input_order = "" if status_value == "휴무" else (order_dropdown.value if order_dropdown.value else "")
         USER_SCHEDULES[target_date] = {"status": status_value, "start_time": final_time, "order_no": input_order}
         save_all_to_client_storage()
@@ -683,14 +697,15 @@ def main(page: ft.Page):
             ft.Divider(height=1, color="transparent"),
             
             # 2️⃣ [상단 배치] 시간 없이 근무만 등록하는 버튼들
+            # 3️⃣ 시간 없이 근무만 등록하는 버튼들 (전일근무 버튼 신설!)
             ft.Text("시간 없이 근무만 등록할 때:", size=11, weight="bold", color="grey"),
             ft.Row([
                 ft.Container(content=ft.Text("휴무", size=14, weight="bold", color="white"), bgcolor="#D93025", alignment=ft.Alignment(0, 0), height=38, border_radius=6, expand=1, on_click=lambda e: select_status_and_save("휴무")),
-                ft.Container(content=ft.Text("오전근무", size=14, weight="bold", color="white"), bgcolor="#5C93E6", alignment=ft.Alignment(0, 0), height=38, border_radius=6, expand=1, on_click=lambda e: select_status_and_save("오전")),
-                ft.Container(content=ft.Text("오후근무", size=14, weight="bold", color="white"), bgcolor="#7E22CE", alignment=ft.Alignment(0, 0), height=38, border_radius=6, expand=1, on_click=lambda e: select_status_and_save("오후"))
-            ], spacing=6),
-            ft.Divider(height=4),
-
+                ft.Container(content=ft.Text("오전", size=14, weight="bold", color="white"), bgcolor="#5C93E6", alignment=ft.Alignment(0, 0), height=38, border_radius=6, expand=1, on_click=lambda e: select_status_and_save("오전")),
+                ft.Container(content=ft.Text("오후", size=14, weight="bold", color="white"), bgcolor="#7E22CE", alignment=ft.Alignment(0, 0), height=38, border_radius=6, expand=1, on_click=lambda e: select_status_and_save("오후")),
+                # 🌟 [추가] 전일근무 버튼 (녹색으로 깔끔하게 구별)
+                ft.Container(content=ft.Text("전일", size=14, weight="bold", color="white"), bgcolor="#10B981", alignment=ft.Alignment(0, 0), height=38, border_radius=6, expand=1, on_click=lambda e: select_status_and_save("전일"))
+            ], spacing=4), # 💡 버튼이 4개가 되므로 여백을 4로 살짝 줄여서 한 줄에 쏙 넣습니다.
             # 3️⃣ 첫탕 시간을 정하는 시계 바퀴 (CupertinoPicker)
             dial_row,
             
