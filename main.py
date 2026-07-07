@@ -1,10 +1,3 @@
-import os
-import sqlite3
-import calendar
-from datetime import datetime, timedelta, timezone
-import flet as ft
-import json
-
 # ==========================================
 # [앱 이름: 버스헬퍼 스케줄러]
 # 현재 배포 버전: 빌드 0002
@@ -14,13 +7,21 @@ import json
 # v0002 (2026-07-07) - 메뉴명을 '긴급연락처'로 통일하고 사무실/정비실 고정 뷰 신설
 # ==========================================
 
+import os
+import sqlite3
+import calendar
+from datetime import datetime, timedelta, timezone
+import flet as ft
+import json
+
 KST = timezone(timedelta(hours=9))
 DB_FILE = "schedules.db"
 STORAGE_SCHEDULES_KEY = "bus_helper_schedules"
 STORAGE_MANGEUN_KEY = "bus_helper_mangeun_targets"
 STORAGE_INPUT_DATA_KEY = "bus_helper_input_data"
-# 💡 전화번호부 저장용 키 신설
 STORAGE_PHONEBOOK_KEY = "bus_helper_phonebook"
+# 🌟 [빌드 0002 위치 교정] 변수를 함수 밖 최상단으로 올려 컴퓨터가 언제든 읽을 수 있게 합니다.
+STORAGE_EMERGENCY_KEY = "bus_helper_emergency" 
 
 def init_db():
     conn = sqlite3.connect(DB_FILE)
@@ -31,16 +32,25 @@ def init_db():
     conn.close()
 
 def main(page: ft.Page):
+    # 🌟 [빌드 0002 추가] 아래 구역에서 태어날 화면 상자들을 함수 안에서 미리 가져다 쓰겠다고 선언 (NameError 원천 차단)
+    global setting_column 
+
     page.title = "버스기사도우미"
     page.theme_mode = "light"
     page.padding = 4
 
+    # 🌟 [빌드 0002 위치 교정] 리스트 초기화 코드를 데이터 로드 구역보다 위로 올렸습니다.
+    EMERGENCY_LIST = [
+        {"name": "사무실", "phone": "", "is_fixed": True},
+        {"name": "정비실", "phone": "", "is_fixed": True}
+    ]
+
     saved_schedules = page.client_storage.get(STORAGE_SCHEDULES_KEY)
     saved_targets = page.client_storage.get(STORAGE_MANGEUN_KEY)
     saved_input_data = page.client_storage.get(STORAGE_INPUT_DATA_KEY)
-    # 💡 저장된 전화번호부 데이터 불러오기
     saved_phonebook = page.client_storage.get(STORAGE_PHONEBOOK_KEY)
-    # 🌟 [빌드 0002 추가] 저장된 긴급 연락처 데이터 불러오기
+    
+    # 🌟 [빌드 0002] 이제 순서가 맞아서 정상적으로 세이브 데이터를 불러옵니다.
     saved_emergency = page.client_storage.get(STORAGE_EMERGENCY_KEY)
     if saved_emergency:
         EMERGENCY_LIST = json.loads(saved_emergency)
@@ -48,12 +58,6 @@ def main(page: ft.Page):
     USER_SCHEDULES = json.loads(saved_schedules) if saved_schedules else {}
     MANGEUN_TARGETS = json.loads(saved_targets) if saved_targets else {}
     PHONEBOOK_LIST = json.loads(saved_phonebook) if saved_phonebook else []
-    # 🌟 [빌드 0002 추가] 긴급 연락처 리스트 (사무실, 정비실은 고정 값으로 기본 세팅)
-    EMERGENCY_LIST = [
-    {"name": "사무실", "phone": "", "is_fixed": True},
-    {"name": "정비실", "phone": "", "is_fixed": True}
-    ]
-    STORAGE_EMERGENCY_KEY = "bus_helper_emergency" # 저장용 키 신설
     
     if saved_input_data:
         input_data_state = json.loads(saved_input_data)
@@ -69,10 +73,9 @@ def main(page: ft.Page):
         page.client_storage.set(STORAGE_SCHEDULES_KEY, json.dumps(USER_SCHEDULES, ensure_ascii=False))
         page.client_storage.set(STORAGE_MANGEUN_KEY, json.dumps(MANGEUN_TARGETS, ensure_ascii=False))
         page.client_storage.set(STORAGE_INPUT_DATA_KEY, json.dumps(input_data_state, ensure_ascii=False))
-        # 💡 전화번호부도 함께 스토리지에 저장
         page.client_storage.set(STORAGE_PHONEBOOK_KEY, json.dumps(PHONEBOOK_LIST, ensure_ascii=False))
         # 🌟 [빌드 0002 추가] 긴급 연락처도 함께 저장
-        page.client_storage.set(STORAGE_EMERGENCY_KEY, json.dumps(EMERGENCY_LIST))
+        page.client_storage.set(STORAGE_EMERGENCY_KEY, json.dumps(EMERGENCY_LIST, ensure_ascii=False))
 
     now_kst = datetime.now(KST)
     current = {"year": now_kst.year, "month": now_kst.month, "selected_date": "2026-07-05"}
@@ -88,10 +91,8 @@ def main(page: ft.Page):
     calendar_grid = ft.Column(spacing=2)
     input_zone_container = ft.Column(spacing=2, visible=False)
     
-    # 💡 전화번호부 리스트가 담길 내부 컴포넌트 선언
     phonebook_items_column = ft.Column(spacing=6)
     
-    # 💡 전화번호부 탭 UI 전면 개편
     phonebook_zone_container = ft.Column([
         ft.Container(
             content=ft.Column([
@@ -99,12 +100,9 @@ def main(page: ft.Page):
                     ft.Text("📞 전화번호부관리", size=16, weight="bold", color="#1E3A8A"),
                 ], alignment="spaceBetween"),
                 ft.Divider(height=1),
-                
-                # 연락처 입력창 폼
                 ft.Row([
-                    pb_name := ft.TextField(label="이름/직책", label_style=ft.TextStyle(size=11), width=100, height=38, text_size=13, content_padding=8), # 💡 label_style 추가
-                    pb_phone := ft.TextField(label="전화번호(숫자만)", label_style=ft.TextStyle(size=11), expand=True, height=38, text_size=13, content_padding=8, keyboard_type=ft.KeyboardType.PHONE), # 💡 label_style 추가
-
+                    pb_name := ft.TextField(label="이름/직책", label_style=ft.TextStyle(size=11), width=100, height=38, text_size=13, content_padding=8),
+                    pb_phone := ft.TextField(label="전화번호(숫자만)", label_style=ft.TextStyle(size=11), expand=True, height=38, text_size=13, content_padding=8, keyboard_type=ft.KeyboardType.PHONE),
                     ft.ElevatedButton(
                         content=ft.Text("추가", size=12, weight="bold", color="white"),
                         bgcolor="#2563EB", width=60, height=38,
@@ -113,23 +111,17 @@ def main(page: ft.Page):
                     )
                 ], spacing=4),
                 ft.Divider(height=1, color="#E2E8F0"),
-                
-                # 연락처가 출력되는 리스트 공간
                 phonebook_items_column
             ]),
             padding=12, border=ft.border.all(1, "#2563EB"), border_radius=10
         )
     ], spacing=2, visible=False)
     
-    # 상단 전화번호부 큰 버튼 (글자 크기 20, 완벽한 직사각형 스타일 유지)
     phonebook_big_button = ft.ElevatedButton(
         content=ft.Container(ft.Text("전화번호부", color="white", size=20, weight="bold"), alignment=ft.alignment.center), 
         width=150, height=70, bgcolor="#2563EB", color="white", 
         on_click=lambda e: change_tab("전화번호"),
-        style=ft.ButtonStyle(
-            shape=ft.RoundedRectangleBorder(radius=10),
-            padding=ft.padding.all(0)
-        )
+        style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=10), padding=ft.padding.all(0))
     )
 
     btn_calendar = ft.ElevatedButton(
@@ -157,7 +149,6 @@ def main(page: ft.Page):
     div_line1 = ft.Divider(height=1)
     div_line2 = ft.Divider(height=1)
 
-    # 💡 [주석 자리] 전화번호부 리스트를 화면에 새롭게 그려주는 기능 (한글 수정/삭제 버튼 적용)
     def rebuild_phonebook_view():
         phonebook_items_column.controls.clear()
         if not PHONEBOOK_LIST:
@@ -171,20 +162,16 @@ def main(page: ft.Page):
             for index, item in enumerate(PHONEBOOK_LIST):
                 name = item.get("name", "")
                 phone = item.get("phone", "")
-                is_edit = item.get("is_edit", False) # 현재 수정 중인 상태인지 확인하는 값
-                
+                is_edit = item.get("is_edit", False)
+        
                 if is_edit:
-                    # ✏️ [수정 모드] 입력창 및 [저장] / [취소] 한글 버튼
                     edit_name = ft.TextField(value=name, width=90, height=34, text_size=13, content_padding=6)
                     edit_phone = ft.TextField(value=phone.replace("-",""), expand=True, height=34, text_size=13, content_padding=6, keyboard_type=ft.KeyboardType.PHONE)
                     
                     def save_edit(idx, en, ep):
                         if en.value and ep.value:
                             PHONEBOOK_LIST[idx] = {"name": en.value, "phone": final_format_phone(ep.value), "is_edit": False}
-                            
-                            # 🌟 [여기에 추가] 이름(name)을 기준으로 가나다순 정렬
                             PHONEBOOK_LIST.sort(key=lambda x: x.get("name", ""))
-                            
                             save_all_to_client_storage()
                             rebuild_phonebook_view()
 
@@ -205,34 +192,6 @@ def main(page: ft.Page):
                         )
                     ], spacing=4)
                 else:
-                    # 📱 [일반 모드] 연락처 정보 및 [수정] / [삭제] 한글 파란색 버튼
-                    row_content = ft.Row([
-                        ft.GestureDetector(
-                            content=ft.Row([
-                                ft.Text(f"{name}", size=14, weight="bold", color="black", width=70), # 너비를 70으로 확보
-                                ft.Text(f"{phone}", size=13, weight="bold", color="#1E3A8A", expand=True), # expand=True로 남은 공간 다 쓰기, 글자 13으로 조절
-                                ft.Text("☎️", size=12, color="red")
-                            ], spacing=4, alignment="start"),
-                            on_tap=lambda e, p=phone: make_call(p),
-                            expand=True
-                        ),
-                        ft.Row([
-                            ft.ElevatedButton(
-                                content=ft.Container(ft.Text("수정", size=11, weight="bold", color="white"), alignment=ft.alignment.center),
-                                bgcolor="#2563EB", width=46, height=30, # 버튼 크기를 더 콤팩트하게 조절
-                                style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=4), padding=0),
-                                on_click=lambda e, idx=index: toggle_edit_mode(idx, True)
-                            ),
-                            ft.ElevatedButton(
-                                content=ft.Container(ft.Text("삭제", size=11, weight="bold", color="white"), alignment=ft.alignment.center),
-                                bgcolor="#1E3A8A", width=46, height=30, # 버튼 크기를 더 콤팩트하게 조절
-                                style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=4), padding=0),
-                                on_click=lambda e, idx=index: delete_phonebook_item(idx)
-                            )
-                        ], spacing=3)
-                    ], alignment="spaceBetween")
-
-                    # 📱 [일반 모드] 연락처 정보 및 [수정] / [삭제] 슬림 한글 버튼
                     row_content = ft.Row([
                         ft.GestureDetector(
                             content=ft.Row([
@@ -246,38 +205,34 @@ def main(page: ft.Page):
                         ft.Row([
                             ft.ElevatedButton(
                                 content=ft.Container(ft.Text("수정", size=10, weight="bold", color="white"), alignment=ft.alignment.center),
-                                bgcolor="#2563EB", width=40, height=28, # 💡 가로 40, 높이 28로 더 슬림하게 조절
+                                bgcolor="#2563EB", width=40, height=28,
                                 style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=4), padding=0),
                                 on_click=lambda e, idx=index: toggle_edit_mode(idx, True)
                             ),
                             ft.ElevatedButton(
                                 content=ft.Container(ft.Text("삭제", size=10, weight="bold", color="white"), alignment=ft.alignment.center),
-                                bgcolor="#1E3A8A", width=40, height=28, # 💡 가로 40, 높이 28로 더 슬림하게 조절
+                                bgcolor="#1E3A8A", width=40, height=28,
                                 style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=4), padding=0),
                                 on_click=lambda e, idx=index: delete_phonebook_item(idx)
                             )
                         ], spacing=3)
                     ], alignment="spaceBetween")
 
-                # 💡 이 부분이 박스를 없애고 아래쪽 라인(밑줄)으로 넒게 정의하는 핵심 코드입니다!
                 phonebook_items_column.controls.append(
                     ft.Container(
                         content=row_content,
-                        padding=ft.padding.only(left=4, right=4, top=8, bottom=8), # 좌우 여백을 줄여 가로를 넓게 씀
-                        border=ft.border.Border(bottom=ft.border.BorderSide(0.5, "#E2E8F0")) # 💡 사방 박스 대신 하단 밑줄만 적용!
+                        padding=ft.padding.only(left=4, right=4, top=8, bottom=8),
+                        border=ft.border.Border(bottom=ft.border.BorderSide(0.5, "#E2E8F0"))
                     )
                 )
-
         page.update()
 
-    # 🌟 [교정] 함수 괄호 안에 target_column을 넣어서 안전하게 상자를 전달받습니다.
+    # 🌟 [빌드 0002 신설] 긴급 연락처 뷰 생성 함수 (target_column 매칭 완료)
     def rebuild_emergency_view(target_column):
-        # 이제 외부에서 넘겨받은 상자를 깨끗이 비웁니다. 노란 줄이 사라집니다!
         target_column.controls.clear()
         
         for index, item in enumerate(EMERGENCY_LIST):
             is_fixed = item.get("is_fixed", False)
-            
             display_text = f"{item['name']}: {item['phone']}" if item['phone'] else f"{item['name']}: (번호 없음)"
             
             action_buttons = [
@@ -294,7 +249,7 @@ def main(page: ft.Page):
                         content=ft.Container(ft.Text("삭제", size=10, weight="bold", color="white"), alignment=ft.alignment.center),
                         bgcolor="#1E3A8A", width=40, height=28,
                         style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=4), padding=0),
-                        on_click=lambda e, idx=index: delete_emergency_item(idx, target_column) # 삭제할 때도 상자 전달
+                        on_click=lambda e, idx=index: delete_emergency_item(idx, target_column)
                     )
                 )
             
@@ -303,7 +258,6 @@ def main(page: ft.Page):
                 ft.Row(action_buttons, spacing=3)
             ], alignment="spaceBetween")
             
-            # 전달받은 상자에 차곡차곡 추가
             target_column.controls.append(
                 ft.Container(
                     content=row_content,
@@ -311,39 +265,32 @@ def main(page: ft.Page):
                     border=ft.border.Border(bottom=ft.border.BorderSide(0.5, "#E2E8F0"))
                 )
             )
-            
         page.update()
 
-    # 🌟 [교정] 삭제 함수도 상자를 같이 넘겨받도록 수정
+    # 🌟 [빌드 0002 신설] 긴급 연락처 AS 항목 삭제 함수
     def delete_emergency_item(index, target_column):
         EMERGENCY_LIST.pop(index)
         save_all_to_client_storage()
-        rebuild_emergency_view(target_column) # 삭제 후 새로고침할 때 상자 전달
+        rebuild_emergency_view(target_column)
 
-    # 💡 전화번호 추가 로직
     def add_phonebook_item():
         tf_name = pb_name
         tf_phone = pb_phone
-        
         if tf_name.value and tf_phone.value:
             formatted_num = final_format_phone(tf_phone.value)
             PHONEBOOK_LIST.append({"name": tf_name.value, "phone": formatted_num})
-            
-            # 🌟 [여기에 추가] 이름(name)을 기준으로 가나다순 정렬
             PHONEBOOK_LIST.sort(key=lambda x: x.get("name", ""))
-            
             save_all_to_client_storage()
             tf_name.value = ""
             tf_phone.value = ""
             rebuild_phonebook_view()
 
-    # 💡 전화번호 삭제 로직
     def delete_phonebook_item(index):
         if 0 <= index < len(PHONEBOOK_LIST):
             PHONEBOOK_LIST.pop(index)
             save_all_to_client_storage()
             rebuild_phonebook_view()
-    # 💡 전화번호 수정 모드 전환 함수
+
     def toggle_edit_mode(index, status):
         if 0 <= index < len(PHONEBOOK_LIST):
             PHONEBOOK_LIST[index]["is_edit"] = status
@@ -353,10 +300,9 @@ def main(page: ft.Page):
         nonlocal current_tab
         current_tab = tab_name
         
-        # 💡 배경색과 글자색은 그대로 부드럽게 제어합니다.
         btn_calendar.style = ft.ButtonStyle(
             color="white" if tab_name == "달력" else "#94A3B8",
-            bgcolor="#2563EB" if tab_name == "달력" else "transparent", # 활성화될 때만 배경색을 은은하게 주거나 투명하게 제어
+            bgcolor="#2563EB" if tab_name == "달력" else "transparent",
             shape=ft.RoundedRectangleBorder(radius=6)
         )
         btn_input.style = ft.ButtonStyle(
@@ -370,11 +316,6 @@ def main(page: ft.Page):
             shape=ft.RoundedRectangleBorder(radius=6)
         )
 
-        # 📱 [추가] 기사님이 원하셨던 전화번호부 타이틀/버튼 색상 제어! 
-        # 전화번호부 탭("전화번호")이 열렸을 때만 파란색, 달력이나 운행정보일 때는 그레이로 자동 전환됩니다.
-        # (※ 만약 전화번호부 버튼 변수명이 다르면 그 이름으로 바꿔주세요)
-        # phonebook_title.color = "#2563EB" if tab_name == "전화번호" else "grey"
-
         btn_calendar.update()
         btn_input.update()
         btn_setting.update()
@@ -383,6 +324,7 @@ def main(page: ft.Page):
             calendar_grid.visible = True
             input_zone_container.visible = False
             phonebook_zone_container.visible = False
+            setting_column.visible = False # 🌟 긴급연락처 상자 숨김 추가
             weeks_header.visible = True
             div_line1.visible = True
             div_line2.visible = True
@@ -390,6 +332,7 @@ def main(page: ft.Page):
             calendar_grid.visible = False
             input_zone_container.visible = True
             phonebook_zone_container.visible = False
+            setting_column.visible = False # 🌟 긴급연락처 상자 숨김 추가
             weeks_header.visible = False
             div_line1.visible = False
             div_line2.visible = False
@@ -398,23 +341,22 @@ def main(page: ft.Page):
             calendar_grid.visible = False
             input_zone_container.visible = False
             phonebook_zone_container.visible = True
+            setting_column.visible = False # 🌟 긴급연락처 상자 숨김 추가
             weeks_header.visible = False
             div_line1.visible = False
             div_line2.visible = False
-            # 💡 기존 전화번호부 데이터도 탭을 열 때 가나다순으로 자동 정렬
             PHONEBOOK_LIST.sort(key=lambda x: x.get("name", ""))
-            rebuild_phonebook_view() # 전화번호부 탭 열릴 때 새로고침
+            rebuild_phonebook_view()
+        # 🌟 [빌드 0002 단어 교체 완전 반영] 겉과 속 모두 '긴급연락처'로 매칭 완료!
         elif tab_name == "긴급연락처":
-            global setting_column # 🌟 [이것만 추가] 아래쪽에 있는 setting_column을 가져와서 쓰겠다는 뜻입니다!
             calendar_grid.visible = False
             input_zone_container.visible = False
             phonebook_zone_container.visible = False
+            setting_column.visible = True # 🌟 긴급연락처 상자 보이기 활성화!
             weeks_header.visible = False
             div_line1.visible = False
             div_line2.visible = False
-            setting_column.visible = True # 이제 컴퓨터가 에러 안 내고 잘 알아듣습니다!
-            
-            rebuild_emergency_view(setting_column)
+            rebuild_emergency_view(setting_column) # 🌟 진짜 상자 이름인 setting_column 주입!
 
         page.update()
 
@@ -664,7 +606,6 @@ def main(page: ft.Page):
         month_title.value = f"{current['year']}년 {current['month']}월"
         month_prefix = f"{current['year']}-{current['month']:02d}"
         month_data = {k: v for k, v in USER_SCHEDULES.items() if k.startswith(month_prefix)}
-        # 🌟 [수정] 근무 일수 계산할 때 "전일"도 근무 날짜에 포함시킵니다.
         work_days = sum(1 for d in month_data.values() if d.get("status") in ["오전", "오후", "전일"])
         off_days = sum(1 for d in month_data.values() if d.get("status") == "휴무")
         m_target = get_mangeun_target()
@@ -695,7 +636,6 @@ def main(page: ft.Page):
                     elif status == "오후":
                         bg_color, text_color = "#E9D5FF", "#7E22CE"
                         status_desc = f"오후({order_no})" if order_no else "오후"
-                    # 🌟 [추가] '전일' 근무일 때 달력 칸을 연한 녹색 바탕에 진한 녹색 글씨로 표시
                     elif status == "전일":
                         bg_color, text_color = "#E6F4EA", "#137333"
                         status_desc = f"전일({order_no})" if order_no else "전일"
@@ -713,7 +653,7 @@ def main(page: ft.Page):
                     )
                     week_row.controls.append(day_box)
             calendar_grid.controls.append(week_row)
-        
+         
         if current_tab == "운행정보":
             refresh_input_tab_view()
 
@@ -749,8 +689,6 @@ def main(page: ft.Page):
         final_time = ""
         if status_value == "자동":
             h, m = selected_time_state["hour"], selected_time_state["minute"]
-            
-            # 🌟 [로직 수정] 기존 상태가 '전일'인 상태에서 시간만 바꾼 거라면, 오전/오후로 분류하지 않고 '전일' 유지!
             existing_info = USER_SCHEDULES.get(target_date, {})
             if existing_info.get("status") == "전일":
                 status_value = "전일"
@@ -767,31 +705,19 @@ def main(page: ft.Page):
 
     popup_card = ft.Container(
         content=ft.Column([
-            # 1️⃣ 날짜 타이틀 (맨 위)
             ft.Row([popup_date_title], alignment="center"), 
             ft.Divider(height=1, color="transparent"),
-            
-            # 2️⃣ [상단 배치] 시간 없이 근무만 등록하는 버튼들
-            # 3️⃣ 시간 없이 근무만 등록하는 버튼들 (전일근무 버튼 신설!)
             ft.Text("시간 없이 근무만 등록할 때:", size=11, weight="bold", color="grey"),
             ft.Row([
                 ft.Container(content=ft.Text("휴무", size=14, weight="bold", color="white"), bgcolor="#D93025", alignment=ft.Alignment(0, 0), height=38, border_radius=6, expand=1, on_click=lambda e: select_status_and_save("휴무")),
                 ft.Container(content=ft.Text("오전", size=14, weight="bold", color="white"), bgcolor="#5C93E6", alignment=ft.Alignment(0, 0), height=38, border_radius=6, expand=1, on_click=lambda e: select_status_and_save("오전")),
                 ft.Container(content=ft.Text("오후", size=14, weight="bold", color="white"), bgcolor="#7E22CE", alignment=ft.Alignment(0, 0), height=38, border_radius=6, expand=1, on_click=lambda e: select_status_and_save("오후")),
-                # 🌟 [추가] 전일근무 버튼 (녹색으로 깔끔하게 구별)
                 ft.Container(content=ft.Text("전일", size=14, weight="bold", color="white"), bgcolor="#10B981", alignment=ft.Alignment(0, 0), height=38, border_radius=6, expand=1, on_click=lambda e: select_status_and_save("전일"))
-            ], spacing=4), # 💡 버튼이 4개가 되므로 여백을 4로 살짝 줄여서 한 줄에 쏙 넣습니다.
-            # 3️⃣ 첫탕 시간을 정하는 시계 바퀴 (CupertinoPicker)
+            ], spacing=4),
             dial_row,
-            
-            # 4️⃣ [위치 교정] 시계 바퀴 바로 아래로 내려온 근무 순번 선택 영역
             ft.Row([ft.Text("근무 순번:", size=12, weight="bold", color="black"), order_dropdown], alignment="center", spacing=10),
             ft.Divider(height=2), 
-            
-            # 5️⃣ 파란색 저장 버튼 (순번 바로 밑으로)
             ft.Row([ft.Container(content=ft.Text("저장", size=14, weight="bold", color="white"), bgcolor="#2563EB", alignment=ft.Alignment(0, 0), width=160, height=38, border_radius=6, on_click=lambda e: select_status_and_save("자동"))], alignment="center"),
-            
-            # 6️⃣ 맨 아래 취소/닫기 영역
             ft.Divider(height=1, color="transparent"),
             ft.Row([ft.TextButton("선택취소(삭제)", on_click=lambda e: select_status_and_save("선택취소"), style=ft.ButtonStyle(color="red")), ft.TextButton("닫기", on_click=lambda e: setattr(popup_layer, "visible", False) or page.update())], alignment="spaceBetween")
         ], spacing=6, tight=True),
@@ -828,8 +754,16 @@ def main(page: ft.Page):
     
     summary_group = ft.Column([stats_text, mangeun_text, mangeun_setting_row], spacing=6, tight=True)
     summary_area = ft.Row([summary_group, phonebook_big_button], alignment="spaceBetween")
-    # ↓↓↓ 안내문구 추가 날짜를 터치하여 근무를 입력 또는 수정하세요 ↓↓↓
     guide_text = ft.Container(content=ft.Text("💡 날짜를 터치하여 근무를 입력 또는 수정하세요.", size=10, color="#666666"), padding=ft.padding.only(left=8, bottom=4))
+   
+    # 🌟 [설정 디자인 구역] 기사님이 468번 줄에 설계해 두셨던 setting_column입니다.
+    setting_column = ft.Column([
+        ft.Container(
+            content=ft.Text("⚠️ 긴급 연락처 기능 레이아웃 구성 중...", size=14, color="grey"),
+            padding=20
+        )
+    ], visible=False)
+
     bottom_navigation_bar = ft.Row([btn_calendar, btn_input, btn_setting], alignment="spaceAround", spacing=4)
 
     scrollable_content = ft.Column(
@@ -838,7 +772,8 @@ def main(page: ft.Page):
             weeks_header, div_line2,
             calendar_grid,
             input_zone_container,
-            phonebook_zone_container 
+            phonebook_zone_container,
+            setting_column # 🌟 스크롤 영역에 진짜 상자 포함
         ],
         expand=True, scroll=ft.ScrollMode.AUTO
     )
