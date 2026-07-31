@@ -466,4 +466,4 @@ def main(page: ft.Page):
     
     change_tab("달력"); rebuild_interface()
 
-ft.app(target=main, port=int(os.environ.get("PORT", 8080)), view=ft.AppView.WEB_BROWSER)
+ft.app(target=main, port=int(os.environ.get("PORT", 8080)), view=ft.AppView.WEB_BROWSER, assets_dir="assets")
