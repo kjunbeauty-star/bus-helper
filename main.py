@@ -350,7 +350,7 @@ def main(page: ft.Page):
     # 앞차/뒷차/내차 세부 입력용 팝업 조립 레이아웃 구역
     def open_info_input_popup(target_type):
         if target_type == "내차":
-            tf_route, tf_bus_no = ft.TextField(label="노선번호", value=input_data_state["route"].replace("미입력",""), keyboard_type=ft.KeyboardType.NUMBER, expand=True, height=38), ft.TextField(label="내차번호", value=input_data_state["bus_no"].replace("호","").replace("미입력",""), keyboard_type=ft.KeyboardType.NUMBER, expand=True, height=38)
+            tf_route, tf_bus_no = ft.TextField(label="노선번호", value=input_data_state["route"].replace("미입력",""), keyboard_type=ft.KeyboardType.TEXT, expand=True, height=38), ft.TextField(label="내차번호", value=input_data_state["bus_no"].replace("호","").replace("미입력",""), keyboard_type=ft.KeyboardType.NUMBER, expand=True, height=38)
             def save_my(e):
                 input_data_state["route"], input_data_state["bus_no"] = tf_route.value if tf_route.value else "미입력", f"{tf_bus_no.value}호" if tf_bus_no.value else "미입력"
                 save_all_to_client_storage(); info_dialog.open = False; page.update(); rebuild_interface()
