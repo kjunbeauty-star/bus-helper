@@ -4,7 +4,6 @@
 # ==========================================
 
 import os
-import sqlite3
 import calendar
 from datetime import datetime, timedelta, timezone
 import flet as ft
@@ -12,21 +11,11 @@ import json
 
 # 한국 표준시(KST) 및 데이터베이스/저장소 키 설정
 KST = timezone(timedelta(hours=9))
-DB_FILE = "schedules.db"
 STORAGE_SCHEDULES_KEY = "bus_helper_schedules"
 STORAGE_MANGEUN_KEY = "bus_helper_mangeun_targets"
 STORAGE_INPUT_DATA_KEY = "bus_helper_input_data"
 STORAGE_PHONEBOOK_KEY = "bus_helper_phonebook"
 STORAGE_EMERGENCY_KEY = "bus_helper_emergency" 
-
-# 구버전 호환용 SQLite 초기화 (현재는 클라이언트 스토리지를 주력으로 사용)
-def init_db():
-    conn = sqlite3.connect(DB_FILE)
-    cursor = conn.cursor()
-    cursor.execute("CREATE TABLE IF NOT EXISTS schedules (date_key TEXT PRIMARY KEY, status TEXT, start_time TEXT)")
-    cursor.execute("CREATE TABLE IF NOT EXISTS mangeun_targets (month_key TEXT PRIMARY KEY, target INTEGER)")
-    conn.commit()
-    conn.close()
 
 def main(page: ft.Page):
     page.title = "버스기사도우미"
@@ -477,5 +466,4 @@ def main(page: ft.Page):
     
     change_tab("달력"); rebuild_interface()
 
-init_db()
 ft.app(target=main, port=int(os.environ.get("PORT", 8080)), view=ft.AppView.WEB_BROWSER)
