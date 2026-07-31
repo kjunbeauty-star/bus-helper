@@ -298,13 +298,13 @@ def main(page: ft.Page):
         except: pass
 
     mangeun_dropdown = ft.Dropdown(options=[ft.dropdown.Option(str(i)) for i in range(15, 27)], width=62, height=36, text_size=12, content_padding=ft.padding.symmetric(vertical=4, horizontal=8))
-    hour_picker = ft.CupertinoPicker(controls=[ft.Text(f"{i:02d}", size=20) for i in range(24)], selected_index=5, on_change=lambda e: update_hour(int(e.control.selected_index)), height=100, expand=1, looping=True)
-    minute_picker = ft.CupertinoPicker(controls=[ft.Text(f"{i:02d}", size=20) for i in range(60)], selected_index=0, on_change=lambda e: update_minute(int(e.control.selected_index)), height=100, expand=1, looping=True)
+    hour_picker = ft.Dropdown(options=[ft.dropdown.Option(f"{i:02d}") for i in range(24)], value="05", width=100, height=48, text_size=18, content_padding=ft.padding.symmetric(vertical=8, horizontal=10), on_change=lambda e: update_hour(int(e.control.value)))
+    minute_picker = ft.Dropdown(options=[ft.dropdown.Option(f"{i:02d}") for i in range(60)], value="00", width=100, height=48, text_size=18, content_padding=ft.padding.symmetric(vertical=8, horizontal=10), on_change=lambda e: update_minute(int(e.control.value)))
 
     def update_hour(val): selected_time_state["hour"] = val
     def update_minute(val): selected_time_state["minute"] = val
 
-    dial_row = ft.Row([hour_picker, ft.Text(":", size=20, weight="bold", color="black"), minute_picker], alignment="center", height=100)
+    dial_row = ft.Row([hour_picker, ft.Text(":", size=20, weight="bold", color="black"), minute_picker], alignment="center")
     popup_layer = ft.Container(visible=False, bgcolor="#AA000000", alignment=ft.Alignment(0, 0), expand=True)
     mangeun_popup_layer = ft.Container(visible=False, bgcolor="#AA000000", alignment=ft.Alignment(0, 0), expand=True)
 
@@ -409,9 +409,9 @@ def main(page: ft.Page):
         if current_time and ":" in current_time:
             h, m = map(int, current_time.split(":"))
             selected_time_state["hour"], selected_time_state["minute"] = h, m
-            hour_picker.selected_index, minute_picker.selected_index = h, m
+            hour_picker.value, minute_picker.value = f"{h:02d}", f"{m:02d}"
         else:
-            selected_time_state["hour"], selected_time_state["minute"], hour_picker.selected_index, minute_picker.selected_index = 5, 0, 5, 0
+            selected_time_state["hour"], selected_time_state["minute"], hour_picker.value, minute_picker.value = 5, 0, "05", "00"        
         popup_layer.content, popup_layer.visible = popup_card, True; page.update()
 
     # 근무 선택 및 저장/삭제 공통 로직 처리 함수
