@@ -26,7 +26,7 @@ jobs:
         with:
           channel: "stable"
       - run: pip install -r requirements.txt
-      - run: flet build web main.py --route-url-strategy hash
+      - run: flet build web --route-url-strategy hash
       - uses: actions/upload-pages-artifact@v3
         with:
           path: build/web
