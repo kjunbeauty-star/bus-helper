@@ -17,6 +17,7 @@ STORAGE_INPUT_DATA_KEY = "bus_helper_input_data"
 STORAGE_PHONEBOOK_KEY = "bus_helper_phonebook"
 STORAGE_EMERGENCY_KEY = "bus_helper_emergency"
 STORAGE_PATTERN_KEY = "bus_helper_work_pattern"
+STORAGE_MEMO_KEY = "bus_helper_date_memos"
 
 # 🔁 반복 근무 패턴 정의 (버스종사자 근무 유형별 순환 사이클)
 WORK_PATTERNS = {
@@ -84,6 +85,9 @@ def main(page: ft.Page):
     # pattern_state: name(패턴명) / anchor_date(기준일 YYYY-MM-DD) / anchor_index(그날이 패턴의 몇 번째인지)
     pattern_state = json.loads(saved_pattern) if saved_pattern else {"name": None, "anchor_date": None, "anchor_index": 0}
 
+    saved_memos = page.client_storage.get(STORAGE_MEMO_KEY)
+    DATE_MEMOS = json.loads(saved_memos) if saved_memos else {}
+
     USER_SCHEDULES = json.loads(saved_schedules) if saved_schedules else {}
     MANGEUN_TARGETS = json.loads(saved_targets) if saved_targets else {}
     PHONEBOOK_LIST = json.loads(saved_phonebook) if saved_phonebook else []
@@ -107,6 +111,7 @@ def main(page: ft.Page):
         page.client_storage.set(STORAGE_PHONEBOOK_KEY, json.dumps(PHONEBOOK_LIST, ensure_ascii=False))
         page.client_storage.set(STORAGE_EMERGENCY_KEY, json.dumps(EMERGENCY_LIST, ensure_ascii=False))
         page.client_storage.set(STORAGE_PATTERN_KEY, json.dumps(pattern_state, ensure_ascii=False))
+        page.client_storage.set(STORAGE_MEMO_KEY, json.dumps(DATE_MEMOS, ensure_ascii=False))
 
     # 앱 켜질 때 오늘 날짜 및 시간 제어용 초기값 설정
     now_kst = datetime.now(KST)
@@ -392,18 +397,24 @@ def main(page: ft.Page):
         pattern_select_box.content.value, pattern_select_box.content.color = name, "black"
         open_pattern_popup(name)
 
+    def pick_direct_input(e=None):
+        pattern_name_popup_layer.visible = False
+        clear_pattern(None)
+
     def open_pattern_name_popup(e=None):
+        direct_row = ft.Container(content=ft.Text("직접입력 (패턴 사용 안함)", size=15, weight="bold", color="grey"), alignment=ft.alignment.center_left, padding=ft.padding.symmetric(vertical=10, horizontal=14), border_radius=6, bgcolor="#F1F5F9", on_click=pick_direct_input)
         rows = [ft.Container(content=ft.Text(name, size=15, weight="bold", color="black"), alignment=ft.alignment.center_left, padding=ft.padding.symmetric(vertical=10, horizontal=14), border_radius=6, bgcolor="#F1F5F9", on_click=lambda e, n=name: pick_pattern_name(n)) for name in WORK_PATTERNS.keys()]
+        all_rows = [direct_row] + rows
         pattern_name_popup_layer.content = make_full_width_sheet(ft.Column([
                 ft.Text("근무형태 선택", size=16, weight="bold", color="black"),
-                ft.Column(rows, spacing=6, scroll=ft.ScrollMode.AUTO, height=min(300, len(rows) * 48), horizontal_alignment="stretch"),
+                ft.Column(all_rows, spacing=6, scroll=ft.ScrollMode.AUTO, height=min(340, len(all_rows) * 48), horizontal_alignment="stretch"),
                 ft.Divider(height=1),
                 ft.Row([ft.ElevatedButton(content=ft.Container(ft.Text("취소", size=14, weight="bold", color="white"), alignment=ft.alignment.center), bgcolor="grey", expand=1, height=40, style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=6), padding=0), on_click=close_pattern_name_popup)], spacing=8),
             ], spacing=10, tight=True, horizontal_alignment="stretch"))
         pattern_name_popup_layer.visible = True
         page.update()
 
-    pattern_select_box = ft.Container(content=ft.Text("눌러서 선택하세요", size=13, color="grey"), width=260, height=44, border=ft.border.all(1, "#94A3B8"), border_radius=6, padding=ft.padding.symmetric(vertical=8, horizontal=10), alignment=ft.alignment.center_left, on_click=open_pattern_name_popup)
+    pattern_select_box = ft.Container(content=ft.Text("눌러서 선택하세요", size=13, color="grey"), height=44, border=ft.border.all(1, "#94A3B8"), border_radius=6, padding=ft.padding.symmetric(vertical=8, horizontal=10), alignment=ft.alignment.center_left, on_click=open_pattern_name_popup)
     pattern_status_text = ft.Text("", size=12, color="grey")
 
     def rebuild_settings_view():
@@ -422,10 +433,7 @@ def main(page: ft.Page):
                     pattern_status_text,
                     ft.Text("패턴 선택:", size=12, color="grey"),
                     pattern_select_box,
-                    ft.Row([
-                        ft.ElevatedButton(content=ft.Container(ft.Text("패턴 해제", size=14, weight="bold", color="white"), alignment=ft.alignment.center), bgcolor="grey", expand=1, height=40, style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=6), padding=0), on_click=clear_pattern),
-                    ], spacing=8),
-                ], spacing=8, tight=True),
+                ], spacing=8, tight=True, horizontal_alignment="stretch"),
                 padding=12, bgcolor="#F8FAFC", border_radius=8, border=ft.border.all(1, "#E2E8F0"),
             )
         )
@@ -517,20 +525,22 @@ def main(page: ft.Page):
 
     # 🧭 URL 라우팅: 브라우저/안드로이드 "뒤로가기"가 각 화면 → 달력(홈)으로 자연스럽게 이어지도록 연결
     ROUTE_TO_TAB = {"/": "달력", "/home": "달력", "/status": "근무현황", "/emergency": "긴급연락처", "/settings": "설정"}
-    home_route_padded = {"done": False}
+    suppress_next_pad = {"flag": False}
 
     def on_route_change(e):
         change_tab(ROUTE_TO_TAB.get(page.route, "달력"))
         # 🚫 달력(홈) 화면에서 뒤로가기를 눌러도 앱이 꺼지지 않도록,
-        # "/"와 "/home"을 딱 한 번만 번갈아 쌓아서 뒤로 갈 곳을 만들어둠
-        # (가드 없이 매번 실행하면 "/" ↔ "/home"이 서로를 계속 호출해 무한루프/깜빡임이 발생함)
-        if home_route_padded["done"]:
+        # 달력에 도착할 때마다 "/"↔"/home"을 한 번씩 더 쌓아서 뒤로 갈 곳을 항상 남겨둠.
+        # (직전 호출이 "내가 방금 스스로 호출한 page.go()"였는지를 플래그로 구분해서
+        #  "/"와 "/home"이 서로를 무한히 계속 호출하는 걸 막음 — 이게 없으면 무한루프/깜빡임 발생)
+        if suppress_next_pad["flag"]:
+            suppress_next_pad["flag"] = False
             return
         if page.route == "/":
-            home_route_padded["done"] = True
+            suppress_next_pad["flag"] = True
             page.go("/home")
         elif page.route == "/home":
-            home_route_padded["done"] = True
+            suppress_next_pad["flag"] = True
             page.go("/")
 
     page.on_route_change = on_route_change
@@ -546,6 +556,7 @@ def main(page: ft.Page):
 
     # 달력 날짜 클릭 시 튀어나오는 첫탕 근무등록 팝업창 세팅들
     popup_date_title = ft.Text("", size=16, weight="bold", color="black", text_align="center")
+    memo_field = ft.TextField(cursor_width=1, label="메모 (선택 입력)", hint_text="예: 미용실, 병원 예약 등", height=44, text_size=13, content_padding=ft.padding.symmetric(vertical=8, horizontal=10))
     order_value_state = {"value": ""}
 
     def close_value_picker(e=None):
@@ -725,7 +736,9 @@ def main(page: ft.Page):
         screen_h = page.height or 700
         chrome_overhead = 230  # 상단바+안내문구+요일줄+구분선+하단탭 등이 차지하는 대략적 높이
         available_h = max(screen_h - chrome_overhead, 60 * len(weeks))
-        cell_h = max(60, min(100, available_h / len(weeks)))
+        # ⚠️ 예전엔 cell_h를 100px로 상한을 씌워서, 주(week) 수가 적은 달이나 화면이 큰 기기에서는
+        # 달력이 남는 공간을 다 못 채우고 하단 메뉴 사이에 빈 공간이 크게 남았음 → 상한 제거하고 화면을 꽉 채움
+        cell_h = max(60, available_h / len(weeks))
         for week in weeks:
             week_row = ft.Row(alignment="spaceAround", spacing=0)
             for day in week:
@@ -744,12 +757,14 @@ def main(page: ft.Page):
                     holiday_name = HOLIDAYS.get(date_key)
                     day_number_color = "#D93025" if (weekday == 6 or holiday_name) else ("#1A73E8" if weekday == 5 else "#000000")
                     time_display = ft.Text(start_time, size=10, weight="bold", color=text_color) if start_time and status != "휴무" else ft.Container()
+                    memo_text = DATE_MEMOS.get(date_key, "")
+                    memo_display = ft.Text(memo_text, size=9, color="#7E22CE", max_lines=1, overflow=ft.TextOverflow.ELLIPSIS) if memo_text else ft.Container()
                     day_number_row = ft.Row(
                         [ft.Text(f"{day}", size=15, weight="normal", italic=True, color=day_number_color)] +
                         ([ft.Text(holiday_name, size=8, weight="bold", color="#D93025")] if holiday_name else []),
                         alignment="center", spacing=3, tight=True,
                     )
-                    day_box = ft.Container(content=ft.Column([day_number_row, ft.Text(status_desc, size=12, weight="bold", color=text_color), time_display], alignment="start", horizontal_alignment="center", spacing=2), bgcolor="#FFFFFF", padding=ft.padding.only(top=0), border=ft.border.all(2, "#2563EB") if (current['year'] == today_y and current['month'] == today_m and day == today_d) else ft.border.all(0.5, "black"), border_radius=0, height=cell_h, expand=1, on_click=lambda e, dk=date_key: open_input_popup(dk))
+                    day_box = ft.Container(content=ft.Column([day_number_row, ft.Text(status_desc, size=12, weight="bold", color=text_color), time_display, memo_display], alignment="start", horizontal_alignment="center", spacing=2), bgcolor="#FFFFFF", padding=ft.padding.only(top=0), border=ft.border.all(2, "#2563EB") if (current['year'] == today_y and current['month'] == today_m and day == today_d) else ft.border.all(0.5, "black"), border_radius=0, height=cell_h, expand=1, on_click=lambda e, dk=date_key: open_input_popup(dk))
                     week_row.controls.append(day_box)
             calendar_grid.controls.append(week_row)
         if current_tab == "근무현황": refresh_input_tab_view()
@@ -834,16 +849,22 @@ def main(page: ft.Page):
             selected_time_state["hour"], selected_time_state["minute"] = None, None
             hour_display_box.content.value, minute_display_box.content.value = "시간", "분"
             hour_display_box.content.color, minute_display_box.content.color = "grey", "grey"
+        memo_field.value = DATE_MEMOS.get(date_key, "")
         popup_layer.content, popup_layer.visible = popup_card, True; page.update()
 
     # 근무 저장 및 삭제 처리 함수
     def select_status_and_save(action):
         target_date = current["selected_date"]
         if action == "선택취소":
-            USER_SCHEDULES.pop(target_date, None); save_all_to_client_storage(); popup_layer.visible = False; rebuild_interface(); return
+            USER_SCHEDULES.pop(target_date, None); DATE_MEMOS.pop(target_date, None); save_all_to_client_storage(); popup_layer.visible = False; rebuild_interface(); return
+        memo_value = memo_field.value.strip() if memo_field.value else ""
+        if memo_value:
+            DATE_MEMOS[target_date] = memo_value
+        else:
+            DATE_MEMOS.pop(target_date, None)
         status_value = pending_status_state["value"]
         if not status_value:
-            popup_layer.visible = False; page.update(); return
+            save_all_to_client_storage(); popup_layer.visible = False; rebuild_interface(); return
         h, m = selected_time_state["hour"], selected_time_state["minute"]
         final_time = f"{h:02d}:{m:02d}" if (status_value != "휴무" and h is not None and m is not None) else ""
         USER_SCHEDULES[target_date] = {"status": status_value, "start_time": final_time, "order_no": "" if status_value == "휴무" else order_value_state["value"]}
@@ -855,8 +876,15 @@ def main(page: ft.Page):
             ft.Row([current_status_display, ft.ElevatedButton(content=ft.Container(ft.Text("근무변경", size=13, weight="bold", color="white"), alignment=ft.alignment.center), bgcolor="#374151", height=36, style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=6), padding=ft.padding.symmetric(horizontal=14)), on_click=open_status_picker)], alignment="spaceBetween"),
             ft.Divider(height=1),
             ft.Text("첫탕 시간을 선택하세요", size=12, weight="bold", color="grey"),
-            ft.Row([hour_display_box, ft.Text(":", size=18, weight="bold", color="black"), minute_display_box, order_display_box], alignment="center", spacing=6),
+            ft.Row([
+                hour_display_box,
+                ft.Container(content=ft.Text(":", size=18, weight="bold", color="black"), width=24, alignment=ft.alignment.center),
+                minute_display_box,
+                ft.Container(width=24),
+                order_display_box,
+            ], alignment="center", spacing=0),
             ft.Divider(height=2, color="transparent"),
+            memo_field,
             ft.Row([ft.Container(content=ft.Text("저장", size=14, weight="bold", color="white"), bgcolor="#2563EB", alignment=ft.Alignment(0, 0), width=160, height=38, border_radius=6, on_click=lambda e: select_status_and_save("저장"))], alignment="center"), ft.Divider(height=1, color="transparent"),
             ft.Row([ft.TextButton("선택취소(삭제)", on_click=lambda e: select_status_and_save("선택취소"), style=ft.ButtonStyle(color="red")), ft.TextButton("닫기", on_click=lambda e: setattr(popup_layer, "visible", False) or page.update())], alignment="spaceBetween")
         ], spacing=6, tight=True))
