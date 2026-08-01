@@ -16,7 +16,12 @@ STORAGE_MANGEUN_KEY = "bus_helper_mangeun_targets"
 STORAGE_INPUT_DATA_KEY = "bus_helper_input_data"
 STORAGE_PHONEBOOK_KEY = "bus_helper_phonebook"
 STORAGE_EMERGENCY_KEY = "bus_helper_emergency"
-STORAGE_WORK_TYPE_KEY = "bus_helper_work_type"
+STORAGE_PATTERN_KEY = "bus_helper_work_pattern"
+
+# 🔁 반복 근무 패턴 정의 (버스종사자 근무 유형별 순환 사이클)
+WORK_PATTERNS = {
+    "4일오전 4일오후": ["오전", "오전", "오전", "오전", "휴무", "오후", "오후", "오후", "오후"],
+}
 
 def main(page: ft.Page):
     page.title = "버스기사도우미"
@@ -39,8 +44,9 @@ def main(page: ft.Page):
     if saved_emergency:
         EMERGENCY_LIST = json.loads(saved_emergency)
 
-    saved_work_type = page.client_storage.get(STORAGE_WORK_TYPE_KEY)
-    work_type_state = {"value": saved_work_type if saved_work_type else "교대제"}
+    saved_pattern = page.client_storage.get(STORAGE_PATTERN_KEY)
+    # pattern_state: name(패턴명) / anchor_date(기준일 YYYY-MM-DD) / anchor_index(그날이 패턴의 몇 번째인지)
+    pattern_state = json.loads(saved_pattern) if saved_pattern else {"name": None, "anchor_date": None, "anchor_index": 0}
 
     USER_SCHEDULES = json.loads(saved_schedules) if saved_schedules else {}
     MANGEUN_TARGETS = json.loads(saved_targets) if saved_targets else {}
@@ -64,7 +70,7 @@ def main(page: ft.Page):
         page.client_storage.set(STORAGE_INPUT_DATA_KEY, json.dumps(input_data_state, ensure_ascii=False))
         page.client_storage.set(STORAGE_PHONEBOOK_KEY, json.dumps(PHONEBOOK_LIST, ensure_ascii=False))
         page.client_storage.set(STORAGE_EMERGENCY_KEY, json.dumps(EMERGENCY_LIST, ensure_ascii=False))
-        page.client_storage.set(STORAGE_WORK_TYPE_KEY, work_type_state["value"])
+        page.client_storage.set(STORAGE_PATTERN_KEY, json.dumps(pattern_state, ensure_ascii=False))
 
     # 앱 켜질 때 오늘 날짜 및 시간 제어용 초기값 설정
     now_kst = datetime.now(KST)
@@ -210,29 +216,77 @@ def main(page: ft.Page):
                 target_column.controls.append(ft.Container(content=row_content, padding=ft.padding.only(left=4, right=4, top=8, bottom=8), border=ft.border.Border(bottom=ft.border.BorderSide(0.5, "#E2E8F0"))))
         page.update()
 
-    # ⚙️ 설정 화면 - 근무형태(교대제/격일제) 선택
-    def on_work_type_changed(e):
-        work_type_state["value"] = e.control.value
-        save_all_to_client_storage()
+    # ⚙️ 설정 화면 - 반복 근무 패턴 선택 (예: 4일오전 4일오후 등 순환근무 자동 채우기)
+    pattern_slot_selected = {"value": pattern_state.get("anchor_index", 0)}
 
-    work_type_radio = ft.RadioGroup(
-        value=work_type_state["value"],
-        on_change=on_work_type_changed,
-        content=ft.Column([
-            ft.Container(content=ft.Radio(value="교대제", label="교대제 (오전/오후 교대, 순번 배정)"), padding=ft.padding.symmetric(vertical=6)),
-            ft.Container(content=ft.Radio(value="격일제", label="격일제 (하루 근무, 다음날 휴무)"), padding=ft.padding.symmetric(vertical=6)),
-        ], spacing=0),
-    )
+    def pattern_slot_color(slot_status):
+        return {"오전": "#1A73E8", "오후": "#7E22CE", "휴무": "#D93025"}.get(slot_status, "black")
+
+    def select_pattern_slot(idx):
+        pattern_slot_selected["value"] = idx
+        build_pattern_slots()
+        page.update()
+
+    def build_pattern_slots():
+        pattern_slots_column.controls.clear()
+        pat = WORK_PATTERNS.get(pattern_dropdown.value, [])
+        for i, slot_status in enumerate(pat):
+            is_selected = (i == pattern_slot_selected["value"])
+            pattern_slots_column.controls.append(
+                ft.Container(
+                    content=ft.Text(f"{i+1}. {slot_status}" + ("   ← 오늘" if is_selected else ""), size=14, weight="bold", color="white" if is_selected else pattern_slot_color(slot_status)),
+                    bgcolor="#2563EB" if is_selected else "#F1F5F9",
+                    padding=ft.padding.symmetric(vertical=10, horizontal=14), border_radius=6,
+                    on_click=lambda e, idx=i: select_pattern_slot(idx),
+                )
+            )
+
+    def on_pattern_dropdown_change(e):
+        pattern_slot_selected["value"] = 0
+        build_pattern_slots()
+        page.update()
+
+    pattern_dropdown = ft.Dropdown(options=[ft.dropdown.Option(k) for k in WORK_PATTERNS.keys()], value=list(WORK_PATTERNS.keys())[0], width=260, height=44, text_size=13, content_padding=ft.padding.symmetric(vertical=8, horizontal=10), on_change=on_pattern_dropdown_change)
+    pattern_slots_column = ft.Column(spacing=6)
+    pattern_status_text = ft.Text("", size=12, color="grey")
+
+    def apply_pattern(e):
+        today_str = datetime.now(KST).strftime("%Y-%m-%d")
+        pattern_state["name"] = pattern_dropdown.value
+        pattern_state["anchor_date"] = today_str
+        pattern_state["anchor_index"] = pattern_slot_selected["value"]
+        save_all_to_client_storage()
+        rebuild_settings_view(); rebuild_interface()
+
+    def clear_pattern(e):
+        pattern_state["name"], pattern_state["anchor_date"], pattern_state["anchor_index"] = None, None, 0
+        save_all_to_client_storage()
+        rebuild_settings_view(); rebuild_interface()
 
     def rebuild_settings_view():
+        if pattern_state.get("name"):
+            pattern_status_text.value = f"✅ 현재 적용중: {pattern_state['name']} (기준일 {pattern_state['anchor_date']})"
+            pattern_dropdown.value = pattern_state["name"]
+            pattern_slot_selected["value"] = pattern_state.get("anchor_index", 0)
+        else:
+            pattern_status_text.value = "적용된 반복 근무 패턴이 없습니다."
+        build_pattern_slots()
         settings_zone_container.controls.clear()
         settings_zone_container.controls.append(
             ft.Container(
                 content=ft.Column([
                     ft.Text("⚙️ 설정", size=16, weight="bold", color="#1E3A8A"),
                     ft.Divider(height=1),
-                    ft.Text("근무형태", size=13, weight="bold", color="black"),
-                    work_type_radio,
+                    ft.Text("근무형태 (반복 근무 패턴)", size=13, weight="bold", color="black"),
+                    pattern_status_text,
+                    ft.Text("패턴 선택:", size=12, color="grey"),
+                    pattern_dropdown,
+                    ft.Text("오늘이 몇 번째 근무인지 선택하세요:", size=12, color="grey"),
+                    pattern_slots_column,
+                    ft.Row([
+                        ft.ElevatedButton(content=ft.Container(ft.Text("적용", size=14, weight="bold", color="white"), alignment=ft.alignment.center), bgcolor="#2563EB", expand=1, height=40, style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=6), padding=0), on_click=apply_pattern),
+                        ft.ElevatedButton(content=ft.Container(ft.Text("패턴 해제", size=14, weight="bold", color="white"), alignment=ft.alignment.center), bgcolor="grey", expand=1, height=40, style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=6), padding=0), on_click=clear_pattern),
+                    ], spacing=8),
                 ], spacing=8, tight=True),
                 padding=12, bgcolor="#F8FAFC", border_radius=8, border=ft.border.all(1, "#E2E8F0"),
             )
@@ -413,6 +467,32 @@ def main(page: ft.Page):
     def refresh_input_tab_view(): input_zone_container.controls.clear(); input_zone_container.controls.append(build_driving_summary_zone()); page.update()
 
     # 📅 [캘린더 렌더러] 매달 달력 날짜 그리드 및 실시간 만근 카운트 일체 갱신 함수
+    # 🔁 특정 날짜가 반복패턴상 몇 번째 슬롯인지 계산해서 상태를 돌려줌 (패턴 미설정 시 None)
+    def get_pattern_status(date_key):
+        if not pattern_state.get("name") or not pattern_state.get("anchor_date"):
+            return None
+        pattern = WORK_PATTERNS.get(pattern_state["name"])
+        if not pattern:
+            return None
+        try:
+            anchor = datetime.strptime(pattern_state["anchor_date"], "%Y-%m-%d")
+            target = datetime.strptime(date_key, "%Y-%m-%d")
+        except ValueError:
+            return None
+        delta_days = (target - anchor).days
+        idx = (pattern_state.get("anchor_index", 0) + delta_days) % len(pattern)
+        return pattern[idx]
+
+    # 📌 해당 날짜의 실제 표시용 근무정보: 수동입력 있으면 그걸 우선, 없으면 반복패턴으로 자동 채움
+    def get_effective_day_info(date_key):
+        manual = USER_SCHEDULES.get(date_key)
+        if manual:
+            return manual
+        p_status = get_pattern_status(date_key)
+        if p_status:
+            return {"status": p_status, "start_time": "", "order_no": ""}
+        return {"status": "", "start_time": "", "order_no": ""}
+
     def rebuild_interface():
         nonlocal USER_SCHEDULES, MANGEUN_TARGETS
         today = datetime.now(KST)
@@ -420,7 +500,9 @@ def main(page: ft.Page):
         month_title.value = f"{current['year']}년 {current['month']}월"
         month_prefix = f"{current['year']}-{current['month']:02d}"
         month_data = {k: v for k, v in USER_SCHEDULES.items() if k.startswith(month_prefix)}
-        work_days, off_days = sum(1 for d in month_data.values() if d.get("status") in ["오전", "오후", "전일"]), sum(1 for d in month_data.values() if d.get("status") == "휴무")
+        days_in_month = calendar.monthrange(current['year'], current['month'])[1]
+        month_effective_statuses = [get_effective_day_info(f"{month_prefix}-{d:02d}").get("status", "") for d in range(1, days_in_month + 1)]
+        work_days, off_days = sum(1 for s in month_effective_statuses if s in ["오전", "오후", "전일"]), sum(1 for s in month_effective_statuses if s == "휴무")
         m_target = get_mangeun_target(); mangeun_dropdown.value = str(m_target)
         diff = work_days - m_target
         stats_text.value = f"근무: {work_days}(+{diff})" if diff > 0 else (f"근무: {work_days}({diff})" if diff < 0 else f"근무: {work_days}")
@@ -431,11 +513,11 @@ def main(page: ft.Page):
         for week in cal.monthdayscalendar(current['year'], current['month']):
             week_row = ft.Row(alignment="spaceAround", spacing=2)
             for day in week:
-                if day == 0: week_row.controls.append(ft.Container(expand=1, height=72))
+                if day == 0: week_row.controls.append(ft.Container(expand=1, height=92))
                 else:
                     weekday = datetime(current['year'], current['month'], day).weekday()
                     date_key = f"{current['year']}-{current['month']:02d}-{day:02d}"
-                    day_info = month_data.get(date_key, {"status": "", "start_time": "", "order_no": ""})
+                    day_info = get_effective_day_info(date_key)
                     status, start_time, order_no = day_info.get("status", ""), day_info.get("start_time", ""), day_info.get("order_no", "")
                     bg_color, text_color, status_desc = "#FFFFFF", "#000000", ""
                     if status == "오전": bg_color, text_color, status_desc = "#D2E3FC", "#1A73E8", f"오전({order_no})" if order_no else "오전"
@@ -444,7 +526,7 @@ def main(page: ft.Page):
                     elif status == "휴무": bg_color, text_color, status_desc = "#FCE8E6", "#D93025", "휴무"
                     day_number_color = "#D93025" if weekday == 6 else ("#1A73E8" if weekday == 5 else "#000000")
                     time_display = ft.Text(start_time, size=10, weight="bold", color=text_color) if start_time and status != "휴무" else ft.Container()
-                    day_box = ft.Container(content=ft.Column([ft.Text(f"{day}", size=15, weight="bold", color=day_number_color), ft.Text(status_desc, size=12, weight="bold", color=text_color), time_display], alignment="start", horizontal_alignment="center", spacing=2), bgcolor=bg_color, padding=ft.padding.only(top=6), border=ft.border.all(2, "#2563EB") if (current['year'] == today_y and current['month'] == today_m and day == today_d) else ft.border.all(0.5, "#E2E8F0"), border_radius=4, height=72, expand=1, on_click=lambda e, dk=date_key: open_input_popup(dk))
+                    day_box = ft.Container(content=ft.Column([ft.Text(f"{day}", size=15, weight="bold", color=day_number_color), ft.Text(status_desc, size=12, weight="bold", color=text_color), time_display], alignment="start", horizontal_alignment="center", spacing=2), bgcolor=bg_color, padding=ft.padding.only(top=6), border=ft.border.all(2, "#2563EB") if (current['year'] == today_y and current['month'] == today_m and day == today_d) else ft.border.all(0.5, "#E2E8F0"), border_radius=4, height=92, expand=1, on_click=lambda e, dk=date_key: open_input_popup(dk))
                     week_row.controls.append(day_box)
             calendar_grid.controls.append(week_row)
         if current_tab == "운행정보": refresh_input_tab_view()
@@ -492,7 +574,7 @@ def main(page: ft.Page):
     # 상단 내비게이션 바 (이전달 / 다음달 이동) 버튼 컴포넌트
     header_nav = ft.Row([ft.TextButton("◀ 이전", on_click=lambda e: move_prev(e), style=ft.ButtonStyle(color="black")), month_title, ft.TextButton("다음 ▶", on_click=lambda e: move_next(e), style=ft.ButtonStyle(color="black"))], alignment="spaceBetween")
     topbar_title = ft.Text("", size=17, weight="bold", color="black")
-    topbar_back_row = ft.Row([ft.TextButton(content=ft.Text("◀ 뒤로", size=14, weight="bold", color="#2563EB"), on_click=lambda e: page.go("/")), topbar_title], alignment="start", spacing=14, visible=False)
+    topbar_back_row = ft.Row([topbar_title], alignment="start", visible=False)
     mangeun_setting_row = ft.Row([mangeun_value_text, ft.ElevatedButton("변경", on_click=lambda e: setattr(mangeun_popup_layer, "visible", True) or page.update(), bgcolor="#2563EB", color="white", width=68, height=22, style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=4), text_style=ft.TextStyle(size=11, weight="bold"), padding=0))], alignment="start", vertical_alignment="center", spacing=6, height=22)
     
     mangeun_popup_layer.content = ft.Container(content=ft.Column([ft.Text("만근 기준 변경", size=16, weight="bold", color="black"), ft.Row([ft.Text("만근:", size=13, weight="bold", color="black"), mangeun_dropdown], alignment="center", spacing=10), ft.Row([ft.TextButton("취소", on_click=lambda e: setattr(mangeun_popup_layer, "visible", False) or page.update()), ft.TextButton("저장", on_click=on_mangeun_dropdown_changed, style=ft.ButtonStyle(color="#2563EB"))], alignment="spaceBetween")], spacing=10, tight=True), bgcolor="white", padding=14, border_radius=12, width=240)
