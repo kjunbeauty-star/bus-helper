@@ -1,5 +1,5 @@
 # ==========================================
-# [앱 이름: 버스헬퍼 스케줄러]
+# [앱 이름: 버스캘린더]
 # 현재 배포 버전: 빌드 0005 (주석 및 이모지 완벽 복구본)
 # ==========================================
 
@@ -21,10 +21,12 @@ STORAGE_PATTERN_KEY = "bus_helper_work_pattern"
 # 🔁 반복 근무 패턴 정의 (버스종사자 근무 유형별 순환 사이클)
 WORK_PATTERNS = {
     "4일오전 4일오후": ["오전", "오전", "오전", "오전", "휴무", "오후", "오후", "오후", "오후"],
+    "5일오전 5일오후": ["오전", "오전", "오전", "오전", "오전", "휴무", "오후", "오후", "오후", "오후", "오후"],
+    "격일제": ["전일", "휴무"],
 }
 
 def main(page: ft.Page):
-    page.title = "버스기사도우미"
+    page.title = "버스캘린더"
     page.theme_mode = "light"
     page.padding = 4
 
@@ -218,37 +220,19 @@ def main(page: ft.Page):
 
     # ⚙️ 설정 화면 - 반복 근무 패턴 선택 (예: 4일오전 4일오후 등 순환근무 자동 채우기)
     pattern_slot_selected = {"value": pattern_state.get("anchor_index", 0)}
+    pattern_popup_layer = ft.Container(visible=False, bgcolor="#AA000000", alignment=ft.Alignment(0, 0), expand=True)
 
     def pattern_slot_color(slot_status):
-        return {"오전": "#1A73E8", "오후": "#7E22CE", "휴무": "#D93025"}.get(slot_status, "black")
+        return {"오전": "#1A73E8", "오후": "#7E22CE", "휴무": "#D93025", "전일": "#137333"}.get(slot_status, "black")
 
     def select_pattern_slot(idx):
         pattern_slot_selected["value"] = idx
-        build_pattern_slots()
+        build_pattern_popup()
         page.update()
 
-    def build_pattern_slots():
-        pattern_slots_column.controls.clear()
-        pat = WORK_PATTERNS.get(pattern_dropdown.value, [])
-        for i, slot_status in enumerate(pat):
-            is_selected = (i == pattern_slot_selected["value"])
-            pattern_slots_column.controls.append(
-                ft.Container(
-                    content=ft.Text(f"{i+1}. {slot_status}" + ("   ← 오늘" if is_selected else ""), size=14, weight="bold", color="white" if is_selected else pattern_slot_color(slot_status)),
-                    bgcolor="#2563EB" if is_selected else "#F1F5F9",
-                    padding=ft.padding.symmetric(vertical=10, horizontal=14), border_radius=6,
-                    on_click=lambda e, idx=i: select_pattern_slot(idx),
-                )
-            )
-
-    def on_pattern_dropdown_change(e):
-        pattern_slot_selected["value"] = 0
-        build_pattern_slots()
+    def close_pattern_popup(e):
+        pattern_popup_layer.visible = False
         page.update()
-
-    pattern_dropdown = ft.Dropdown(options=[ft.dropdown.Option(k) for k in WORK_PATTERNS.keys()], value=list(WORK_PATTERNS.keys())[0], width=260, height=44, text_size=13, content_padding=ft.padding.symmetric(vertical=8, horizontal=10), on_change=on_pattern_dropdown_change)
-    pattern_slots_column = ft.Column(spacing=6)
-    pattern_status_text = ft.Text("", size=12, color="grey")
 
     def apply_pattern(e):
         today_str = datetime.now(KST).strftime("%Y-%m-%d")
@@ -256,6 +240,7 @@ def main(page: ft.Page):
         pattern_state["anchor_date"] = today_str
         pattern_state["anchor_index"] = pattern_slot_selected["value"]
         save_all_to_client_storage()
+        pattern_popup_layer.visible = False
         rebuild_settings_view(); rebuild_interface()
 
     def clear_pattern(e):
@@ -263,14 +248,51 @@ def main(page: ft.Page):
         save_all_to_client_storage()
         rebuild_settings_view(); rebuild_interface()
 
+    def build_pattern_popup():
+        pat = WORK_PATTERNS.get(pattern_dropdown.value, [])
+        slot_rows = []
+        for i, slot_status in enumerate(pat):
+            is_selected = (i == pattern_slot_selected["value"])
+            slot_rows.append(
+                ft.Container(
+                    content=ft.Text(f"{i+1}. {slot_status}" + ("   ← 오늘" if is_selected else ""), size=14, weight="bold", color="white" if is_selected else pattern_slot_color(slot_status)),
+                    bgcolor="#2563EB" if is_selected else "#F1F5F9",
+                    padding=ft.padding.symmetric(vertical=10, horizontal=14), border_radius=6,
+                    on_click=lambda e, idx=i: select_pattern_slot(idx),
+                )
+            )
+        pattern_popup_layer.content = ft.Container(
+            content=ft.Column([
+                ft.Text(f"오늘 근무선택 ({pattern_dropdown.value})", size=15, weight="bold", color="black"),
+                ft.Text("오늘이 몇 번째 근무인지 선택하세요.", size=12, color="grey"),
+                ft.Column(slot_rows, spacing=6, scroll=ft.ScrollMode.AUTO, height=min(360, len(pat) * 48)),
+                ft.Row([
+                    ft.ElevatedButton(content=ft.Container(ft.Text("적용", size=14, weight="bold", color="white"), alignment=ft.alignment.center), bgcolor="#2563EB", expand=1, height=38, style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=6), padding=0), on_click=apply_pattern),
+                    ft.ElevatedButton(content=ft.Container(ft.Text("취소", size=14, weight="bold", color="white"), alignment=ft.alignment.center), bgcolor="grey", expand=1, height=38, style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=6), padding=0), on_click=close_pattern_popup),
+                ], spacing=8),
+            ], spacing=10, tight=True),
+            bgcolor="white", padding=16, border_radius=12, width=280,
+        )
+
+    def open_pattern_popup(e):
+        # 현재 선택된 패턴이 이미 적용중인 패턴과 같으면 그 위치를 유지, 다르면 처음부터
+        pattern_slot_selected["value"] = pattern_state.get("anchor_index", 0) if pattern_state.get("name") == pattern_dropdown.value else 0
+        build_pattern_popup()
+        pattern_popup_layer.visible = True
+        page.update()
+
+    def on_pattern_dropdown_change(e):
+        pass  # 드롭다운은 팝업을 열 때 다시 반영되므로 별도 처리 불필요
+
+    pattern_dropdown = ft.Dropdown(options=[ft.dropdown.Option(k) for k in WORK_PATTERNS.keys()], value=list(WORK_PATTERNS.keys())[0], width=260, height=44, text_size=13, content_padding=ft.padding.symmetric(vertical=8, horizontal=10), on_change=on_pattern_dropdown_change)
+    pattern_status_text = ft.Text("", size=12, color="grey")
+
     def rebuild_settings_view():
         if pattern_state.get("name"):
             pattern_status_text.value = f"✅ 현재 적용중: {pattern_state['name']} (기준일 {pattern_state['anchor_date']})"
             pattern_dropdown.value = pattern_state["name"]
-            pattern_slot_selected["value"] = pattern_state.get("anchor_index", 0)
         else:
             pattern_status_text.value = "적용된 반복 근무 패턴이 없습니다."
-        build_pattern_slots()
         settings_zone_container.controls.clear()
         settings_zone_container.controls.append(
             ft.Container(
@@ -281,10 +303,8 @@ def main(page: ft.Page):
                     pattern_status_text,
                     ft.Text("패턴 선택:", size=12, color="grey"),
                     pattern_dropdown,
-                    ft.Text("오늘이 몇 번째 근무인지 선택하세요:", size=12, color="grey"),
-                    pattern_slots_column,
                     ft.Row([
-                        ft.ElevatedButton(content=ft.Container(ft.Text("적용", size=14, weight="bold", color="white"), alignment=ft.alignment.center), bgcolor="#2563EB", expand=1, height=40, style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=6), padding=0), on_click=apply_pattern),
+                        ft.ElevatedButton(content=ft.Container(ft.Text("오늘 근무 선택", size=14, weight="bold", color="white"), alignment=ft.alignment.center), bgcolor="#2563EB", expand=1, height=40, style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=6), padding=0), on_click=open_pattern_popup),
                         ft.ElevatedButton(content=ft.Container(ft.Text("패턴 해제", size=14, weight="bold", color="white"), alignment=ft.alignment.center), bgcolor="grey", expand=1, height=40, style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=6), padding=0), on_click=clear_pattern),
                     ], spacing=8),
                 ], spacing=8, tight=True),
@@ -510,10 +530,16 @@ def main(page: ft.Page):
 
         calendar_grid.controls.clear()
         cal = calendar.Calendar(firstweekday=6)
-        for week in cal.monthdayscalendar(current['year'], current['month']):
+        weeks = cal.monthdayscalendar(current['year'], current['month'])
+        # 📐 화면 높이에 맞춰 날짜칸 크기 자동 계산 (기기/글자크기 상관없이 화면에 맞게 조정)
+        screen_h = page.height or 700
+        chrome_overhead = 230  # 상단바+안내문구+요일줄+구분선+하단탭 등이 차지하는 대략적 높이
+        available_h = max(screen_h - chrome_overhead, 60 * len(weeks))
+        cell_h = max(60, min(100, available_h / len(weeks)))
+        for week in weeks:
             week_row = ft.Row(alignment="spaceAround", spacing=2)
             for day in week:
-                if day == 0: week_row.controls.append(ft.Container(expand=1, height=92))
+                if day == 0: week_row.controls.append(ft.Container(expand=1, height=cell_h))
                 else:
                     weekday = datetime(current['year'], current['month'], day).weekday()
                     date_key = f"{current['year']}-{current['month']:02d}-{day:02d}"
@@ -526,7 +552,7 @@ def main(page: ft.Page):
                     elif status == "휴무": bg_color, text_color, status_desc = "#FCE8E6", "#D93025", "휴무"
                     day_number_color = "#D93025" if weekday == 6 else ("#1A73E8" if weekday == 5 else "#000000")
                     time_display = ft.Text(start_time, size=10, weight="bold", color=text_color) if start_time and status != "휴무" else ft.Container()
-                    day_box = ft.Container(content=ft.Column([ft.Text(f"{day}", size=15, weight="bold", color=day_number_color), ft.Text(status_desc, size=12, weight="bold", color=text_color), time_display], alignment="start", horizontal_alignment="center", spacing=2), bgcolor=bg_color, padding=ft.padding.only(top=6), border=ft.border.all(2, "#2563EB") if (current['year'] == today_y and current['month'] == today_m and day == today_d) else ft.border.all(0.5, "#E2E8F0"), border_radius=4, height=92, expand=1, on_click=lambda e, dk=date_key: open_input_popup(dk))
+                    day_box = ft.Container(content=ft.Column([ft.Text(f"{day}", size=15, weight="bold", color=day_number_color), ft.Text(status_desc, size=12, weight="bold", color=text_color), time_display], alignment="start", horizontal_alignment="center", spacing=2), bgcolor=bg_color, padding=ft.padding.only(top=6), border=ft.border.all(2, "#2563EB") if (current['year'] == today_y and current['month'] == today_m and day == today_d) else ft.border.all(0.5, "#E2E8F0"), border_radius=4, height=cell_h, expand=1, on_click=lambda e, dk=date_key: open_input_popup(dk))
                     week_row.controls.append(day_box)
             calendar_grid.controls.append(week_row)
         if current_tab == "운행정보": refresh_input_tab_view()
@@ -597,8 +623,9 @@ def main(page: ft.Page):
 
     # 화면 스크롤 가능 구역 및 전체 인터페이스 초기 패치 주입 구역
     scrollable_content = ft.Column([topbar_back_row, header_nav, summary_area, guide_text, div_line1, weeks_header, div_line2, calendar_grid, input_zone_container, phonebook_zone_container, setting_column, settings_zone_container], expand=True, scroll=ft.ScrollMode.AUTO)
-    page.add(ft.Stack([ft.Column([scrollable_content, ft.Divider(height=1), ft.Row([btn_status, btn_setting, btn_config], alignment="spaceAround", spacing=4)], expand=True), popup_layer, mangeun_popup_layer], expand=True))
+    page.add(ft.Stack([ft.Column([scrollable_content, ft.Divider(height=1), ft.Row([btn_status, btn_setting, btn_config], alignment="spaceAround", spacing=4)], expand=True), popup_layer, mangeun_popup_layer, pattern_popup_layer], expand=True))
     
+    page.on_resize = lambda e: rebuild_interface()
     change_tab("달력"); rebuild_interface()
 
 ft.app(target=main, port=int(os.environ.get("PORT", 8080)), view=ft.AppView.WEB_BROWSER)
