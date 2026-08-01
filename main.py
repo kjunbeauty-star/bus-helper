@@ -15,7 +15,8 @@ STORAGE_SCHEDULES_KEY = "bus_helper_schedules"
 STORAGE_MANGEUN_KEY = "bus_helper_mangeun_targets"
 STORAGE_INPUT_DATA_KEY = "bus_helper_input_data"
 STORAGE_PHONEBOOK_KEY = "bus_helper_phonebook"
-STORAGE_EMERGENCY_KEY = "bus_helper_emergency" 
+STORAGE_EMERGENCY_KEY = "bus_helper_emergency"
+STORAGE_WORK_TYPE_KEY = "bus_helper_work_type"
 
 def main(page: ft.Page):
     page.title = "버스기사도우미"
@@ -37,6 +38,9 @@ def main(page: ft.Page):
     saved_emergency = page.client_storage.get(STORAGE_EMERGENCY_KEY)
     if saved_emergency:
         EMERGENCY_LIST = json.loads(saved_emergency)
+
+    saved_work_type = page.client_storage.get(STORAGE_WORK_TYPE_KEY)
+    work_type_state = {"value": saved_work_type if saved_work_type else "교대제"}
 
     USER_SCHEDULES = json.loads(saved_schedules) if saved_schedules else {}
     MANGEUN_TARGETS = json.loads(saved_targets) if saved_targets else {}
@@ -60,6 +64,7 @@ def main(page: ft.Page):
         page.client_storage.set(STORAGE_INPUT_DATA_KEY, json.dumps(input_data_state, ensure_ascii=False))
         page.client_storage.set(STORAGE_PHONEBOOK_KEY, json.dumps(PHONEBOOK_LIST, ensure_ascii=False))
         page.client_storage.set(STORAGE_EMERGENCY_KEY, json.dumps(EMERGENCY_LIST, ensure_ascii=False))
+        page.client_storage.set(STORAGE_WORK_TYPE_KEY, work_type_state["value"])
 
     # 앱 켜질 때 오늘 날짜 및 시간 제어용 초기값 설정
     now_kst = datetime.now(KST)
@@ -76,6 +81,7 @@ def main(page: ft.Page):
     
     calendar_grid = ft.Column(spacing=2)
     input_zone_container = ft.Column(spacing=2, visible=False)
+    settings_zone_container = ft.Column(spacing=2, visible=False)
     
     phonebook_items_column = ft.Column(spacing=6)
     
@@ -99,15 +105,14 @@ def main(page: ft.Page):
     phonebook_big_button = ft.ElevatedButton(
         content=ft.Container(ft.Text("📞 전화번호부", color="white", size=20, weight="bold"), alignment=ft.alignment.center), 
         width=150, height=70, bgcolor="#2563EB", color="white", 
-        on_click=lambda e: change_tab("전화번호"),
+        on_click=lambda e: page.go("/phonebook"),
         style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=10), padding=ft.padding.all(0))
     )
 
     # [하단 탭 메뉴 버튼] 기사님 디자인 피드백 반영 (텍스트 이모지 장착 및 한여름의 패딩 제거 버전)
-    btn_calendar = ft.ElevatedButton(content=ft.Container(content=ft.Text("📅 달력", color="white", size=11, weight="bold"), alignment=ft.alignment.center), expand=1, height=40, style=ft.ButtonStyle(bgcolor="#2563EB", shape=ft.RoundedRectangleBorder(radius=6), padding=0), on_click=lambda e: change_tab("달력"))
-    btn_status = ft.ElevatedButton(content=ft.Container(content=ft.Text("📊 근무현황", color="white", size=11, weight="bold"), alignment=ft.alignment.center), expand=1, height=40, style=ft.ButtonStyle(bgcolor="grey", shape=ft.RoundedRectangleBorder(radius=6), padding=0), on_click=lambda e: change_tab("근무현황"))
-    btn_input = ft.ElevatedButton(content=ft.Container(content=ft.Text("🚌 운행정보", color="white", size=11, weight="bold"), alignment=ft.alignment.center), expand=1, height=40, style=ft.ButtonStyle(bgcolor="grey", shape=ft.RoundedRectangleBorder(radius=6), padding=0), on_click=lambda e: change_tab("운행정보"))
-    btn_setting = ft.ElevatedButton(content=ft.Container(content=ft.Text("🚨 긴급연락처", color="white", size=11, weight="bold"), alignment=ft.alignment.center), expand=1, height=40, style=ft.ButtonStyle(bgcolor="grey", shape=ft.RoundedRectangleBorder(radius=6), padding=0), on_click=lambda e: change_tab("긴급연락처"))
+    btn_status = ft.ElevatedButton(content=ft.Container(content=ft.Text("📊 근무현황", color="white", size=11, weight="bold"), alignment=ft.alignment.center), expand=1, height=40, style=ft.ButtonStyle(bgcolor="grey", shape=ft.RoundedRectangleBorder(radius=6), padding=0), on_click=lambda e: page.go("/status"))
+    btn_setting = ft.ElevatedButton(content=ft.Container(content=ft.Text("🚨 긴급연락처", color="white", size=11, weight="bold"), alignment=ft.alignment.center), expand=1, height=40, style=ft.ButtonStyle(bgcolor="grey", shape=ft.RoundedRectangleBorder(radius=6), padding=0), on_click=lambda e: page.go("/emergency"))
+    btn_config = ft.ElevatedButton(content=ft.Container(content=ft.Text("⚙️ 설정", color="white", size=11, weight="bold"), alignment=ft.alignment.center), expand=1, height=40, style=ft.ButtonStyle(bgcolor="grey", shape=ft.RoundedRectangleBorder(radius=6), padding=0), on_click=lambda e: page.go("/settings"))
 
     # 달력 최상단 요일 표시줄 (일~토)
     days_letters = ["일", "월", "화", "수", "목", "금", "토"]
@@ -205,6 +210,35 @@ def main(page: ft.Page):
                 target_column.controls.append(ft.Container(content=row_content, padding=ft.padding.only(left=4, right=4, top=8, bottom=8), border=ft.border.Border(bottom=ft.border.BorderSide(0.5, "#E2E8F0"))))
         page.update()
 
+    # ⚙️ 설정 화면 - 근무형태(교대제/격일제) 선택
+    def on_work_type_changed(e):
+        work_type_state["value"] = e.control.value
+        save_all_to_client_storage()
+
+    work_type_radio = ft.RadioGroup(
+        value=work_type_state["value"],
+        on_change=on_work_type_changed,
+        content=ft.Column([
+            ft.Container(content=ft.Radio(value="교대제", label="교대제 (오전/오후 교대, 순번 배정)"), padding=ft.padding.symmetric(vertical=6)),
+            ft.Container(content=ft.Radio(value="격일제", label="격일제 (하루 근무, 다음날 휴무)"), padding=ft.padding.symmetric(vertical=6)),
+        ], spacing=0),
+    )
+
+    def rebuild_settings_view():
+        settings_zone_container.controls.clear()
+        settings_zone_container.controls.append(
+            ft.Container(
+                content=ft.Column([
+                    ft.Text("⚙️ 설정", size=16, weight="bold", color="#1E3A8A"),
+                    ft.Divider(height=1),
+                    ft.Text("근무형태", size=13, weight="bold", color="black"),
+                    work_type_radio,
+                ], spacing=8, tight=True),
+                padding=12, bgcolor="#F8FAFC", border_radius=8, border=ft.border.all(1, "#E2E8F0"),
+            )
+        )
+        page.update()
+
     # 연락처 관리 관련 내부 기능 함수들 (삭제/토글/추가 등)
     def delete_emergency_item(index, target_column):
         if 0 <= index < len(EMERGENCY_LIST):
@@ -256,36 +290,49 @@ def main(page: ft.Page):
             PHONEBOOK_LIST[index]["is_edit"] = status
             rebuild_phonebook_view()
 
-    # 🔄 [메인 함수] 하단 메뉴 탭 전환 마스터 제어 함수 (여백 패딩 제로 깔끔 동기화 버전)
+    # 🔄 [메인 함수] 하단 메뉴 탭 전환 마스터 제어 함수 — 달력은 홈 화면(버튼 없음), 나머지는 topbar 뒤로가기로 복귀
     def change_tab(tab_name):
         nonlocal current_tab
         current_tab = tab_name
-        
-        btn_calendar.style = ft.ButtonStyle(color="white" if tab_name == "달력" else "#94A3B8", bgcolor="#2563EB" if tab_name == "달력" else "transparent", shape=ft.RoundedRectangleBorder(radius=6), padding=0)
-        btn_status.style = ft.ButtonStyle(color="white" if tab_name == "근무현황" else "#94A3B8", bgcolor="#2563EB" if tab_name == "근무현황" else "transparent", shape=ft.RoundedRectangleBorder(radius=6), padding=0)
-        btn_input.style = ft.ButtonStyle(color="white" if tab_name == "운행정보" else "#94A3B8", bgcolor="#2563EB" if tab_name == "운행정보" else "transparent", shape=ft.RoundedRectangleBorder(radius=6), padding=0)
-        btn_setting.style = ft.ButtonStyle(color="white" if tab_name == "긴급연락처" else "#94A3B8", bgcolor="#2563EB" if tab_name == "긴급연락처" else "transparent", shape=ft.RoundedRectangleBorder(radius=6), padding=0)
 
-        btn_calendar.update()
+        btn_status.style = ft.ButtonStyle(color="white" if tab_name in ("근무현황", "전화번호") else "#94A3B8", bgcolor="#2563EB" if tab_name in ("근무현황", "전화번호") else "transparent", shape=ft.RoundedRectangleBorder(radius=6), padding=0)
+        btn_setting.style = ft.ButtonStyle(color="white" if tab_name == "긴급연락처" else "#94A3B8", bgcolor="#2563EB" if tab_name == "긴급연락처" else "transparent", shape=ft.RoundedRectangleBorder(radius=6), padding=0)
+        btn_config.style = ft.ButtonStyle(color="white" if tab_name == "설정" else "#94A3B8", bgcolor="#2563EB" if tab_name == "설정" else "transparent", shape=ft.RoundedRectangleBorder(radius=6), padding=0)
+
         btn_status.update()
-        btn_input.update()
         btn_setting.update()
-        
+        btn_config.update()
+
+        topbar_back_row.visible = tab_name != "달력"
+
         if tab_name == "달력":
-            header_nav.visible, summary_area.visible, guide_text.visible, calendar_grid.visible, input_zone_container.visible, phonebook_zone_container.visible, setting_column.visible, weeks_header.visible, div_line1.visible, div_line2.visible = True, False, False, True, False, False, False, True, True, True
+            header_nav.visible, summary_area.visible, guide_text.visible, calendar_grid.visible, input_zone_container.visible, phonebook_zone_container.visible, setting_column.visible, settings_zone_container.visible, weeks_header.visible, div_line1.visible, div_line2.visible = True, False, True, True, False, False, False, False, True, True, True
         elif tab_name == "근무현황":
-            header_nav.visible, summary_area.visible, guide_text.visible, calendar_grid.visible, input_zone_container.visible, phonebook_zone_container.visible, setting_column.visible, weeks_header.visible, div_line1.visible, div_line2.visible = True, True, True, False, False, False, False, False, False, False
-        elif tab_name == "운행정보":
-            header_nav.visible, summary_area.visible, guide_text.visible, calendar_grid.visible, input_zone_container.visible, phonebook_zone_container.visible, setting_column.visible, weeks_header.visible, div_line1.visible, div_line2.visible = True, False, False, False, True, False, False, False, False, False
+            topbar_title.value = "📊 근무현황"
+            header_nav.visible, summary_area.visible, guide_text.visible, calendar_grid.visible, input_zone_container.visible, phonebook_zone_container.visible, setting_column.visible, settings_zone_container.visible, weeks_header.visible, div_line1.visible, div_line2.visible = False, True, False, False, True, False, False, False, False, False, False
             refresh_input_tab_view()
         elif tab_name == "전화번호":
-            header_nav.visible, summary_area.visible, guide_text.visible, calendar_grid.visible, input_zone_container.visible, phonebook_zone_container.visible, setting_column.visible, weeks_header.visible, div_line1.visible, div_line2.visible = True, False, False, False, False, True, False, False, False, False
+            topbar_title.value = "📞 동료기사 전화번호부"
+            header_nav.visible, summary_area.visible, guide_text.visible, calendar_grid.visible, input_zone_container.visible, phonebook_zone_container.visible, setting_column.visible, settings_zone_container.visible, weeks_header.visible, div_line1.visible, div_line2.visible = False, False, False, False, False, True, False, False, False, False, False
             PHONEBOOK_LIST.sort(key=lambda x: x.get("name", ""))
             rebuild_phonebook_view()
         elif tab_name == "긴급연락처":
-            header_nav.visible, summary_area.visible, guide_text.visible, calendar_grid.visible, input_zone_container.visible, phonebook_zone_container.visible, setting_column.visible, weeks_header.visible, div_line1.visible, div_line2.visible = True, False, False, False, False, False, True, False, False, False
+            topbar_title.value = "🚨 긴급연락처"
+            header_nav.visible, summary_area.visible, guide_text.visible, calendar_grid.visible, input_zone_container.visible, phonebook_zone_container.visible, setting_column.visible, settings_zone_container.visible, weeks_header.visible, div_line1.visible, div_line2.visible = False, False, False, False, False, False, True, False, False, False, False
             rebuild_emergency_view(setting_column)
+        elif tab_name == "설정":
+            topbar_title.value = "⚙️ 설정"
+            header_nav.visible, summary_area.visible, guide_text.visible, calendar_grid.visible, input_zone_container.visible, phonebook_zone_container.visible, setting_column.visible, settings_zone_container.visible, weeks_header.visible, div_line1.visible, div_line2.visible = False, False, False, False, False, False, False, True, False, False, False
+            rebuild_settings_view()
         page.update()
+
+    # 🧭 URL 라우팅: 브라우저/안드로이드 "뒤로가기"가 각 화면 → 달력(홈)으로 자연스럽게 이어지도록 연결
+    ROUTE_TO_TAB = {"/": "달력", "/status": "근무현황", "/emergency": "긴급연락처", "/settings": "설정", "/phonebook": "전화번호"}
+
+    def on_route_change(e):
+        change_tab(ROUTE_TO_TAB.get(page.route, "달력"))
+
+    page.on_route_change = on_route_change
 
     # 달력 날짜 클릭 시 튀어나오는 첫탕 근무등록 팝업창 세팅들
     popup_date_title = ft.Text("", size=16, weight="bold", color="black", text_align="center")
@@ -384,7 +431,7 @@ def main(page: ft.Page):
         for week in cal.monthdayscalendar(current['year'], current['month']):
             week_row = ft.Row(alignment="spaceAround", spacing=2)
             for day in week:
-                if day == 0: week_row.controls.append(ft.Container(expand=1, height=52))
+                if day == 0: week_row.controls.append(ft.Container(expand=1, height=72))
                 else:
                     weekday = datetime(current['year'], current['month'], day).weekday()
                     date_key = f"{current['year']}-{current['month']:02d}-{day:02d}"
@@ -396,8 +443,8 @@ def main(page: ft.Page):
                     elif status == "전일": bg_color, text_color, status_desc = "#E6F4EA", "#137333", f"전일({order_no})" if order_no else "전일"
                     elif status == "휴무": bg_color, text_color, status_desc = "#FCE8E6", "#D93025", "휴무"
                     day_number_color = "#D93025" if weekday == 6 else ("#1A73E8" if weekday == 5 else "#000000")
-                    time_display = ft.Text(start_time, size=9, weight="bold", color=text_color) if start_time and status != "휴무" else ft.Container()
-                    day_box = ft.Container(content=ft.Column([ft.Text(f"{day}", size=12, weight="bold", color=day_number_color), ft.Text(status_desc, size=10, weight="bold", color=text_color), time_display], alignment="start", horizontal_alignment="center", spacing=0), bgcolor=bg_color, padding=ft.padding.only(top=4), border=ft.border.all(2, "#2563EB") if (current['year'] == today_y and current['month'] == today_m and day == today_d) else ft.border.all(0.5, "#E2E8F0"), border_radius=4, height=52, expand=1, on_click=lambda e, dk=date_key: open_input_popup(dk))
+                    time_display = ft.Text(start_time, size=10, weight="bold", color=text_color) if start_time and status != "휴무" else ft.Container()
+                    day_box = ft.Container(content=ft.Column([ft.Text(f"{day}", size=15, weight="bold", color=day_number_color), ft.Text(status_desc, size=12, weight="bold", color=text_color), time_display], alignment="start", horizontal_alignment="center", spacing=2), bgcolor=bg_color, padding=ft.padding.only(top=6), border=ft.border.all(2, "#2563EB") if (current['year'] == today_y and current['month'] == today_m and day == today_d) else ft.border.all(0.5, "#E2E8F0"), border_radius=4, height=72, expand=1, on_click=lambda e, dk=date_key: open_input_popup(dk))
                     week_row.controls.append(day_box)
             calendar_grid.controls.append(week_row)
         if current_tab == "운행정보": refresh_input_tab_view()
@@ -444,6 +491,8 @@ def main(page: ft.Page):
 
     # 상단 내비게이션 바 (이전달 / 다음달 이동) 버튼 컴포넌트
     header_nav = ft.Row([ft.TextButton("◀ 이전", on_click=lambda e: move_prev(e), style=ft.ButtonStyle(color="black")), month_title, ft.TextButton("다음 ▶", on_click=lambda e: move_next(e), style=ft.ButtonStyle(color="black"))], alignment="spaceBetween")
+    topbar_title = ft.Text("", size=17, weight="bold", color="black")
+    topbar_back_row = ft.Row([ft.TextButton(content=ft.Text("◀ 뒤로", size=14, weight="bold", color="#2563EB"), on_click=lambda e: page.go("/")), topbar_title], alignment="start", spacing=14, visible=False)
     mangeun_setting_row = ft.Row([mangeun_value_text, ft.ElevatedButton("변경", on_click=lambda e: setattr(mangeun_popup_layer, "visible", True) or page.update(), bgcolor="#2563EB", color="white", width=68, height=22, style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=4), text_style=ft.TextStyle(size=11, weight="bold"), padding=0))], alignment="start", vertical_alignment="center", spacing=6, height=22)
     
     mangeun_popup_layer.content = ft.Container(content=ft.Column([ft.Text("만근 기준 변경", size=16, weight="bold", color="black"), ft.Row([ft.Text("만근:", size=13, weight="bold", color="black"), mangeun_dropdown], alignment="center", spacing=10), ft.Row([ft.TextButton("취소", on_click=lambda e: setattr(mangeun_popup_layer, "visible", False) or page.update()), ft.TextButton("저장", on_click=on_mangeun_dropdown_changed, style=ft.ButtonStyle(color="#2563EB"))], alignment="spaceBetween")], spacing=10, tight=True), bgcolor="white", padding=14, border_radius=12, width=240)
@@ -465,8 +514,8 @@ def main(page: ft.Page):
     emergency_form_container = ft.Container(content=ft.Column([ft.Row([ft.Text("🚨 긴급 연락처 관리", size=16, weight="bold", color="#1E3A8A")]), ft.Divider(height=1), ft.Row([em_name := ft.TextField(cursor_width=1, label="이름/서비스명", label_style=ft.TextStyle(size=11), width=100, height=38, text_size=13, content_padding=8), em_phone := ft.TextField(cursor_width=1, label="전화번호(숫자만)", label_style=ft.TextStyle(size=11), expand=True, height=38, text_size=13, content_padding=8, keyboard_type=ft.KeyboardType.PHONE), ft.ElevatedButton(content=ft.Text("등록", size=12, weight="bold", color="white"), bgcolor="#2563EB", width=60, height=38, style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=4), padding=0), on_click=lambda e: add_emergency_item())], spacing=4), ft.Divider(height=1, color="#E2E8F0")]))
 
     # 화면 스크롤 가능 구역 및 전체 인터페이스 초기 패치 주입 구역
-    scrollable_content = ft.Column([header_nav, summary_area, guide_text, div_line1, weeks_header, div_line2, calendar_grid, input_zone_container, phonebook_zone_container, setting_column], expand=True, scroll=ft.ScrollMode.AUTO)
-    page.add(ft.Stack([ft.Column([scrollable_content, ft.Divider(height=1), ft.Row([btn_calendar, btn_status, btn_input, btn_setting], alignment="spaceAround", spacing=4)], expand=True), popup_layer, mangeun_popup_layer], expand=True))
+    scrollable_content = ft.Column([topbar_back_row, header_nav, summary_area, guide_text, div_line1, weeks_header, div_line2, calendar_grid, input_zone_container, phonebook_zone_container, setting_column, settings_zone_container], expand=True, scroll=ft.ScrollMode.AUTO)
+    page.add(ft.Stack([ft.Column([scrollable_content, ft.Divider(height=1), ft.Row([btn_status, btn_setting, btn_config], alignment="spaceAround", spacing=4)], expand=True), popup_layer, mangeun_popup_layer], expand=True))
     
     change_tab("달력"); rebuild_interface()
 
