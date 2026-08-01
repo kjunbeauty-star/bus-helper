@@ -105,6 +105,7 @@ def main(page: ft.Page):
 
     # [하단 탭 메뉴 버튼] 기사님 디자인 피드백 반영 (텍스트 이모지 장착 및 한여름의 패딩 제거 버전)
     btn_calendar = ft.ElevatedButton(content=ft.Container(content=ft.Text("📅 달력", color="white", size=11, weight="bold"), alignment=ft.alignment.center), expand=1, height=40, style=ft.ButtonStyle(bgcolor="#2563EB", shape=ft.RoundedRectangleBorder(radius=6), padding=0), on_click=lambda e: change_tab("달력"))
+    btn_status = ft.ElevatedButton(content=ft.Container(content=ft.Text("📊 근무현황", color="white", size=11, weight="bold"), alignment=ft.alignment.center), expand=1, height=40, style=ft.ButtonStyle(bgcolor="grey", shape=ft.RoundedRectangleBorder(radius=6), padding=0), on_click=lambda e: change_tab("근무현황"))
     btn_input = ft.ElevatedButton(content=ft.Container(content=ft.Text("🚌 운행정보", color="white", size=11, weight="bold"), alignment=ft.alignment.center), expand=1, height=40, style=ft.ButtonStyle(bgcolor="grey", shape=ft.RoundedRectangleBorder(radius=6), padding=0), on_click=lambda e: change_tab("운행정보"))
     btn_setting = ft.ElevatedButton(content=ft.Container(content=ft.Text("🚨 긴급연락처", color="white", size=11, weight="bold"), alignment=ft.alignment.center), expand=1, height=40, style=ft.ButtonStyle(bgcolor="grey", shape=ft.RoundedRectangleBorder(radius=6), padding=0), on_click=lambda e: change_tab("긴급연락처"))
 
@@ -261,15 +262,19 @@ def main(page: ft.Page):
         current_tab = tab_name
         
         btn_calendar.style = ft.ButtonStyle(color="white" if tab_name == "달력" else "#94A3B8", bgcolor="#2563EB" if tab_name == "달력" else "transparent", shape=ft.RoundedRectangleBorder(radius=6), padding=0)
+        btn_status.style = ft.ButtonStyle(color="white" if tab_name == "근무현황" else "#94A3B8", bgcolor="#2563EB" if tab_name == "근무현황" else "transparent", shape=ft.RoundedRectangleBorder(radius=6), padding=0)
         btn_input.style = ft.ButtonStyle(color="white" if tab_name == "운행정보" else "#94A3B8", bgcolor="#2563EB" if tab_name == "운행정보" else "transparent", shape=ft.RoundedRectangleBorder(radius=6), padding=0)
         btn_setting.style = ft.ButtonStyle(color="white" if tab_name == "긴급연락처" else "#94A3B8", bgcolor="#2563EB" if tab_name == "긴급연락처" else "transparent", shape=ft.RoundedRectangleBorder(radius=6), padding=0)
 
         btn_calendar.update()
+        btn_status.update()
         btn_input.update()
         btn_setting.update()
         
         if tab_name == "달력":
-            header_nav.visible, summary_area.visible, guide_text.visible, calendar_grid.visible, input_zone_container.visible, phonebook_zone_container.visible, setting_column.visible, weeks_header.visible, div_line1.visible, div_line2.visible = True, True, True, True, False, False, False, True, True, True
+            header_nav.visible, summary_area.visible, guide_text.visible, calendar_grid.visible, input_zone_container.visible, phonebook_zone_container.visible, setting_column.visible, weeks_header.visible, div_line1.visible, div_line2.visible = True, False, False, True, False, False, False, True, True, True
+        elif tab_name == "근무현황":
+            header_nav.visible, summary_area.visible, guide_text.visible, calendar_grid.visible, input_zone_container.visible, phonebook_zone_container.visible, setting_column.visible, weeks_header.visible, div_line1.visible, div_line2.visible = True, True, True, False, False, False, False, False, False, False
         elif tab_name == "운행정보":
             header_nav.visible, summary_area.visible, guide_text.visible, calendar_grid.visible, input_zone_container.visible, phonebook_zone_container.visible, setting_column.visible, weeks_header.visible, div_line1.visible, div_line2.visible = True, False, False, False, True, False, False, False, False, False
             refresh_input_tab_view()
@@ -392,7 +397,7 @@ def main(page: ft.Page):
                     elif status == "휴무": bg_color, text_color, status_desc = "#FCE8E6", "#D93025", "휴무"
                     day_number_color = "#D93025" if weekday == 6 else ("#1A73E8" if weekday == 5 else "#000000")
                     time_display = ft.Text(start_time, size=9, weight="bold", color=text_color) if start_time and status != "휴무" else ft.Container()
-                    day_box = ft.Container(content=ft.Column([ft.Text(f"{day}", size=12, weight="bold", color=day_number_color), ft.Text(status_desc, size=10, weight="bold", color=text_color), time_display], alignment="center", horizontal_alignment="center", spacing=0), bgcolor=bg_color, border=ft.border.all(2, "#2563EB") if (current['year'] == today_y and current['month'] == today_m and day == today_d) else ft.border.all(0.5, "#E2E8F0"), border_radius=4, height=52, expand=1, on_click=lambda e, dk=date_key: open_input_popup(dk))
+                    day_box = ft.Container(content=ft.Column([ft.Text(f"{day}", size=12, weight="bold", color=day_number_color), ft.Text(status_desc, size=10, weight="bold", color=text_color), time_display], alignment="start", horizontal_alignment="center", spacing=0), bgcolor=bg_color, padding=ft.padding.only(top=4), border=ft.border.all(2, "#2563EB") if (current['year'] == today_y and current['month'] == today_m and day == today_d) else ft.border.all(0.5, "#E2E8F0"), border_radius=4, height=52, expand=1, on_click=lambda e, dk=date_key: open_input_popup(dk))
                     week_row.controls.append(day_box)
             calendar_grid.controls.append(week_row)
         if current_tab == "운행정보": refresh_input_tab_view()
@@ -461,7 +466,7 @@ def main(page: ft.Page):
 
     # 화면 스크롤 가능 구역 및 전체 인터페이스 초기 패치 주입 구역
     scrollable_content = ft.Column([header_nav, summary_area, guide_text, div_line1, weeks_header, div_line2, calendar_grid, input_zone_container, phonebook_zone_container, setting_column], expand=True, scroll=ft.ScrollMode.AUTO)
-    page.add(ft.Stack([ft.Column([scrollable_content, ft.Divider(height=1), ft.Row([btn_calendar, btn_input, btn_setting], alignment="spaceAround", spacing=4)], expand=True), popup_layer, mangeun_popup_layer], expand=True))
+    page.add(ft.Stack([ft.Column([scrollable_content, ft.Divider(height=1), ft.Row([btn_calendar, btn_status, btn_input, btn_setting], alignment="spaceAround", spacing=4)], expand=True), popup_layer, mangeun_popup_layer], expand=True))
     
     change_tab("달력"); rebuild_interface()
 
