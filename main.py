@@ -526,22 +526,51 @@ def main(page: ft.Page):
     # 🧭 URL 라우팅: 브라우저/안드로이드 "뒤로가기"가 각 화면 → 달력(홈)으로 자연스럽게 이어지도록 연결
     ROUTE_TO_TAB = {"/": "달력", "/home": "달력", "/status": "근무현황", "/emergency": "긴급연락처", "/settings": "설정"}
     suppress_next_pad = {"flag": False}
+    home_back_armed = {"value": False}
+    exit_confirm_popup_layer = ft.Container(visible=False, bgcolor="#AA000000", alignment=ft.Alignment(0, 0), expand=True)
+
+    def close_exit_confirm(e=None):
+        # "취소": 뒤로가기 함정을 다시 걸어서, 다음에 또 뒤로가기를 누르면 다시 종료 확인이 뜨게 함
+        exit_confirm_popup_layer.visible = False
+        suppress_next_pad["flag"] = True
+        page.go("/home" if page.route == "/" else "/")
+        page.update()
+
+    def confirm_exit_app(e=None):
+        # "종료": 실제 앱 종료 시도 (설치된 앱/데스크톱 빌드에서 동작. 일반 모바일 브라우저 탭은
+        # 보안정책상 스크립트로 강제로 닫을 수 없어 이 경우엔 반응이 없을 수 있음)
+        page.window_close()
+
+    def show_exit_confirm():
+        exit_confirm_popup_layer.content = make_full_width_sheet(ft.Column([
+                ft.Text("앱을 종료하시겠습니까?", size=16, weight="bold", color="black"),
+                ft.Row([
+                    ft.ElevatedButton(content=ft.Container(ft.Text("종료", size=14, weight="bold", color="white"), alignment=ft.alignment.center), bgcolor="#D93025", expand=1, height=40, style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=6), padding=0), on_click=confirm_exit_app),
+                    ft.ElevatedButton(content=ft.Container(ft.Text("취소", size=14, weight="bold", color="white"), alignment=ft.alignment.center), bgcolor="grey", expand=1, height=40, style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=6), padding=0), on_click=close_exit_confirm),
+                ], spacing=8),
+            ], spacing=14, tight=True, horizontal_alignment="stretch"))
+        exit_confirm_popup_layer.visible = True
+        page.update()
 
     def on_route_change(e):
         change_tab(ROUTE_TO_TAB.get(page.route, "달력"))
-        # 🚫 달력(홈) 화면에서 뒤로가기를 눌러도 앱이 꺼지지 않도록,
-        # 달력에 도착할 때마다 "/"↔"/home"을 한 번씩 더 쌓아서 뒤로 갈 곳을 항상 남겨둠.
         # (직전 호출이 "내가 방금 스스로 호출한 page.go()"였는지를 플래그로 구분해서
         #  "/"와 "/home"이 서로를 무한히 계속 호출하는 걸 막음 — 이게 없으면 무한루프/깜빡임 발생)
         if suppress_next_pad["flag"]:
             suppress_next_pad["flag"] = False
             return
-        if page.route == "/":
+        if page.route not in ("/", "/home"):
+            # 달력을 벗어난 다른 화면으로 이동함 → 종료 확인 함정은 일단 해제
+            home_back_armed["value"] = False
+            return
+        if home_back_armed["value"]:
+            # 🚪 이미 달력 화면에 있는 상태에서 뒤로가기를 또 눌렀을 때만 종료 확인을 띄움
+            show_exit_confirm()
+        else:
+            # 달력에 처음 도착함 → 조용히 뒤로가기 함정을 한 번 걸어둠 (앱이 바로 안 꺼지게)
+            home_back_armed["value"] = True
             suppress_next_pad["flag"] = True
-            page.go("/home")
-        elif page.route == "/home":
-            suppress_next_pad["flag"] = True
-            page.go("/")
+            page.go("/home" if page.route == "/" else "/")
 
     page.on_route_change = on_route_change
 
@@ -950,7 +979,7 @@ def main(page: ft.Page):
 
     # 화면 스크롤 가능 구역 및 전체 인터페이스 초기 패치 주입 구역
     scrollable_content = ft.Column([topbar_back_row, header_nav, summary_area, guide_text, calendar_table, input_zone_container, setting_column, phonebook_zone_container, settings_zone_container], expand=True, scroll=ft.ScrollMode.AUTO)
-    page.add(ft.Stack([ft.Column([scrollable_content, ft.Divider(height=1), ft.Row([btn_status, btn_setting, btn_config], alignment="spaceAround", spacing=4)], expand=True), popup_layer, value_picker_popup_layer, mangeun_popup_layer, pattern_popup_layer, pattern_name_popup_layer, reset_confirm_popup_layer, status_picker_popup_layer], expand=True))
+    page.add(ft.Stack([ft.Column([scrollable_content, ft.Divider(height=1), ft.Row([btn_status, btn_setting, btn_config], alignment="spaceAround", spacing=4)], expand=True), popup_layer, value_picker_popup_layer, mangeun_popup_layer, pattern_popup_layer, pattern_name_popup_layer, reset_confirm_popup_layer, status_picker_popup_layer, exit_confirm_popup_layer], expand=True))
     
     page.on_resize = lambda e: rebuild_interface()
     change_tab("달력"); rebuild_interface()
