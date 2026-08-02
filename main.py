@@ -518,6 +518,9 @@ async def main(page: ft.Page):
         btn_config.update()
 
         topbar_back_row.visible = tab_name != "달력"
+        # 🛠️ summary_area(근무/휴무/만근 요약)는 visible=False로만 숨기면 자리(공백)가 그대로 남는 문제가 있어서,
+        # 근무현황 탭일 때만 컨트롤 목록에 실제로 넣고, 그 외엔 아예 목록에서 빼서 공간 자체가 안 생기게 함
+        summary_area_holder.controls = [summary_area] if tab_name == "근무현황" else []
 
         if tab_name == "달력":
             header_nav.visible, summary_area.visible, guide_text.visible, calendar_grid.visible, input_zone_container.visible, phonebook_zone_container.visible, setting_column.visible, settings_zone_container.visible, weeks_header.visible = True, False, True, True, False, False, False, False, True
@@ -788,7 +791,7 @@ async def main(page: ft.Page):
         weeks = cal.monthdayscalendar(current['year'], current['month'])
         # 📐 화면 높이에 맞춰 날짜칸 크기 자동 계산 (기기/글자크기 상관없이 화면에 맞게 조정)
         screen_h = page.height or 700
-        chrome_overhead = 160  # 상단바+안내문구+요일줄+구분선+하단탭 등이 차지하는 대략적 높이 (여백 재축소로 값 더 낮춤)
+        chrome_overhead = 185  # 상단바+안내문구+요일줄+구분선+하단탭 등이 차지하는 대략적 높이 (160은 과했음 → 살짝 올려 재조정)
         available_h = max(screen_h - chrome_overhead, 60 * len(weeks))
         # ⚠️ 예전엔 cell_h를 100px로 상한을 씌워서, 주(week) 수가 적은 달이나 화면이 큰 기기에서는
         # 달력이 남는 공간을 다 못 채우고 하단 메뉴 사이에 빈 공간이 크게 남았음 → 상한 제거하고 화면을 꽉 채움
@@ -971,6 +974,7 @@ async def main(page: ft.Page):
         rebuild_interface()
 
     summary_area = ft.Row([ft.Column([stats_text, mangeun_text, mangeun_setting_row], spacing=3, tight=True)], alignment="start")
+    summary_area_holder = ft.Column([], spacing=0, tight=True)
 
     # 🗑️ 리셋 관련: 확인 팝업 + 실제 초기화 로직
     reset_confirm_popup_layer = ft.Container(visible=False, bgcolor="#AA000000", alignment=ft.Alignment(0, 0), expand=True)
@@ -1008,7 +1012,7 @@ async def main(page: ft.Page):
     emergency_form_container = ft.Container(content=ft.Column([ft.Row([ft.Text("🚨 긴급연락처", size=16, weight="bold", color="#1E3A8A")]), ft.Divider(height=1), ft.Row([em_name := ft.TextField(cursor_width=1, label="이름/서비스명", label_style=ft.TextStyle(size=11), width=100, height=38, text_size=13, content_padding=8), em_phone := ft.TextField(cursor_width=1, label="전화번호(숫자만)", label_style=ft.TextStyle(size=11), expand=True, height=38, text_size=13, content_padding=8, keyboard_type=ft.KeyboardType.PHONE), ft.ElevatedButton(content=ft.Text("등록", size=12, weight="bold", color="white"), bgcolor="#2563EB", width=60, height=38, style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=4), padding=0), on_click=lambda e: add_emergency_item())], spacing=4), ft.Divider(height=1, color="#E2E8F0")]))
 
     # 화면 스크롤 가능 구역 및 전체 인터페이스 초기 패치 주입 구역
-    scrollable_content = ft.Column([topbar_back_row, header_nav, summary_area, guide_text, calendar_table, input_zone_container, setting_column, phonebook_zone_container, settings_zone_container], expand=True, scroll=ft.ScrollMode.AUTO, spacing=0)
+    scrollable_content = ft.Column([topbar_back_row, header_nav, summary_area_holder, guide_text, calendar_table, input_zone_container, setting_column, phonebook_zone_container, settings_zone_container], expand=True, scroll=ft.ScrollMode.AUTO, spacing=0)
     page.add(ft.Stack([ft.Column([scrollable_content, ft.Divider(height=1), ft.Row([btn_status, btn_setting, btn_config], alignment="spaceAround", spacing=4)], expand=True), popup_layer, value_picker_popup_layer, mangeun_popup_layer, pattern_popup_layer, pattern_name_popup_layer, reset_confirm_popup_layer, status_picker_popup_layer, exit_confirm_popup_layer, driver_list_popup_layer], expand=True))
     
     page.on_resize = lambda e: rebuild_interface()
