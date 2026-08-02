@@ -791,7 +791,7 @@ async def main(page: ft.Page):
         weeks = cal.monthdayscalendar(current['year'], current['month'])
         # 📐 화면 높이에 맞춰 날짜칸 크기 자동 계산 (기기/글자크기 상관없이 화면에 맞게 조정)
         screen_h = page.height or 700
-        chrome_overhead = 150  # 상단바+안내문구+요일줄+구분선+하단탭 등이 차지하는 대략적 높이 (버튼 기본여백 제거로 실제 높이가 줄어 값도 낮춤)
+        chrome_overhead = 165  # 상단바+안내문구+요일줄+구분선+하단탭 등이 차지하는 대략적 높이 (150은 과했음 → 재조정)
         available_h = max(screen_h - chrome_overhead, 60 * len(weeks))
         # ⚠️ 예전엔 cell_h를 100px로 상한을 씌워서, 주(week) 수가 적은 달이나 화면이 큰 기기에서는
         # 달력이 남는 공간을 다 못 채우고 하단 메뉴 사이에 빈 공간이 크게 남았음 → 상한 제거하고 화면을 꽉 채움
