@@ -72,34 +72,44 @@ async def main(page: ft.Page):
     EMERGENCY_LIST = []
 
     # 스마트폰 내부 저장소(Shared Preferences)에서 기존 데이터 불러오기
+    # 🛡️ 예전 버전들을 거치며 저장된 값이 혹시 깨진 형태(dict가 아닌 문자열 등)로 남아있어도
+    # 앱이 죽지 않고 조용히 기본값으로 초기화되도록 안전하게 불러오는 헬퍼
+    def safe_json_load(raw, expected_type, default):
+        try:
+            val = json.loads(raw) if raw else default
+        except Exception:
+            return default
+        return val if isinstance(val, expected_type) else default
+
     saved_schedules = await page.shared_preferences.get(STORAGE_SCHEDULES_KEY)
     saved_targets = await page.shared_preferences.get(STORAGE_MANGEUN_KEY)
     saved_input_data = await page.shared_preferences.get(STORAGE_INPUT_DATA_KEY)
     saved_phonebook = await page.shared_preferences.get(STORAGE_PHONEBOOK_KEY)
     
     saved_emergency = await page.shared_preferences.get(STORAGE_EMERGENCY_KEY)
-    if saved_emergency:
-        EMERGENCY_LIST = json.loads(saved_emergency)
+    EMERGENCY_LIST = safe_json_load(saved_emergency, list, [])
 
     saved_pattern = await page.shared_preferences.get(STORAGE_PATTERN_KEY)
     # pattern_state: name(패턴명) / anchor_date(기준일 YYYY-MM-DD) / anchor_index(그날이 패턴의 몇 번째인지)
-    pattern_state = json.loads(saved_pattern) if saved_pattern else {"name": None, "anchor_date": None, "anchor_index": 0}
+    pattern_state = safe_json_load(saved_pattern, dict, {"name": None, "anchor_date": None, "anchor_index": 0})
 
     saved_memos = await page.shared_preferences.get(STORAGE_MEMO_KEY)
-    DATE_MEMOS = json.loads(saved_memos) if saved_memos else {}
+    DATE_MEMOS = safe_json_load(saved_memos, dict, {})
 
-    USER_SCHEDULES = json.loads(saved_schedules) if saved_schedules else {}
-    MANGEUN_TARGETS = json.loads(saved_targets) if saved_targets else {}
-    PHONEBOOK_LIST = json.loads(saved_phonebook) if saved_phonebook else []
+    USER_SCHEDULES = safe_json_load(saved_schedules, dict, {})
+    MANGEUN_TARGETS = safe_json_load(saved_targets, dict, {})
+    PHONEBOOK_LIST = safe_json_load(saved_phonebook, list, [])
     
     # 운행정보(내차/앞차/뒷차) 초기값 세팅
-    if saved_input_data:
-        input_data_state = json.loads(saved_input_data)
+    _loaded_input_data = safe_json_load(saved_input_data, dict, None)
+    if _loaded_input_data:
+        input_data_state = _loaded_input_data
     else:
         input_data_state = {
             "route": "미입력",
             "bus_no": "미입력",
             "front_bus": "미입력", "front_driver": "미입력", "front_phone": "미입력",
+
             "back_bus": "미입력", "back_driver": "미입력", "back_phone": "미입력"
         }
 
