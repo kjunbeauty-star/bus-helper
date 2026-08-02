@@ -798,7 +798,7 @@ async def main(page: ft.Page):
         else:
             screen_h = raw_h
             rebuild_interface._last_good_h = raw_h
-        chrome_overhead = 145  # 상단바+안내문구+요일줄+구분선+하단탭 등이 차지하는 대략적 높이 (125는 너무 작아 하단 잘림, 162는 여백 남음 → 중간값으로 조정 중)
+        chrome_overhead = 155  # 상단바+안내문구+요일줄+구분선+하단탭 등이 차지하는 대략적 높이 (145는 잘림, 162는 여백 → 좁혀가는 중)
         available_h = max(screen_h - chrome_overhead, 60 * len(weeks))
         # ⚠️ 예전엔 cell_h를 100px로 상한을 씌워서, 주(week) 수가 적은 달이나 화면이 큰 기기에서는
         # 달력이 남는 공간을 다 못 채우고 하단 메뉴 사이에 빈 공간이 크게 남았음 → 상한 제거하고 화면을 꽉 채움
