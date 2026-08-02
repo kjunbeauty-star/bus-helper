@@ -796,7 +796,7 @@ async def main(page: ft.Page):
         # ⚠️ 예전엔 cell_h를 100px로 상한을 씌워서, 주(week) 수가 적은 달이나 화면이 큰 기기에서는
         # 달력이 남는 공간을 다 못 채우고 하단 메뉴 사이에 빈 공간이 크게 남았음 → 상한 제거하고 화면을 꽉 채움
         cell_h = max(60, available_h / len(weeks))
-        print(f"[DEBUG] page.height={page.height}, screen_h={screen_h}, weeks={len(weeks)}, chrome_overhead={chrome_overhead}, available_h={available_h}, cell_h={cell_h}, floor_hit={available_h == 60*len(weeks)}")
+        print(f"[DEBUG] page.height={page.height}, screen_h={screen_h}, weeks={len(weeks)}, chrome_overhead={chrome_overhead}, available_h={available_h}, cell_h={cell_h}, floor_hit={available_h == 60*len(weeks)}", flush=True)
         for week in weeks:
             week_row = ft.Row(alignment="spaceAround", spacing=0)
             for day in week:
