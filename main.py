@@ -791,7 +791,7 @@ async def main(page: ft.Page):
         weeks = cal.monthdayscalendar(current['year'], current['month'])
         # 📐 화면 높이에 맞춰 날짜칸 크기 자동 계산 (기기/글자크기 상관없이 화면에 맞게 조정)
         screen_h = page.height or 700
-        chrome_overhead = 185  # 상단바+안내문구+요일줄+구분선+하단탭 등이 차지하는 대략적 높이 (160은 과했음 → 살짝 올려 재조정)
+        chrome_overhead = 150  # 상단바+안내문구+요일줄+구분선+하단탭 등이 차지하는 대략적 높이 (버튼 기본여백 제거로 실제 높이가 줄어 값도 낮춤)
         available_h = max(screen_h - chrome_overhead, 60 * len(weeks))
         # ⚠️ 예전엔 cell_h를 100px로 상한을 씌워서, 주(week) 수가 적은 달이나 화면이 큰 기기에서는
         # 달력이 남는 공간을 다 못 채우고 하단 메뉴 사이에 빈 공간이 크게 남았음 → 상한 제거하고 화면을 꽉 채움
@@ -947,7 +947,11 @@ async def main(page: ft.Page):
         ], spacing=6, tight=True))
 
     # 상단 내비게이션 바 (이전달 / 다음달 이동) 버튼 컴포넌트
-    header_nav = ft.Row([ft.TextButton("◀ 이전", on_click=lambda e: move_prev(e), style=ft.ButtonStyle(color="black")), month_title, ft.TextButton("다음 ▶", on_click=lambda e: move_next(e), style=ft.ButtonStyle(color="black"))], alignment="spaceBetween")
+    header_nav = ft.Row([
+        ft.TextButton("◀ 이전", on_click=lambda e: move_prev(e), style=ft.ButtonStyle(color="black", padding=0)),
+        month_title,
+        ft.TextButton("다음 ▶", on_click=lambda e: move_next(e), style=ft.ButtonStyle(color="black", padding=0)),
+    ], alignment="spaceBetween", height=32)
     topbar_title = ft.Text("", size=17, weight="bold", color="black")
     topbar_back_row = ft.Row([
         ft.TextButton(content=ft.Text("🏠 달력으로 가기", size=14, weight="bold", color="#2563EB"), on_click=lambda e: page.go("/")),
@@ -1005,8 +1009,8 @@ async def main(page: ft.Page):
 
     guide_text = ft.Row([
         ft.Container(content=ft.Text("💡 날짜를 터치하여 근무를 입력 또는 수정하세요.", size=10, color="#666666"), padding=ft.Padding.only(left=8, bottom=0), expand=1),
-        ft.TextButton(content=ft.Text("🗑️ 리셋", size=11, weight="bold", color="#D93025"), on_click=open_reset_popup),
-    ], alignment="spaceBetween")
+        ft.TextButton(content=ft.Text("🗑️ 리셋", size=11, weight="bold", color="#D93025"), on_click=open_reset_popup, style=ft.ButtonStyle(padding=0)),
+    ], alignment="spaceBetween", height=28)
    
     # 긴급연락처 신규 등록 폼 컴포넌트
     emergency_form_container = ft.Container(content=ft.Column([ft.Row([ft.Text("🚨 긴급연락처", size=16, weight="bold", color="#1E3A8A")]), ft.Divider(height=1), ft.Row([em_name := ft.TextField(cursor_width=1, label="이름/서비스명", label_style=ft.TextStyle(size=11), width=100, height=38, text_size=13, content_padding=8), em_phone := ft.TextField(cursor_width=1, label="전화번호(숫자만)", label_style=ft.TextStyle(size=11), expand=True, height=38, text_size=13, content_padding=8, keyboard_type=ft.KeyboardType.PHONE), ft.ElevatedButton(content=ft.Text("등록", size=12, weight="bold", color="white"), bgcolor="#2563EB", width=60, height=38, style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=4), padding=0), on_click=lambda e: add_emergency_item())], spacing=4), ft.Divider(height=1, color="#E2E8F0")]))
