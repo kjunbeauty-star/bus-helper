@@ -1,0 +1,14 @@
+__pycache__/
+*.py[cod]
+
+build/
+build_env/
+
+*.db
+*.apk
+*.aab
+*.zip
+
+*.docx
+*.pdf
+
