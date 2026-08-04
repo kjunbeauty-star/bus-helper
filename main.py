@@ -580,8 +580,7 @@ async def main(page: ft.Page):
         # 📇 연락처 화면 안에서만 쓰는 서브탭 전환 버튼바. 다른 탭으로 나가면 항상 숨김.
         contacts_subtab_bar.visible = (tab_name == "긴급연락처")
         if tab_name != "긴급연락처":
-            emergency_swipe_area.visible = False
-            phonebook_swipe_area.visible = False
+            contacts_content_host.visible = False
 
         if tab_name == "달력":
             header_nav.visible, summary_area.visible, guide_text.visible, calendar_grid.visible, input_zone_container.visible, phonebook_zone_container.visible, setting_column.visible, settings_zone_container.visible, weeks_header.visible = True, False, True, True, False, False, False, False, True
@@ -612,18 +611,22 @@ async def main(page: ft.Page):
 
     def switch_contacts_subtab(name):
         contacts_subtab_state["value"] = name
-        # 웹에서도 높이가 정상 재계산되도록 콘텐츠가 아닌 스와이프 영역을 전환한다.
+        # 하나의 스와이프 영역 안에서 콘텐츠만 교체해 웹 렌더 트리를 안정적으로 유지한다.
         setting_column.visible = True
         phonebook_zone_container.visible = True
-        emergency_swipe_area.visible = (name == "긴급")
-        phonebook_swipe_area.visible = (name == "기사")
+        contacts_content_host.content = setting_column if name == "긴급" else phonebook_zone_container
+        contacts_content_host.visible = True
         btn_contacts_emergency.style = ft.ButtonStyle(color="white" if name == "긴급" else "#64748B", bgcolor="#2563EB" if name == "긴급" else "#E2E8F0", shape=ft.RoundedRectangleBorder(radius=6), padding=0)
         btn_contacts_driver.style = ft.ButtonStyle(color="white" if name == "기사" else "#64748B", bgcolor="#2563EB" if name == "기사" else "#E2E8F0", shape=ft.RoundedRectangleBorder(radius=6), padding=0)
         page.update()
 
     def update_contacts_swipe(e):
-        local_delta = getattr(e, "local_delta", None)
-        contacts_swipe_state["dx"] += getattr(local_delta, "x", 0.0) or 0.0
+        primary_delta = getattr(e, "primary_delta", None)
+        if primary_delta is not None:
+            contacts_swipe_state["dx"] += primary_delta
+        else:
+            local_delta = getattr(e, "local_delta", None)
+            contacts_swipe_state["dx"] = getattr(local_delta, "x", 0.0) or 0.0
 
     def start_contacts_swipe(e):
         contacts_swipe_state["dx"] = 0.0
@@ -825,8 +828,12 @@ async def main(page: ft.Page):
         refresh_input_tab_view()
 
     def update_driving_swipe(e):
-        local_delta = getattr(e, "local_delta", None)
-        driving_swipe_state["dx"] += getattr(local_delta, "x", 0.0) or 0.0
+        primary_delta = getattr(e, "primary_delta", None)
+        if primary_delta is not None:
+            driving_swipe_state["dx"] += primary_delta
+        else:
+            local_delta = getattr(e, "local_delta", None)
+            driving_swipe_state["dx"] = getattr(local_delta, "x", 0.0) or 0.0
 
     def start_driving_swipe(e):
         driving_swipe_state["dx"] = 0.0
@@ -856,14 +863,7 @@ async def main(page: ft.Page):
         front_tab = ft.ElevatedButton(content=ft.Text("앞차 정보", size=12, weight="bold"), expand=1, height=34, style=ft.ButtonStyle(color="white" if selected_name == "앞차" else "#64748B", bgcolor="#2563EB" if selected_name == "앞차" else "#E2E8F0", shape=ft.RoundedRectangleBorder(radius=6), padding=0), on_click=lambda e: switch_driving_subtab("앞차"))
         back_tab = ft.ElevatedButton(content=ft.Text("뒷차 정보", size=12, weight="bold"), expand=1, height=34, style=ft.ButtonStyle(color="white" if selected_name == "뒷차" else "#64748B", bgcolor="#2563EB" if selected_name == "뒷차" else "#E2E8F0", shape=ft.RoundedRectangleBorder(radius=6), padding=0), on_click=lambda e: switch_driving_subtab("뒷차"))
         selected_card = front_card if selected_name == "앞차" else back_card
-        swipeable_card = ft.GestureDetector(
-            content=selected_card,
-            on_horizontal_drag_start=start_driving_swipe,
-            on_horizontal_drag_update=update_driving_swipe,
-            on_horizontal_drag_end=finish_driving_swipe,
-            drag_interval=10,
-        )
-        return ft.Container(content=ft.Column([ft.Text("🚍 운행 정보 요약", size=14, weight="bold", color="#1E3A8A"), my_card, ft.Row([front_tab, back_tab], spacing=6), swipeable_card], spacing=8, horizontal_alignment="stretch"), padding=12, border=ft.Border.all(1, "#2563EB"), border_radius=10, margin=ft.Margin.only(top=12, bottom=10))
+        return ft.Container(content=ft.Column([ft.Text("🚍 운행 정보 요약", size=14, weight="bold", color="#1E3A8A"), my_card, ft.Row([front_tab, back_tab], spacing=6), selected_card], spacing=8, horizontal_alignment="stretch"), padding=12, border=ft.Border.all(1, "#2563EB"), border_radius=10, margin=ft.Margin.only(top=12, bottom=10))
 
     # 하이픈(-) 자동 정렬 마법의 번호 교정 포맷 함수
     def final_format_phone(raw_value):
@@ -1241,22 +1241,7 @@ async def main(page: ft.Page):
     # 긴급연락처 신규 등록 폼 컴포넌트
     emergency_form_container = ft.Container(content=ft.Column([ft.Row([ft.Text("🚨 긴급연락처", size=16, weight="bold", color="#1E3A8A")]), ft.Divider(height=1), ft.Row([em_name := ft.TextField(cursor_width=1, label="이름/서비스명", label_style=ft.TextStyle(size=11), width=100, height=38, text_size=13, content_padding=8), em_phone := ft.TextField(cursor_width=1, label="전화번호(숫자만)", label_style=ft.TextStyle(size=11), expand=True, height=38, text_size=13, content_padding=8, keyboard_type=ft.KeyboardType.PHONE), ft.ElevatedButton(content=ft.Text("등록", size=12, weight="bold", color="white"), bgcolor="#2563EB", width=60, height=38, style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=4), padding=0), on_click=lambda e: add_emergency_item())], spacing=4), ft.Divider(height=1, color="#E2E8F0")]))
 
-    emergency_swipe_area = ft.GestureDetector(
-        content=setting_column,
-        on_horizontal_drag_start=start_contacts_swipe,
-        on_horizontal_drag_update=update_contacts_swipe,
-        on_horizontal_drag_end=finish_contacts_swipe,
-        drag_interval=10,
-        visible=False,
-    )
-    phonebook_swipe_area = ft.GestureDetector(
-        content=phonebook_zone_container,
-        on_horizontal_drag_start=start_contacts_swipe,
-        on_horizontal_drag_update=update_contacts_swipe,
-        on_horizontal_drag_end=finish_contacts_swipe,
-        drag_interval=10,
-        visible=False,
-    )
+    contacts_content_host = ft.Container(visible=False)
 
     # 화면 스크롤 가능 구역 및 전체 인터페이스 초기 배치
     # Android APK에서는 Stack의 bottom=0 절대배치가 시스템 내비게이션 영역과 겹치거나
@@ -1273,8 +1258,7 @@ async def main(page: ft.Page):
             calendar_table,
             input_zone_container,
             contacts_subtab_bar,
-            emergency_swipe_area,
-            phonebook_swipe_area,
+            contacts_content_host,
             settings_zone_container,
         ],
         expand=True,
@@ -1300,9 +1284,36 @@ async def main(page: ft.Page):
     )
 
     # 본문과 하단 메뉴를 세로로 분리한 뒤, 팝업 레이어만 전체 화면 위에 올린다.
+    def start_main_swipe(e):
+        if current_tab == "긴급연락처":
+            start_contacts_swipe(e)
+        elif current_tab == "근무현황":
+            start_driving_swipe(e)
+
+    def update_main_swipe(e):
+        if current_tab == "긴급연락처":
+            update_contacts_swipe(e)
+        elif current_tab == "근무현황":
+            update_driving_swipe(e)
+
+    def finish_main_swipe(e):
+        if current_tab == "긴급연락처":
+            finish_contacts_swipe(e)
+        elif current_tab == "근무현황":
+            finish_driving_swipe(e)
+
+    swipeable_scroll_area = ft.GestureDetector(
+        content=ft.Container(content=scrollable_content, expand=True),
+        on_horizontal_drag_start=start_main_swipe,
+        on_horizontal_drag_update=update_main_swipe,
+        on_horizontal_drag_end=finish_main_swipe,
+        drag_interval=10,
+        expand=True,
+    )
+
     main_layout = ft.Column(
         [
-            ft.Container(content=scrollable_content, expand=True),
+            swipeable_scroll_area,
             bottom_bar,
         ],
         expand=True,
