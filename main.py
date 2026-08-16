@@ -9,7 +9,23 @@ from datetime import datetime, timedelta, timezone
 import flet as ft
 import json
 
+from alarm_logic import build_desired_alarms, is_expired_date_alarm
+from alarm_models import AlarmSettings, SCHEMA_VERSION
+
+try:
+    from work_alarm import WorkAlarmService
+except ImportError:
+    WorkAlarmService = None
+
 from data_utils import format_phone, normalize_contacts, normalize_input_data, normalize_schedules
+from lunar_utils import get_lunar_marker
+from pattern_utils import (
+    ALL_MONTHS,
+    add_pattern_segment,
+    get_pattern_segment,
+    get_repeating_pattern_status,
+    normalize_pattern_state,
+)
 
 try:
     import holidays as holidays_lib
@@ -25,6 +41,7 @@ STORAGE_PHONEBOOK_KEY = "bus_helper_phonebook"
 STORAGE_EMERGENCY_KEY = "bus_helper_emergency"
 STORAGE_PATTERN_KEY = "bus_helper_work_pattern"
 STORAGE_MEMO_KEY = "bus_helper_date_memos"
+STORAGE_ALARM_SETTINGS_KEY = "bus_helper_alarm_settings"
 
 # 🔁 반복 근무 패턴 정의 (버스종사자 근무 유형별 순환 사이클)
 WORK_PATTERNS = {
@@ -39,21 +56,21 @@ WORK_PATTERNS = {
 # 참고: 노동절(5/1)은 관공서 공휴일은 아니지만 버스회사 등 민간사업장에는 실질적으로 적용되어 포함함.
 HOLIDAYS = {
     "2025-01-01": "신정", "2025-01-27": "임시공휴일", "2025-01-28": "설연휴", "2025-01-29": "설날", "2025-01-30": "설연휴",
-    "2025-03-01": "삼일절", "2025-03-03": "대체휴일", "2025-05-01": "노동절", "2025-05-05": "어린이날/부처님",
+    "2025-03-01": "삼일절", "2025-03-03": "대체휴", "2025-05-01": "노동절", "2025-05-05": "어린이날/부처님",
     "2025-06-03": "대선", "2025-06-06": "현충일", "2025-08-15": "광복절", "2025-10-03": "개천절",
-    "2025-10-05": "추석연휴", "2025-10-06": "추석", "2025-10-07": "추석연휴", "2025-10-08": "대체휴일",
+    "2025-10-05": "추석연휴", "2025-10-06": "추석", "2025-10-07": "추석연휴", "2025-10-08": "대체휴",
     "2025-10-09": "한글날", "2025-12-25": "성탄절",
     "2026-01-01": "신정", "2026-02-16": "설연휴", "2026-02-17": "설날", "2026-02-18": "설연휴",
-    "2026-03-01": "삼일절", "2026-03-02": "대체휴일", "2026-05-01": "노동절", "2026-05-05": "어린이날",
-    "2026-05-24": "부처님", "2026-05-25": "대체휴일", "2026-06-03": "지방선거", "2026-06-06": "현충일",
-    "2026-07-17": "제헌절", "2026-08-15": "광복절", "2026-08-17": "대체휴일", "2026-09-24": "추석연휴",
-    "2026-09-25": "추석", "2026-09-26": "추석연휴", "2026-10-03": "개천절", "2026-10-05": "대체휴일",
+    "2026-03-01": "삼일절", "2026-03-02": "대체휴", "2026-05-01": "노동절", "2026-05-05": "어린이날",
+    "2026-05-24": "부처님", "2026-05-25": "대체휴", "2026-06-03": "지방선거", "2026-06-06": "현충일",
+    "2026-07-17": "제헌절", "2026-08-15": "광복절", "2026-08-17": "대체휴", "2026-09-24": "추석연휴",
+    "2026-09-25": "추석", "2026-09-26": "추석연휴", "2026-10-03": "개천절", "2026-10-05": "대체휴",
     "2026-10-09": "한글날", "2026-12-25": "성탄절",
-    "2027-01-01": "신정", "2027-02-06": "설연휴", "2027-02-07": "설날", "2027-02-08": "설연휴", "2027-02-09": "대체휴일",
+    "2027-01-01": "신정", "2027-02-06": "설연휴", "2027-02-07": "설날", "2027-02-08": "설연휴", "2027-02-09": "대체휴",
     "2027-03-01": "삼일절", "2027-05-01": "노동절", "2027-05-05": "어린이날", "2027-05-13": "부처님",
-    "2027-06-06": "현충일", "2027-07-17": "제헌절", "2027-08-15": "광복절", "2027-08-16": "대체휴일",
+    "2027-06-06": "현충일", "2027-07-17": "제헌절", "2027-08-15": "광복절", "2027-08-16": "대체휴",
     "2027-09-14": "추석연휴", "2027-09-15": "추석", "2027-09-16": "추석연휴", "2027-10-03": "개천절",
-    "2027-10-04": "대체휴일", "2027-10-09": "한글날", "2027-10-11": "대체휴일", "2027-12-25": "성탄절", "2027-12-27": "대체휴일",
+    "2027-10-04": "대체휴", "2027-10-09": "한글날", "2027-10-11": "대체휴", "2027-12-25": "성탄절", "2027-12-27": "대체휴",
 }
 
 _HOLIDAY_YEAR_CACHE = {}
@@ -117,6 +134,9 @@ async def main(page: ft.Page):
     # 안드로이드 네이티브 앱에서만 상태바(시간/배터리/신호) 침범 방지용 상단 여백 추가
     # 웹(Render) 배포는 브라우저가 자체적으로 상태바를 처리하므로 영향 없어야 함
     is_native_android = (page.platform == ft.PagePlatform.ANDROID) and not page.web
+    alarm_service = WorkAlarmService() if is_native_android and WorkAlarmService else None
+    if alarm_service:
+        page.services.append(alarm_service)
     top_inset = 30 if is_native_android else 4  # 30은 시작값 — 실기기 테스트하며 조정
     print(f"[DEBUG] platform={page.platform}, web={page.web}, is_native_android={is_native_android}, top_inset={top_inset}", flush=True)
     page.padding = ft.Padding.only(left=4, right=4, top=top_inset, bottom=0)
@@ -147,10 +167,24 @@ async def main(page: ft.Page):
 
     saved_pattern = await page.shared_preferences.get(STORAGE_PATTERN_KEY)
     # pattern_state: name(패턴명) / anchor_date(기준일 YYYY-MM-DD) / anchor_index(그날이 패턴의 몇 번째인지)
-    pattern_state = safe_json_load(saved_pattern, dict, {"name": None, "anchor_date": None, "anchor_index": 0})
+    pattern_state = normalize_pattern_state(
+        safe_json_load(saved_pattern, dict, {"name": None, "anchor_date": None, "anchor_index": 0}))
 
     saved_memos = await page.shared_preferences.get(STORAGE_MEMO_KEY)
     DATE_MEMOS = safe_json_load(saved_memos, dict, {})
+    saved_alarm_settings = await page.shared_preferences.get(STORAGE_ALARM_SETTINGS_KEY)
+    alarm_settings_state = AlarmSettings.from_dict(
+        safe_json_load(saved_alarm_settings, dict, {})
+    ).to_dict()
+    alarm_runtime_state = {
+        "notifications_granted": False,
+        "exact_alarm_granted": False,
+        "full_screen_granted": False,
+        "last_sync_at": 0,
+        "reserved_count": 0,
+        "current_alarm_id": None,
+        "message": "Android APK에서만 사용할 수 있습니다." if not is_native_android else "확인 중",
+    }
 
     USER_SCHEDULES = normalize_schedules(safe_json_load(saved_schedules, dict, {}))
     MANGEUN_TARGETS = safe_json_load(saved_targets, dict, {})
@@ -173,6 +207,12 @@ async def main(page: ft.Page):
         await page.shared_preferences.set(STORAGE_EMERGENCY_KEY, json.dumps(EMERGENCY_LIST, ensure_ascii=False))
         await page.shared_preferences.set(STORAGE_PATTERN_KEY, json.dumps(pattern_state, ensure_ascii=False))
         await page.shared_preferences.set(STORAGE_MEMO_KEY, json.dumps(DATE_MEMOS, ensure_ascii=False))
+
+    async def save_alarm_settings():
+        await page.shared_preferences.set(
+            STORAGE_ALARM_SETTINGS_KEY,
+            json.dumps(alarm_settings_state, ensure_ascii=False),
+        )
 
 
     # 앱 켜질 때 오늘 날짜 및 시간 제어용 초기값 설정
@@ -227,9 +267,16 @@ async def main(page: ft.Page):
     btn_setting = ft.ElevatedButton(content=ft.Container(content=ft.Text("📇 연락처", color="white", size=11, weight="bold"), alignment=ft.Alignment.CENTER), expand=1, height=40, style=ft.ButtonStyle(bgcolor="grey", shape=ft.RoundedRectangleBorder(radius=6), padding=0), on_click=lambda e: navigate_to("/emergency"))
     btn_config = ft.ElevatedButton(content=ft.Container(content=ft.Text("⚙️ 설정", color="white", size=11, weight="bold"), alignment=ft.Alignment.CENTER), expand=1, height=40, style=ft.ButtonStyle(bgcolor="grey", shape=ft.RoundedRectangleBorder(radius=6), padding=0), on_click=lambda e: navigate_to("/settings"))
 
+    # ==========================================================
+    # [UI 개선]
+    # 달력 격자선을 연한 회색으로 변경
+    # 기존보다 모바일 앱 느낌이 나도록 수정
+    # ==========================================================
+    CALENDAR_GRID_LINE_COLOR = "#D6D9DE"
+
     # 달력 최상단 요일 표시줄 (일~토)
     days_letters = ["일", "월", "화", "수", "목", "금", "토"]
-    weeks_header = ft.Row([ft.Container(content=ft.Text(d, size=13, weight="bold", color="#D93025" if d=="일" else ("#1A73E8" if d=="토" else "black")), expand=1, alignment=ft.Alignment(0, 0), padding=ft.Padding.symmetric(vertical=2), bgcolor="#E5E7EB", border=ft.Border.all(0.5, "black")) for d in days_letters], alignment="spaceAround", spacing=0)
+    weeks_header = ft.Row([ft.Container(content=ft.Text(d, size=13, weight="bold", color="#D93025" if d=="일" else ("#1A73E8" if d=="토" else "black")), expand=1, alignment=ft.Alignment(0, 0), padding=ft.Padding.symmetric(vertical=2), bgcolor="#E5E7EB", border=ft.Border.all(0.5, CALENDAR_GRID_LINE_COLOR)) for d in days_letters], alignment="spaceAround", spacing=0)
     calendar_table = ft.Column([weeks_header, calendar_grid], spacing=0)
 
 
@@ -319,25 +366,53 @@ async def main(page: ft.Page):
         build_pattern_popup()
         page.update()
 
-    def apply_pattern(idx):
+    def request_pattern_apply(idx):
+        if pattern_state.get("history"):
+            popup_view_mode["mode"] = "apply_scope"
+            popup_view_mode["confirm_idx"] = idx
+            build_pattern_popup()
+            page.update()
+            return
+        apply_pattern(idx, ALL_MONTHS)
+
+    def apply_pattern(idx, effective_month):
         today_str = datetime.now(KST).strftime("%Y-%m-%d")
-        pattern_state["name"] = pending_pattern_name["value"]
-        pattern_state["anchor_date"] = today_str
-        pattern_state["anchor_index"] = idx
+        add_pattern_segment(
+            pattern_state,
+            pending_pattern_name["value"],
+            today_str,
+            idx,
+            effective_month,
+        )
         page.run_task(save_all_to_client_storage)
+        page.run_task(reconcile_alarms, "work_pattern_applied")
         rebuild_settings_view(); rebuild_interface()
         popup_view_mode["mode"] = "done"
         popup_view_mode["applied_idx"] = idx
         popup_view_mode["applied_date"] = today_str
+        popup_view_mode["applied_scope"] = (
+            "전체 일정" if effective_month == ALL_MONTHS else f"{effective_month}월부터"
+        )
         build_pattern_popup()
         page.update()
 
     def confirm_apply_pattern(e):
-        apply_pattern(popup_view_mode["confirm_idx"])
+        request_pattern_apply(popup_view_mode["confirm_idx"])
+
+    def apply_pattern_this_month(e):
+        month_key = datetime.now(KST).strftime("%Y-%m")
+        apply_pattern(popup_view_mode["confirm_idx"], month_key)
+
+    def apply_pattern_next_month(e):
+        today = datetime.now(KST)
+        next_month = (today.replace(day=1) + timedelta(days=32)).replace(day=1)
+        apply_pattern(popup_view_mode["confirm_idx"], next_month.strftime("%Y-%m"))
 
     def clear_pattern(e):
         pattern_state["name"], pattern_state["anchor_date"], pattern_state["anchor_index"] = None, None, 0
+        pattern_state["history"] = []
         page.run_task(save_all_to_client_storage)
+        page.run_task(reconcile_alarms, "work_pattern_cleared")
         rebuild_settings_view(); rebuild_interface()
 
     def build_pattern_popup():
@@ -362,9 +437,19 @@ async def main(page: ft.Page):
                     ft.Divider(height=1),
                     ft.Text(f"근무형태: {pending_pattern_name['value']}", size=14, weight="bold", color="black"),
                     ft.Text(f"기준일: {popup_view_mode['applied_date']}  (초록색 칸이 오늘 근무: {today_status})", size=12, color="grey"),
+                    ft.Text(f"적용 범위: {popup_view_mode['applied_scope']}", size=12, color="#2563EB"),
                     ft.Row(slot_chips, wrap=True, spacing=6, run_spacing=6),
-                    ft.Text("이후 날짜는 이 기준으로 자동 반복 적용됩니다.", size=12, color="grey"),
+                    ft.Text("직접 입력한 날짜와 이전 근무 이력은 그대로 유지됩니다.", size=12, color="grey"),
                     ft.Row([ft.ElevatedButton(content=ft.Container(ft.Text("확인", size=14, weight="bold", color="white"), alignment=ft.Alignment.CENTER), bgcolor="#2563EB", expand=1, height=40, style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=6), padding=0), on_click=finish_pattern_apply)], spacing=8),
+                ], spacing=10, tight=True, horizontal_alignment="stretch"))
+            return
+        if popup_view_mode["mode"] == "apply_scope":
+            pattern_popup_layer.content = make_full_width_sheet(ft.Column([
+                    ft.Text("근무형태 변경", size=16, weight="bold", color="black"),
+                    ft.Text("새 근무형태를 언제부터 적용할까요?\n이전 기간의 근무 이력은 그대로 유지됩니다.", size=13, color="black", text_align="center"),
+                    ft.ElevatedButton(content=ft.Text("이번 달부터 적용", size=14, weight="bold"), height=42, bgcolor="#2563EB", color="white", on_click=apply_pattern_this_month),
+                    ft.ElevatedButton(content=ft.Text("다음 달부터 적용", size=14, weight="bold"), height=42, bgcolor="#1E3A8A", color="white", on_click=apply_pattern_next_month),
+                    ft.ElevatedButton(content=ft.Text("취소", size=14, weight="bold"), height=38, bgcolor="grey", color="white", on_click=back_to_slot_list),
                 ], spacing=10, tight=True, horizontal_alignment="stretch"))
             return
         if pending_pattern_name["value"] == "격일제":
@@ -374,8 +459,8 @@ async def main(page: ft.Page):
                     ft.Text("오늘 격일제 근무를 선택하세요", size=15, weight="bold", color="black"),
                     ft.Text("선택한 상태를 기준으로 이후 근무/휴무가 하루씩 번갈아 자동 설정됩니다.", size=12, color="grey"),
                     ft.Row([
-                        ft.ElevatedButton(content=ft.Container(ft.Text("오늘 근무", size=14, weight="bold", color="white"), alignment=ft.Alignment.CENTER), bgcolor="#137333", expand=1, height=44, style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=6), padding=0), on_click=lambda e: apply_pattern(0)),
-                        ft.ElevatedButton(content=ft.Container(ft.Text("오늘 휴무", size=14, weight="bold", color="white"), alignment=ft.Alignment.CENTER), bgcolor="#D93025", expand=1, height=44, style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=6), padding=0), on_click=lambda e: apply_pattern(1)),
+                        ft.ElevatedButton(content=ft.Container(ft.Text("오늘 근무", size=14, weight="bold", color="white"), alignment=ft.Alignment.CENTER), bgcolor="#137333", expand=1, height=44, style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=6), padding=0), on_click=lambda e: request_pattern_apply(0)),
+                        ft.ElevatedButton(content=ft.Container(ft.Text("오늘 휴무", size=14, weight="bold", color="white"), alignment=ft.Alignment.CENTER), bgcolor="#D93025", expand=1, height=44, style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=6), padding=0), on_click=lambda e: request_pattern_apply(1)),
                     ], spacing=8),
                     ft.Row([ft.ElevatedButton(content=ft.Container(ft.Text("닫기", size=14, weight="bold", color="white"), alignment=ft.Alignment.CENTER), bgcolor="grey", expand=1, height=38, style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=6), padding=0), on_click=close_pattern_popup)], spacing=8),
                 ], spacing=14, tight=True, horizontal_alignment="stretch"))
@@ -447,14 +532,295 @@ async def main(page: ft.Page):
     pattern_select_box = ft.Container(content=ft.Text("눌러서 선택하세요", size=13, color="grey"), height=44, border=ft.Border.all(1, "#94A3B8"), border_radius=6, padding=ft.Padding.symmetric(vertical=8, horizontal=10), alignment=ft.Alignment.CENTER_LEFT, on_click=open_pattern_name_popup)
     pattern_status_text = ft.Text("", size=12, color="grey")
 
+    def format_sync_time(epoch_millis):
+        if not epoch_millis:
+            return "없음"
+        return datetime.fromtimestamp(epoch_millis / 1000, KST).strftime("%Y-%m-%d %H:%M")
+
+    def refresh_alarm_controls():
+        supported = alarm_service is not None
+        alarm_master_switch.value = alarm_settings_state["enabled"]
+        alarm_morning_switch.value = alarm_settings_state["morning_enabled"]
+        alarm_afternoon_switch.value = alarm_settings_state["afternoon_enabled"]
+        alarm_morning_time.value = alarm_settings_state["morning_time"]
+        alarm_afternoon_time.value = alarm_settings_state["afternoon_time"]
+        for control in (
+            alarm_master_switch, alarm_morning_switch, alarm_afternoon_switch,
+            alarm_morning_time, alarm_afternoon_time, notification_permission_button,
+            exact_alarm_permission_button, test_alarm_button, stop_alarm_button,
+            full_screen_permission_button,
+        ):
+            control.disabled = not supported
+        notification_permission_button.content.value = (
+            "허용됨" if alarm_runtime_state["notifications_granted"] else "허용 필요"
+        )
+        exact_alarm_permission_button.content.value = (
+            "허용됨" if alarm_runtime_state["exact_alarm_granted"] else "설정 필요"
+        )
+        full_screen_permission_button.content.value = (
+            "허용됨" if alarm_runtime_state["full_screen_granted"] else "설정 필요"
+        )
+        alarm_last_sync_text.value = format_sync_time(alarm_runtime_state["last_sync_at"])
+        alarm_reserved_count_text.value = f"{alarm_runtime_state['reserved_count']}개"
+        alarm_current_text.value = alarm_runtime_state["current_alarm_id"] or "없음"
+        alarm_message_text.value = alarm_runtime_state["message"]
+
+    async def refresh_alarm_status(e=None):
+        if alarm_service is None:
+            refresh_alarm_controls()
+            return
+        try:
+            permission = await alarm_service.get_permission_status()
+            snapshot = await alarm_service.get_native_snapshot()
+            diagnostics = snapshot.get("diagnostics", {}) if isinstance(snapshot, dict) else {}
+            alarms = snapshot.get("alarms", []) if isinstance(snapshot, dict) else []
+            alarm_runtime_state.update({
+                "notifications_granted": permission.get("notifications_granted", False),
+                "exact_alarm_granted": permission.get("exact_alarm_granted", False),
+                "full_screen_granted": permission.get("full_screen_granted", False),
+                "last_sync_at": diagnostics.get("last_sync_at", 0),
+                "reserved_count": len(alarms) if isinstance(alarms, list) else 0,
+                "current_alarm_id": diagnostics.get("current_alarm_id"),
+                "message": "",
+            })
+        except Exception as exc:
+            alarm_runtime_state["message"] = f"상태 확인 실패: {exc}"
+            print(f"[Permission] status failed: {exc}", flush=True)
+        refresh_alarm_controls()
+        page.update()
+
+    async def reconcile_alarms(reason="manual"):
+        now = datetime.now(KST)
+        expired_count = clear_expired_date_alarms(now)
+        if expired_count:
+            await save_all_to_client_storage()
+            print(f"[Reconcile] expired_date_alarms_cleared={expired_count}", flush=True)
+        if alarm_service is None:
+            return {"native_scheduling": False, "reason": "android_only"}
+        print(f"[Reconcile] started reason={reason}", flush=True)
+        try:
+            now = datetime.now(KST)
+            alarms = build_desired_alarms(
+                start_date=now.date(),
+                get_day_info=get_effective_day_info,
+                settings=AlarmSettings.from_dict(alarm_settings_state),
+                timezone=KST,
+                now=now,
+                days=90,
+            )
+            snapshot = {
+                "schema_version": SCHEMA_VERSION,
+                "generated_at": int(now.timestamp() * 1000),
+                "alarms": [alarm.to_dict() for alarm in alarms],
+            }
+            result = await alarm_service.reconcile(snapshot)
+            alarm_runtime_state.update({
+                "last_sync_at": result.get("last_sync_at", int(now.timestamp() * 1000)),
+                "reserved_count": result.get("reserved_count", len(alarms)),
+                "message": "" if not result.get("failed") else f"예약 실패 {result['failed']}개",
+            })
+            print(
+                f"[Reconcile] scheduled={result.get('scheduled', 0)} "
+                f"updated={result.get('updated', 0)} cancelled={result.get('cancelled', 0)}",
+                flush=True,
+            )
+            await refresh_alarm_status()
+            return result
+        except Exception as exc:
+            alarm_runtime_state["message"] = f"동기화 실패: {exc}"
+            print(f"[Reconcile] failed reason={reason}: {exc}", flush=True)
+            refresh_alarm_controls()
+            page.update()
+            return {"native_scheduling": False, "error": str(exc)}
+
+    async def update_alarm_option(key, value):
+        alarm_settings_state[key] = bool(value)
+        alarm_settings_summary_text.value = "사용 중" if alarm_settings_state["enabled"] else "사용 안 함"
+        await save_alarm_settings()
+        await reconcile_alarms(key)
+        if key == "enabled" and value and not alarm_runtime_state["notifications_granted"]:
+            alarm_runtime_state["message"] = "알림·정확한 알람·전체 화면 권한을 확인해 주세요."
+            await request_notification_permission()
+        if key == "enabled" and not value:
+            await stop_alarm_now()
+
+    async def update_alarm_time(key, control):
+        candidate = (control.value or "").strip()
+        updated = dict(alarm_settings_state)
+        updated[key] = candidate
+        try:
+            normalized = AlarmSettings.from_dict(updated).to_dict()[key]
+        except ValueError:
+            control.value = alarm_settings_state[key]
+            alarm_runtime_state["message"] = "시간은 00:00~23:59 형식으로 입력하세요."
+            refresh_alarm_controls()
+            page.update()
+            return
+        alarm_settings_state[key] = normalized
+        control.value = normalized
+        await save_alarm_settings()
+        await reconcile_alarms(key)
+
+    async def request_notification_permission(e=None):
+        if alarm_service is None:
+            return
+        result = await alarm_service.request_notification_permission()
+        alarm_runtime_state["notifications_granted"] = result.get("notifications_granted", False)
+        print(f"[Permission] Notification granted={alarm_runtime_state['notifications_granted']}", flush=True)
+        await reconcile_alarms("notification_permission")
+
+    async def request_exact_alarm_permission(e=None):
+        if alarm_service is None:
+            return
+        result = await alarm_service.open_exact_alarm_settings()
+        alarm_runtime_state["exact_alarm_granted"] = result.get("exact_alarm_granted", False)
+        print(f"[Permission] Exact alarm granted={alarm_runtime_state['exact_alarm_granted']}", flush=True)
+        await reconcile_alarms("exact_alarm_permission")
+
+    async def request_full_screen_permission(e=None):
+        if alarm_service is None:
+            return
+        result = await alarm_service.open_full_screen_settings()
+        alarm_runtime_state["full_screen_granted"] = result.get("full_screen_granted", False)
+        print(f"[Permission] Full screen granted={alarm_runtime_state['full_screen_granted']}", flush=True)
+        await refresh_alarm_status()
+
+    async def run_test_alarm(e=None):
+        if alarm_service is None:
+            return
+        print("[TestAlarm] started", flush=True)
+        try:
+            result = await alarm_service.test_alarm()
+            alarm_runtime_state["current_alarm_id"] = result.get("alarm_id")
+            alarm_runtime_state["message"] = (
+                f"테스트 알람 실행: {result.get('alarm_id', '')}" if result.get("started")
+                else "테스트 알람을 시작하지 못했습니다."
+            )
+            print("[TestAlarm] completed", flush=True)
+        except Exception as exc:
+            alarm_runtime_state["message"] = f"테스트 알람 실패: {exc}"
+            print(f"[TestAlarm] failed: {exc}", flush=True)
+        refresh_alarm_controls()
+        page.update()
+
+    async def stop_alarm_now(e=None):
+        if alarm_service is None:
+            return
+        print("[AlarmStop] requested", flush=True)
+        try:
+            await alarm_service.stop_ringing()
+            alarm_runtime_state["current_alarm_id"] = None
+            alarm_runtime_state["message"] = "알람을 껐습니다."
+            print("[AlarmStop] completed", flush=True)
+        except Exception as exc:
+            alarm_runtime_state["message"] = f"알람 끄기 실패: {exc}"
+            print(f"[AlarmStop] failed: {exc}", flush=True)
+        refresh_alarm_controls()
+        page.update()
+
+    alarm_master_switch = ft.Switch(
+        label="알람 사용", value=alarm_settings_state["enabled"],
+        on_change=lambda e: page.run_task(update_alarm_option, "enabled", e.control.value),
+    )
+    alarm_morning_switch = ft.Switch(
+        label="사용", value=alarm_settings_state["morning_enabled"],
+        on_change=lambda e: page.run_task(update_alarm_option, "morning_enabled", e.control.value),
+    )
+    alarm_afternoon_switch = ft.Switch(
+        label="사용", value=alarm_settings_state["afternoon_enabled"],
+        on_change=lambda e: page.run_task(update_alarm_option, "afternoon_enabled", e.control.value),
+    )
+    alarm_morning_time = ft.TextField(
+        label="시간", value=alarm_settings_state["morning_time"], width=110, height=42,
+        text_size=13, keyboard_type=ft.KeyboardType.DATETIME,
+        on_blur=lambda e: page.run_task(update_alarm_time, "morning_time", e.control),
+        on_submit=lambda e: page.run_task(update_alarm_time, "morning_time", e.control),
+    )
+    alarm_afternoon_time = ft.TextField(
+        label="시간", value=alarm_settings_state["afternoon_time"], width=110, height=42,
+        text_size=13, keyboard_type=ft.KeyboardType.DATETIME,
+        on_blur=lambda e: page.run_task(update_alarm_time, "afternoon_time", e.control),
+        on_submit=lambda e: page.run_task(update_alarm_time, "afternoon_time", e.control),
+    )
+    notification_permission_button = ft.TextButton(
+        content=ft.Text("허용 필요"), on_click=lambda e: page.run_task(request_notification_permission)
+    )
+    exact_alarm_permission_button = ft.TextButton(
+        content=ft.Text("설정 필요"), on_click=lambda e: page.run_task(request_exact_alarm_permission)
+    )
+    full_screen_permission_button = ft.TextButton(
+        content=ft.Text("설정 필요"), on_click=lambda e: page.run_task(request_full_screen_permission)
+    )
+    test_alarm_button = ft.ElevatedButton(
+        "지금 울려보기", icon=ft.Icons.ALARM, bgcolor="#2563EB", color="white", expand=1,
+        on_click=lambda e: page.run_task(run_test_alarm),
+    )
+    stop_alarm_button = ft.ElevatedButton(
+        "현재 알람 끄기", icon=ft.Icons.STOP_CIRCLE, bgcolor="#D93025", color="white", expand=1,
+        on_click=lambda e: page.run_task(stop_alarm_now),
+    )
+    alarm_last_sync_text = ft.Text("없음", size=12, weight="bold")
+    alarm_reserved_count_text = ft.Text("0개", size=12, weight="bold")
+    alarm_current_text = ft.Text("없음", size=12, weight="bold")
+    alarm_message_text = ft.Text("", size=11, color="#D93025")
+    alarm_settings_summary_text = ft.Text("사용 안 함", size=12, color="#64748B")
+
+    def close_alarm_settings_popup(e=None):
+        alarm_settings_popup_layer.visible = False
+        page.update()
+
+    def open_alarm_settings_popup(e=None):
+        refresh_alarm_controls()
+        alarm_settings_popup_layer.content = make_full_width_sheet(
+            ft.Column([
+                ft.Text("⏰ 알람 설정", size=16, weight="bold", color="#1E3A8A"),
+                alarm_master_switch,
+                ft.Divider(height=1),
+                ft.Text("오전근무 기본 알람", size=13, weight="bold"),
+                ft.Row([alarm_morning_switch, alarm_morning_time], alignment="spaceBetween"),
+                ft.Text("오후근무 기본 알람", size=13, weight="bold"),
+                ft.Row([alarm_afternoon_switch, alarm_afternoon_time], alignment="spaceBetween"),
+                ft.Divider(height=1),
+                ft.Row([ft.Text("알림 권한", size=12), notification_permission_button], alignment="spaceBetween"),
+                ft.Row([ft.Text("정확한 알람 권한", size=12), exact_alarm_permission_button], alignment="spaceBetween"),
+                ft.Row([ft.Text("전체 화면 알람 권한", size=12), full_screen_permission_button], alignment="spaceBetween"),
+                ft.Row([test_alarm_button, stop_alarm_button], spacing=6),
+                ft.Divider(height=1),
+                ft.Row([ft.Text("마지막 동기화", size=11, color="grey"), alarm_last_sync_text], alignment="spaceBetween"),
+                ft.Row([ft.Text("예약된 알람", size=11, color="grey"), alarm_reserved_count_text], alignment="spaceBetween"),
+                ft.Row([ft.Text("현재 울리는 알람", size=11, color="grey"), alarm_current_text], alignment="spaceBetween"),
+                alarm_message_text,
+                ft.ElevatedButton("닫기", bgcolor="#64748B", color="white", on_click=close_alarm_settings_popup),
+            ], spacing=6, tight=True, scroll=ft.ScrollMode.AUTO, height=530,
+               horizontal_alignment="stretch"),
+            top=45,
+        )
+        alarm_settings_popup_layer.visible = True
+        if alarm_service is not None:
+            page.run_task(refresh_alarm_status)
+        page.update()
+
     def rebuild_settings_view():
-        if pattern_state.get("name"):
-            pattern_status_text.value = f"✅ 현재 적용중: {pattern_state['name']} (기준일 {pattern_state['anchor_date']})"
+        today_key = datetime.now(KST).strftime("%Y-%m-%d")
+        current_month_key = today_key[:7]
+        active_segment = get_pattern_segment(pattern_state, today_key)
+        future_segments = [
+            item for item in pattern_state.get("history", [])
+            if item.get("effective_month", ALL_MONTHS) > current_month_key
+        ]
+        if active_segment:
+            pattern_status_text.value = f"✅ 현재 적용중: {active_segment['name']}"
         else:
             pattern_status_text.value = "적용된 반복 근무 패턴이 없습니다."
+        if future_segments:
+            next_segment = sorted(future_segments, key=lambda item: item["effective_month"])[0]
+            pattern_status_text.value += (
+                f"\n📅 {next_segment['effective_month']}월부터: {next_segment['name']}"
+            )
         pattern_select_box.content.value, pattern_select_box.content.color = "눌러서 선택하세요", "grey"
         settings_zone_container.controls.clear()
-        settings_zone_container.controls.append(
+        alarm_settings_summary_text.value = "사용 중" if alarm_settings_state["enabled"] else "사용 안 함"
+        settings_zone_container.controls.extend([
             ft.Container(
                 content=ft.Column([
                     ft.Text("⚙️ 설정", size=16, weight="bold", color="#1E3A8A"),
@@ -465,8 +831,18 @@ async def main(page: ft.Page):
                     pattern_select_box,
                 ], spacing=8, tight=True, horizontal_alignment="stretch"),
                 padding=12, bgcolor="#F8FAFC", border_radius=8, border=ft.Border.all(1, "#E2E8F0"),
-            )
-        )
+            ),
+            ft.Container(
+                content=ft.Row([
+                    ft.Text("⏰ 알람 설정", size=14, weight="bold", color="#1E3A8A"),
+                    alarm_settings_summary_text,
+                    ft.Icon(ft.Icons.CHEVRON_RIGHT, color="#64748B"),
+                ], alignment="spaceBetween"),
+                padding=14, bgcolor="#F8FAFC", border_radius=8,
+                border=ft.Border.all(1, "#E2E8F0"), on_click=open_alarm_settings_popup,
+            ),
+        ])
+        refresh_alarm_controls()
         page.update()
 
     # 연락처 수정은 목록 안에서 처리하지 않고 작은 모달에서 저장/삭제/취소한다.
@@ -728,8 +1104,76 @@ async def main(page: ft.Page):
 
     # 달력 날짜 클릭 시 튀어나오는 첫탕 근무등록 팝업창 세팅들
     popup_date_title = ft.Text("", size=16, weight="bold", color="black", text_align="center")
-    memo_field = ft.TextField(cursor_width=1, label="메모 (선택 입력)", hint_text="예: 미용실, 병원 예약 등", height=44, text_size=13, content_padding=ft.Padding.symmetric(vertical=8, horizontal=10))
+    memo_field = ft.TextField(cursor_width=1, label="메모 (선택 입력)", hint_text="예: 미용실, 병원 예약 등", hint_style=ft.TextStyle(color="#9CA3AF"), height=44, text_size=13, content_padding=ft.Padding.symmetric(vertical=8, horizontal=10))
     order_value_state = {"value": ""}
+    date_alarm_state = {"mode": "", "offset": 0, "time": ""}
+    alarm_validation_text = ft.Text("", size=11, color="#D93025")
+
+    def parse_direct_alarm_time(value):
+        candidate = (value or "").strip()
+        digits = candidate.replace(":", "")
+        if len(digits) != 4 or not digits.isdigit():
+            raise ValueError("alarm time must contain four digits")
+        hour, minute = int(digits[:2]), int(digits[2:])
+        if not 0 <= hour <= 23 or not 0 <= minute <= 59:
+            raise ValueError("alarm time is out of range")
+        return f"{hour:02d}:{minute:02d}"
+
+    def update_direct_alarm_input(e):
+        digits = "".join(ch for ch in (e.control.value or "") if ch.isdigit())[:4]
+        e.control.value = f"{digits[:2]}:{digits[2:]}" if len(digits) == 4 else digits
+        update_date_alarm_ui()
+
+    def update_date_alarm_ui(e=None):
+        value = date_alarm_dropdown.value or "default"
+        alarm_validation_text.value = ""
+        date_alarm_direct_time.visible = value == "direct"
+        if value.startswith("relative_"):
+            if selected_time_state["hour"] is None or selected_time_state["minute"] is None:
+                alarm_validation_text.value = "첫탕 시간을 먼저 선택하거나 직접 시간을 입력하세요."
+            else:
+                offset = int(value.split("_", 1)[1])
+                first_trip = datetime(
+                    2000, 1, 2, selected_time_state["hour"], selected_time_state["minute"]
+                )
+                alarm_time = first_trip - timedelta(minutes=offset)
+                alarm_validation_text.value = f"알람 예정: {alarm_time.strftime('%H:%M')}"
+                alarm_validation_text.color = "#137333"
+        elif value == "direct" and date_alarm_direct_time.value:
+            try:
+                normalized_time = parse_direct_alarm_time(date_alarm_direct_time.value)
+                alarm_validation_text.value = f"알람 예정: {normalized_time}"
+                alarm_validation_text.color = "#137333"
+            except ValueError:
+                alarm_validation_text.value = "숫자 4자리를 입력하세요. 예: 0530"
+                alarm_validation_text.color = "#D93025"
+        else:
+            alarm_validation_text.color = "#D93025"
+        page.update()
+
+    date_alarm_dropdown = ft.Dropdown(
+        label="알람 설정", value="default", expand=True, height=44, text_size=12, dense=True,
+        content_padding=ft.Padding.symmetric(vertical=6, horizontal=12),
+        options=[
+            ft.DropdownOption(key="default", text="기본 오전·오후 알람 사용"),
+            ft.DropdownOption(key="off", text="이 날짜는 알람 사용 안 함"),
+            ft.DropdownOption(key="relative_30", text="첫탕 30분 전"),
+            ft.DropdownOption(key="relative_60", text="첫탕 1시간 전"),
+            ft.DropdownOption(key="relative_90", text="첫탕 1시간 30분 전"),
+            ft.DropdownOption(key="relative_120", text="첫탕 2시간 전"),
+            ft.DropdownOption(key="direct", text="알람 시간 직접 입력"),
+        ],
+        on_select=update_date_alarm_ui,
+    )
+    date_alarm_direct_time = ft.TextField(
+        label="직접 알람 시간 (숫자 4자리)", hint_text="예: 0530", expand=True, height=44,
+        text_size=12,
+        label_style=ft.TextStyle(size=10, color="#64748B"),
+        hint_style=ft.TextStyle(size=11, color="#94A3B8"),
+        content_padding=ft.Padding.symmetric(vertical=6, horizontal=12),
+        keyboard_type=ft.KeyboardType.NUMBER, visible=False,
+        on_change=update_direct_alarm_input,
+    )
 
     def close_value_picker(e=None):
         value_picker_popup_layer.visible = False
@@ -758,6 +1202,8 @@ async def main(page: ft.Page):
             order_display_box.content.value = f"{value}번" if value != "" else "순번"
             order_display_box.content.color = "black" if value != "" else "grey"
         value_picker_popup_layer.visible = False
+        if field in ("hour", "minute"):
+            update_date_alarm_ui()
         page.update()
 
     def open_value_picker(field):
@@ -781,9 +1227,9 @@ async def main(page: ft.Page):
         value_picker_popup_layer.visible = True
         page.update()
 
-    hour_display_box = ft.Container(content=ft.Text("시간", size=16, color="grey"), width=72, height=48, border=ft.Border.all(1, "#94A3B8"), border_radius=6, alignment=ft.Alignment.CENTER, on_click=lambda e: open_value_picker("hour"))
-    minute_display_box = ft.Container(content=ft.Text("분", size=16, color="grey"), width=72, height=48, border=ft.Border.all(1, "#94A3B8"), border_radius=6, alignment=ft.Alignment.CENTER, on_click=lambda e: open_value_picker("minute"))
-    order_display_box = ft.Container(content=ft.Text("순번", size=14, color="grey"), width=76, height=48, border=ft.Border.all(1, "#94A3B8"), border_radius=6, alignment=ft.Alignment.CENTER, on_click=lambda e: open_value_picker("order"))
+    hour_display_box = ft.Container(content=ft.Text("시간", size=16, color="grey"), width=72, height=32, border=ft.Border.all(1, "#94A3B8"), border_radius=6, alignment=ft.Alignment.CENTER, on_click=lambda e: open_value_picker("hour"))
+    minute_display_box = ft.Container(content=ft.Text("분", size=16, color="grey"), width=72, height=32, border=ft.Border.all(1, "#94A3B8"), border_radius=6, alignment=ft.Alignment.CENTER, on_click=lambda e: open_value_picker("minute"))
+    order_display_box = ft.Container(content=ft.Text("순번", size=14, color="grey"), width=76, height=32, border=ft.Border.all(1, "#94A3B8"), border_radius=6, alignment=ft.Alignment.CENTER, on_click=lambda e: open_value_picker("order"))
 
     mangeun_display_box = ft.Container(content=ft.Text("22", size=14, weight="bold", color="black"), width=62, height=36, border=ft.Border.all(1, "#94A3B8"), border_radius=6, alignment=ft.Alignment.CENTER, on_click=lambda e: open_value_picker("mangeun"))
 
@@ -793,6 +1239,7 @@ async def main(page: ft.Page):
     mangeun_popup_layer = ft.Container(visible=False, bgcolor="#AA000000", alignment=ft.Alignment(0, 0), expand=True)
     status_picker_popup_layer = ft.Container(visible=False, bgcolor="#AA000000", alignment=ft.Alignment(0, 0), expand=True)
     driver_list_popup_layer = ft.Container(visible=False, bgcolor="#AA000000", alignment=ft.Alignment(0, 0), expand=True)
+    alarm_settings_popup_layer = ft.Container(visible=False, bgcolor="#AA000000", alignment=ft.Alignment(0, 0), expand=True)
     # 매월 유동적으로 변하는 자동 만근 일수 계산 로직
     def get_mangeun_target():
         try:
@@ -914,7 +1361,7 @@ async def main(page: ft.Page):
                 ft.ElevatedButton(content=ft.Container(ft.Text("뒤로가기", size=12, weight="bold", color="white", no_wrap=True), alignment=ft.Alignment.CENTER), on_click=lambda e: page.pop_dialog(), expand=1, height=38, bgcolor="grey"),
             ], spacing=8, width=260)]
         elif target_type == "앞차":
-            tf_f_bus, tf_f_driver, tf_f_phone = ft.TextField(cursor_width=1, label="앞차번호", value=input_data_state["front_bus"].replace("호","").replace("미입력",""), keyboard_type=ft.KeyboardType.NUMBER, expand=True, height=38, text_size=13, content_padding=8), ft.TextField(cursor_width=1, label="기사성함", value=input_data_state["front_driver"].replace("미입력",""), expand=True, height=38, text_size=13, content_padding=8), ft.TextField(cursor_width=1, label="전화번호(숫자만)", value=input_data_state["front_phone"].replace("-","").replace("미입력",""), keyboard_type=ft.KeyboardType.PHONE, expand=True, height=38, text_size=13, content_padding=8)
+            tf_f_bus, tf_f_driver, tf_f_phone = ft.TextField(cursor_width=1, label="앞차번호", value=input_data_state["front_bus"].replace("호","").replace("미입력",""), keyboard_type=ft.KeyboardType.NUMBER, width=260, height=38, text_size=13, content_padding=8), ft.TextField(cursor_width=1, label="기사성함", value=input_data_state["front_driver"].replace("미입력",""), width=260, height=38, text_size=13, content_padding=8), ft.TextField(cursor_width=1, label="전화번호(숫자만)", value=input_data_state["front_phone"].replace("-","").replace("미입력",""), keyboard_type=ft.KeyboardType.PHONE, width=260, height=38, text_size=13, content_padding=8)
             def save_front(e):
                 input_data_state["front_bus"], input_data_state["front_driver"], input_data_state["front_phone"] = f"{tf_f_bus.value}호" if tf_f_bus.value else "미입력", tf_f_driver.value if tf_f_driver.value else "미입력", final_format_phone(tf_f_phone.value) if tf_f_phone.value else "미입력"
                 page.run_task(save_all_to_client_storage); page.pop_dialog(); page.update(); rebuild_interface()
@@ -927,7 +1374,7 @@ async def main(page: ft.Page):
                 ft.ElevatedButton(content=ft.Container(ft.Text("뒤로가기", size=12, weight="bold", color="white", no_wrap=True), alignment=ft.Alignment.CENTER), on_click=lambda e: page.pop_dialog(), expand=1, height=38, bgcolor="grey"),
             ], spacing=8, width=260)]
         elif target_type == "뒷차":
-            tf_b_bus, tf_b_driver, tf_b_phone = ft.TextField(cursor_width=1, label="뒷차번호", value=input_data_state["back_bus"].replace("호","").replace("미입력",""), keyboard_type=ft.KeyboardType.NUMBER, expand=True, height=38, text_size=13, content_padding=8), ft.TextField(cursor_width=1, label="기사성함", value=input_data_state["back_driver"].replace("미입력",""), expand=True, height=38, text_size=13, content_padding=8), ft.TextField(cursor_width=1, label="전화번호 (숫자만)", value=input_data_state["back_phone"].replace("-","").replace("미입력",""), keyboard_type=ft.KeyboardType.PHONE, expand=True, height=38, text_size=13, content_padding=8)
+            tf_b_bus, tf_b_driver, tf_b_phone = ft.TextField(cursor_width=1, label="뒷차번호", value=input_data_state["back_bus"].replace("호","").replace("미입력",""), keyboard_type=ft.KeyboardType.NUMBER, width=260, height=38, text_size=13, content_padding=8), ft.TextField(cursor_width=1, label="기사성함", value=input_data_state["back_driver"].replace("미입력",""), width=260, height=38, text_size=13, content_padding=8), ft.TextField(cursor_width=1, label="전화번호 (숫자만)", value=input_data_state["back_phone"].replace("-","").replace("미입력",""), keyboard_type=ft.KeyboardType.PHONE, width=260, height=38, text_size=13, content_padding=8)
             def save_back(e):
                 input_data_state["back_bus"], input_data_state["back_driver"], input_data_state["back_phone"] = f"{tf_b_bus.value}호" if tf_b_bus.value else "미입력", tf_b_driver.value if tf_b_driver.value else "미입력", final_format_phone(tf_b_phone.value) if tf_b_phone.value else "미입력"
                 page.run_task(save_all_to_client_storage); page.pop_dialog(); page.update(); rebuild_interface()
@@ -939,41 +1386,63 @@ async def main(page: ft.Page):
             ], spacing=8, width=260)]
         page.show_dialog(info_dialog)
 
-    info_dialog = ft.AlertDialog(modal=False, content=ft.Container())
+    info_dialog = ft.AlertDialog(
+        modal=False,
+        content=ft.Container(),
+        scrollable=True,
+        alignment=ft.Alignment(0, -1),
+        inset_padding=ft.Padding.only(left=24, right=24, top=12, bottom=12),
+    )
     def refresh_input_tab_view(): input_zone_container.controls.clear(); input_zone_container.controls.append(build_driving_summary_zone()); page.update()
 
     # 📅 [캘린더 렌더러] 매달 달력 날짜 그리드 및 실시간 만근 카운트 일체 갱신 함수
     # 🔁 특정 날짜가 반복패턴상 몇 번째 슬롯인지 계산해서 상태를 돌려줌 (패턴 미설정 시 None)
     def get_pattern_status(date_key):
-        if not pattern_state.get("name") or not pattern_state.get("anchor_date"):
-            return None
-        pattern = WORK_PATTERNS.get(pattern_state["name"])
-        if not pattern:
-            return None
-        try:
-            anchor = datetime.strptime(pattern_state["anchor_date"], "%Y-%m-%d")
-            target = datetime.strptime(date_key, "%Y-%m-%d")
-        except ValueError:
-            return None
-        delta_days = (target - anchor).days
-        idx = (pattern_state.get("anchor_index", 0) + delta_days) % len(pattern)
-        return pattern[idx]
+        return get_repeating_pattern_status(pattern_state, WORK_PATTERNS, date_key)
 
     # 📌 해당 날짜의 실제 표시용 근무정보: 수동입력 있으면 그걸 우선, 없으면 반복패턴으로 자동 채움
     def get_effective_day_info(date_key):
         manual = USER_SCHEDULES.get(date_key)
         if manual:
-            return manual
+            result = dict(manual)
+            result["memo"] = DATE_MEMOS.get(date_key, "")
+            return result
         p_status = get_pattern_status(date_key)
         if p_status:
             return {"status": p_status, "start_time": "", "order_no": ""}
         return {"status": "", "start_time": "", "order_no": ""}
 
+    def clear_expired_date_alarms(now=None):
+        """Clear only expired per-date alarm overrides; preserve work data and memos."""
+        current_time = now or datetime.now(KST)
+        cleared = 0
+        for date_key, info in USER_SCHEDULES.items():
+            if not isinstance(info, dict):
+                continue
+            try:
+                work_date = datetime.strptime(date_key, "%Y-%m-%d").date()
+            except (TypeError, ValueError):
+                continue
+            if not is_expired_date_alarm(
+                work_date=work_date, day_info=info, timezone=KST, now=current_time,
+            ):
+                continue
+            info["alarm_mode"] = ""
+            info["alarm_offset_minutes"] = 0
+            info["alarm_time"] = ""
+            cleared += 1
+        return cleared
+
+
     def rebuild_interface():
         nonlocal USER_SCHEDULES, MANGEUN_TARGETS
         today = datetime.now(KST)
+        if clear_expired_date_alarms(today):
+            page.run_task(save_all_to_client_storage)
         today_y, today_m, today_d = today.year, today.month, today.day
         month_title.value = f"{current['year']}년 {current['month']}월"
+        today_month_button.visible = not (
+            current["year"] == today_y and current["month"] == today_m)
         month_prefix = f"{current['year']}-{current['month']:02d}"
         month_data = {k: v for k, v in USER_SCHEDULES.items() if k.startswith(month_prefix)}
         days_in_month = calendar.monthrange(current['year'], current['month'])[1]
@@ -1014,7 +1483,7 @@ async def main(page: ft.Page):
         for week in weeks:
             week_row = ft.Row(alignment="spaceAround", spacing=0)
             for day in week:
-                if day == 0: week_row.controls.append(ft.Container(expand=1, height=cell_h, bgcolor="#FFFFFF", border=ft.Border.all(0.5, "black")))
+                if day == 0: week_row.controls.append(ft.Container(expand=1, height=cell_h, bgcolor="#FFFFFF", border=ft.Border.all(0.5, CALENDAR_GRID_LINE_COLOR)))
                 else:
                     weekday = datetime(current['year'], current['month'], day).weekday()
                     date_key = f"{current['year']}-{current['month']:02d}-{day:02d}"
@@ -1022,21 +1491,44 @@ async def main(page: ft.Page):
                     status, start_time, order_no = day_info.get("status", ""), day_info.get("start_time", ""), day_info.get("order_no", "")
                     bg_color = "#F7F7F7"
                     text_color = status_color(status) if status else "#000000"
-                    if status in ("오전", "오후", "전일", "근무") and order_no:
-                        status_desc = f"{status}({order_no})"
-                    else:
-                        status_desc = status
+                    status_order = str(order_no) if status in ("오전", "오후", "전일", "근무") and order_no else ""
+                    status_display = ft.Row([ft.Text(status, size=10, weight="bold", color=text_color, no_wrap=True)] + ([ft.Text(status_order, size=8, weight="normal", color="#64748B", no_wrap=True)] if status_order else []), alignment="center", vertical_alignment="center", spacing=1, tight=True)
                     holiday_name = get_holiday_name(date_key)
+                    lunar_marker = get_lunar_marker(current['year'], current['month'], day)
                     day_number_color = "#D93025" if (weekday == 6 or holiday_name) else ("#1A73E8" if weekday == 5 else "#000000")
+                    has_date_alarm = day_info.get("alarm_mode", "") in ("relative", "direct")
                     time_display = ft.Text(start_time, size=10, weight="bold", color=text_color) if start_time and status != "휴무" else ft.Container()
                     memo_text = DATE_MEMOS.get(date_key, "")
-                    memo_display = ft.Text(memo_text, size=9, color="#7E22CE", max_lines=1, overflow=ft.TextOverflow.ELLIPSIS) if memo_text else ft.Container()
-                    day_number_row = ft.Row(
-                        [ft.Text(f"{day}", size=12, weight="normal", italic=True, color=day_number_color)] +
-                        ([ft.Text(holiday_name, size=8, weight="bold", color="#D93025")] if holiday_name else []),
-                        alignment="center", spacing=3, tight=True,
+                    memo_display = ft.Text(memo_text, size=9, color="black", max_lines=1, overflow=ft.TextOverflow.ELLIPSIS) if memo_text else ft.Container()
+                    date_labels = []
+                    if holiday_name:
+                        date_labels.append(ft.Text(holiday_name, size=7, weight="normal", color="#D93025", no_wrap=True, overflow=ft.TextOverflow.VISIBLE))
+                    if lunar_marker and not holiday_name:  # 공휴일과 겹치면 공휴일 이름만 표시
+                        date_labels.append(ft.Text(lunar_marker, size=7, color="#64748B", no_wrap=True, overflow=ft.TextOverflow.VISIBLE))
+                    # ==========================================================
+                    # [UI 개선]
+                    # 오늘 날짜 강조 방식을
+                    # 파란 테두리 → 숫자 강조 방식으로 변경
+                    # ==========================================================
+                    is_today = (current['year'] == today_y and current['month'] == today_m and day == today_d)
+                    day_number_display = (
+                        ft.Container(
+                            content=ft.Text(f"{day}", size=11, weight="normal", italic=True, color="white"),
+                            bgcolor="#2563EB", width=18, height=18, border_radius=9,
+                            # 이탤릭 글씨가 오른쪽으로 기울어져 보이는 착시를 보정하기 위해 살짝 왼쪽으로 정렬
+                            alignment=ft.Alignment(-0.15, 0),
+                        ) if is_today else ft.Text(f"{day}", size=11, weight="normal", italic=True, color=day_number_color)
                     )
-                    day_box = ft.Container(content=ft.Column([day_number_row, ft.Text(status_desc, size=10, weight="bold", color=text_color), time_display, memo_display], alignment="start", horizontal_alignment="center", spacing=1), bgcolor="#FFFFFF", padding=ft.Padding.only(top=0), border=ft.Border.all(2, "#2563EB") if (current['year'] == today_y and current['month'] == today_m and day == today_d) else ft.Border.all(0.5, "black"), border_radius=0, height=cell_h, expand=1, on_click=lambda e, dk=date_key: open_input_popup(dk))
+                    day_number_row = ft.Row(
+                        [day_number_display] +
+                        # 알람 아이콘이 날짜숫자에 바짝 붙어 보이던 것을 살짝 띄우기 위해 spacing을 3→6으로 확대
+                        ([ft.Icon(ft.Icons.ALARM, size=11, color="#2563EB", tooltip="날짜별 알람 설정됨")] if has_date_alarm else []) +
+                        ([ft.Column(date_labels, spacing=0, tight=True)] if date_labels else []),
+                        alignment="start", vertical_alignment="center", spacing=4,
+                    )
+                    # 오늘 날짜 셀만 폭이 좁아져 "오후(6)" 같은 상태문구가 줄바꿈되던 버그 →
+                    # 굵은 파란 테두리(2px)를 없애고 모든 셀과 동일한 얇은 회색 테두리로 통일하면서 함께 해결됨
+                    day_box = ft.Container(content=ft.Column([day_number_row, status_display, time_display, memo_display], alignment="start", horizontal_alignment="center", spacing=1), bgcolor="#FFF8D6" if is_today else "#FFFFFF", padding=ft.Padding.only(left=3, right=2, top=0), border=ft.Border.all(0.5, CALENDAR_GRID_LINE_COLOR), border_radius=0, height=cell_h, expand=1, on_click=lambda e, dk=date_key: open_input_popup(dk))
                     week_row.controls.append(day_box)
             calendar_grid.controls.append(week_row)
         if current_tab == "근무현황": refresh_input_tab_view()
@@ -1102,6 +1594,8 @@ async def main(page: ft.Page):
 
     def open_input_popup(date_key):
         current["selected_date"] = date_key
+        if clear_expired_date_alarms():
+            page.run_task(save_all_to_client_storage)
         popup_date_title.value = date_key
         day_info = get_effective_day_info(date_key)
         current_time, current_order = day_info.get("start_time", ""), day_info.get("order_no", "")
@@ -1122,13 +1616,22 @@ async def main(page: ft.Page):
             hour_display_box.content.value, minute_display_box.content.value = "시간", "분"
             hour_display_box.content.color, minute_display_box.content.color = "grey", "grey"
         memo_field.value = DATE_MEMOS.get(date_key, "")
+        alarm_mode = day_info.get("alarm_mode", "")
+        if alarm_mode == "relative":
+            date_alarm_dropdown.value = f"relative_{day_info.get('alarm_offset_minutes', 0)}"
+        elif alarm_mode in ("off", "direct"):
+            date_alarm_dropdown.value = alarm_mode
+        else:
+            date_alarm_dropdown.value = "default"
+        date_alarm_direct_time.value = day_info.get("alarm_time", "")
+        update_date_alarm_ui()
         popup_layer.content, popup_layer.visible = popup_card, True; page.update()
 
     # 근무 저장 및 삭제 처리 함수
     def select_status_and_save(action):
         target_date = current["selected_date"]
         if action == "선택취소":
-            USER_SCHEDULES.pop(target_date, None); DATE_MEMOS.pop(target_date, None); page.run_task(save_all_to_client_storage); popup_layer.visible = False; rebuild_interface(); return
+            USER_SCHEDULES.pop(target_date, None); DATE_MEMOS.pop(target_date, None); page.run_task(save_all_to_client_storage); page.run_task(reconcile_alarms, "schedule_deleted"); popup_layer.visible = False; rebuild_interface(); return
         memo_value = memo_field.value.strip() if memo_field.value else ""
         if memo_value:
             DATE_MEMOS[target_date] = memo_value
@@ -1136,12 +1639,35 @@ async def main(page: ft.Page):
             DATE_MEMOS.pop(target_date, None)
         status_value = pending_status_state["value"]
         if not status_value:
-            page.run_task(save_all_to_client_storage); popup_layer.visible = False; rebuild_interface(); return
+            page.run_task(save_all_to_client_storage); page.run_task(reconcile_alarms, "schedule_saved"); popup_layer.visible = False; rebuild_interface(); return
         h, m = selected_time_state["hour"], selected_time_state["minute"]
         final_time = f"{h:02d}:{m:02d}" if (status_value != "휴무" and h is not None and m is not None) else ""
-        USER_SCHEDULES[target_date] = {"status": status_value, "start_time": final_time, "order_no": "" if status_value == "휴무" else order_value_state["value"]}
-        page.run_task(save_all_to_client_storage); popup_layer.visible = False; rebuild_interface()
+        selection = date_alarm_dropdown.value or "default"
+        alarm_mode, alarm_offset, alarm_time = "", 0, ""
+        if selection.startswith("relative_"):
+            if not final_time:
+                alarm_validation_text.value = "첫탕 시간을 먼저 선택하거나 직접 시간을 입력하세요."
+                alarm_validation_text.color = "#D93025"; page.update(); return
+            alarm_mode, alarm_offset = "relative", int(selection.split("_", 1)[1])
+        elif selection == "direct":
+            candidate = (date_alarm_direct_time.value or "").strip()
+            try:
+                alarm_time = parse_direct_alarm_time(candidate)
+            except ValueError:
+                alarm_validation_text.value = "직접 알람 시간을 숫자 4자리로 입력하세요. 예: 0530"
+                alarm_validation_text.color = "#D93025"; page.update(); return
+            alarm_mode = "direct"
+        elif selection == "off":
+            alarm_mode = "off"
+        USER_SCHEDULES[target_date] = {
+            "status": status_value, "start_time": final_time,
+            "order_no": "" if status_value == "휴무" else order_value_state["value"],
+            "alarm_mode": alarm_mode, "alarm_offset_minutes": alarm_offset,
+            "alarm_time": alarm_time,
+        }
+        page.run_task(save_all_to_client_storage); page.run_task(reconcile_alarms, "schedule_saved"); popup_layer.visible = False; rebuild_interface()
 
+    # [UI 개선] 키보드 표시 시 메모 입력란 가시성 및 알람 정보 배치 개선
     # 팝업 내부 스크롤뷰 레이아웃 구조체
     popup_card = make_full_width_sheet(ft.Column([
             ft.Row([popup_date_title], alignment="center"),
@@ -1156,15 +1682,33 @@ async def main(page: ft.Page):
                 order_display_box,
             ], alignment="center", spacing=0),
             ft.Divider(height=2, color="transparent"),
-            memo_field,
+            ft.Column(
+                [
+                    ft.Column(
+                        [
+                            ft.Row([date_alarm_dropdown], spacing=0),
+                            ft.Row([date_alarm_direct_time], spacing=0),
+                            alarm_validation_text,
+                        ],
+                        spacing=2,
+                        horizontal_alignment="stretch",
+                    ),
+                    memo_field,
+                ],
+                spacing=4,
+            ),
             ft.Row([ft.Container(content=ft.Text("저장", size=14, weight="bold", color="white"), bgcolor="#2563EB", alignment=ft.Alignment(0, 0), width=160, height=38, border_radius=6, on_click=lambda e: select_status_and_save("저장"))], alignment="center"), ft.Divider(height=1, color="transparent"),
             ft.Row([ft.TextButton("선택취소(삭제)", on_click=lambda e: select_status_and_save("선택취소"), style=ft.ButtonStyle(color="red")), ft.TextButton("닫기", on_click=lambda e: setattr(popup_layer, "visible", False) or page.update())], alignment="spaceBetween")
-        ], spacing=6, tight=True))
+        ], spacing=6, tight=True, scroll=ft.ScrollMode.AUTO), top=5) #height=460 이라고 돼 있는 것을 자동으로 보이게 지움
 
     # 상단 내비게이션 바 (이전달 / 다음달 이동) 버튼 컴포넌트
+    today_month_button = ft.TextButton(
+        "오늘", visible=False, on_click=lambda e: go_today_month(e),
+        style=ft.ButtonStyle(color="#2563EB", padding=2),
+    )
     header_nav = ft.Row([
         ft.TextButton("◀ 이전", on_click=lambda e: move_prev(e), style=ft.ButtonStyle(color="black", padding=0)),
-        month_title,
+        ft.Row([month_title, today_month_button], spacing=2, tight=True),
         ft.TextButton("다음 ▶", on_click=lambda e: move_next(e), style=ft.ButtonStyle(color="black", padding=0)),
     ], alignment="spaceBetween", height=32)
     topbar_title = ft.Text("", size=17, weight="bold", color="black")
@@ -1192,6 +1736,12 @@ async def main(page: ft.Page):
         if current["month"] == 13: current["month"] = 1; current["year"] += 1
         rebuild_interface()
 
+    def go_today_month(e):
+        today = datetime.now(KST)
+        current["year"], current["month"] = today.year, today.month
+        current["selected_date"] = today.strftime("%Y-%m-%d")
+        rebuild_interface()
+
     def summary_cell(text_control):
         return ft.Container(content=text_control, expand=1, padding=ft.Padding.symmetric(horizontal=12, vertical=8), alignment=ft.Alignment.CENTER_LEFT)
 
@@ -1216,7 +1766,9 @@ async def main(page: ft.Page):
     def do_reset(e):
         USER_SCHEDULES.clear()
         pattern_state["name"], pattern_state["anchor_date"], pattern_state["anchor_index"] = None, None, 0
+        pattern_state["history"] = []
         page.run_task(save_all_to_client_storage)
+        page.run_task(reconcile_alarms, "schedule_reset")
         reset_confirm_popup_layer.visible = False
         rebuild_interface()
 
@@ -1283,24 +1835,56 @@ async def main(page: ft.Page):
         padding=ft.Padding.only(bottom=4),
     )
 
+    # ==========================================================
+    # [UI 개선]
+    # 달력 좌우 스와이프 지원
+    # 버튼과 동시에 사용 가능
+    # ==========================================================
+    calendar_swipe_state = {"dx": 0.0}
+
+    def start_calendar_swipe(e):
+        calendar_swipe_state["dx"] = 0.0
+
+    def update_calendar_swipe(e):
+        primary_delta = getattr(e, "primary_delta", None)
+        if primary_delta is not None:
+            calendar_swipe_state["dx"] += primary_delta
+        else:
+            local_delta = getattr(e, "local_delta", None)
+            calendar_swipe_state["dx"] = getattr(local_delta, "x", 0.0) or 0.0
+
+    def finish_calendar_swipe(e):
+        dx = calendar_swipe_state["dx"]
+        calendar_swipe_state["dx"] = 0.0
+        if dx <= -35:
+            move_next(e)  # 왼쪽 스와이프 → 다음달 (기존 "다음 ▶" 버튼과 동일 동작)
+        elif dx >= 35:
+            move_prev(e)  # 오른쪽 스와이프 → 이전달 (기존 "◀ 이전" 버튼과 동일 동작)
+
     # 본문과 하단 메뉴를 세로로 분리한 뒤, 팝업 레이어만 전체 화면 위에 올린다.
     def start_main_swipe(e):
         if current_tab == "긴급연락처":
             start_contacts_swipe(e)
         elif current_tab == "근무현황":
             start_driving_swipe(e)
+        elif current_tab == "달력":
+            start_calendar_swipe(e)
 
     def update_main_swipe(e):
         if current_tab == "긴급연락처":
             update_contacts_swipe(e)
         elif current_tab == "근무현황":
             update_driving_swipe(e)
+        elif current_tab == "달력":
+            update_calendar_swipe(e)
 
     def finish_main_swipe(e):
         if current_tab == "긴급연락처":
             finish_contacts_swipe(e)
         elif current_tab == "근무현황":
             finish_driving_swipe(e)
+        elif current_tab == "달력":
+            finish_calendar_swipe(e)
 
     swipeable_scroll_area = ft.GestureDetector(
         content=ft.Container(content=scrollable_content, expand=True),
@@ -1346,6 +1930,7 @@ async def main(page: ft.Page):
                 status_picker_popup_layer,
                 exit_confirm_popup_layer,
                 driver_list_popup_layer,
+                alarm_settings_popup_layer,
             ],
             expand=True,
         )
@@ -1365,6 +1950,7 @@ async def main(page: ft.Page):
             popup_layer, value_picker_popup_layer, mangeun_popup_layer,
             pattern_popup_layer, pattern_name_popup_layer, reset_confirm_popup_layer,
             status_picker_popup_layer, driver_list_popup_layer,
+            alarm_settings_popup_layer,
         ]
         for layer in open_popups:
             if layer.visible:
@@ -1398,7 +1984,15 @@ async def main(page: ft.Page):
         page.update()
 
     page.on_resize = lambda e: rebuild_interface()
+    await reconcile_alarms("app_start")
+    async def handle_app_lifecycle(e):
+        if e.state not in (ft.AppLifecycleState.SHOW, ft.AppLifecycleState.RESUME):
+            return
+        await reconcile_alarms("app_resumed")
+        rebuild_interface()
+
     change_tab("달력"); rebuild_interface()
+    page.on_app_lifecycle_state_change = lambda e: page.run_task(handle_app_lifecycle, e)
 
 if os.environ.get("PORT"):
     # 🌐 Render 등 웹 서버로 배포될 때 (PORT 환경변수가 있을 때만) 브라우저/포트 지정 방식으로 실행
