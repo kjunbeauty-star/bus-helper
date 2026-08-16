@@ -43,10 +43,16 @@ def normalize_schedules(value):
         status = item.get("status", "")
         start_time = item.get("start_time", "")
         order_no = item.get("order_no", "")
+        alarm_mode = item.get("alarm_mode", "")
+        alarm_offset_minutes = item.get("alarm_offset_minutes", 0)
+        alarm_time = item.get("alarm_time", "")
         result[date_key] = {
             "status": status if isinstance(status, str) else "",
             "start_time": start_time if isinstance(start_time, str) else "",
             "order_no": str(order_no) if order_no is not None else "",
+            "alarm_mode": alarm_mode if alarm_mode in ("", "off", "relative", "direct") else "",
+            "alarm_offset_minutes": alarm_offset_minutes if isinstance(alarm_offset_minutes, int) else 0,
+            "alarm_time": alarm_time if isinstance(alarm_time, str) else "",
         }
     return result
 

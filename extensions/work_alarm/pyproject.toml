@@ -1,0 +1,17 @@
+[project]
+name = "work-alarm"
+version = "0.1.0"
+description = "Android work alarm service extension for the Bus Calendar Flet app"
+requires-python = ">=3.10"
+dependencies = ["flet>=0.86.4"]
+
+[tool.setuptools.package-data]
+"flutter.work_alarm" = ["**/*"]
+
+[tool.setuptools]
+license-files = []
+
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+

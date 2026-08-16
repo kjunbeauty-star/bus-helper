@@ -5,6 +5,7 @@
 
 import os
 import calendar
+import asyncio
 from datetime import datetime, timedelta, timezone
 import flet as ft
 import json
@@ -19,6 +20,7 @@ except ImportError:
 
 from data_utils import format_phone, normalize_contacts, normalize_input_data, normalize_schedules
 from lunar_utils import get_lunar_marker
+from holiday_sync import download_holidays, should_check_holidays
 from pattern_utils import (
     ALL_MONTHS,
     add_pattern_segment,
@@ -42,6 +44,11 @@ STORAGE_EMERGENCY_KEY = "bus_helper_emergency"
 STORAGE_PATTERN_KEY = "bus_helper_work_pattern"
 STORAGE_MEMO_KEY = "bus_helper_date_memos"
 STORAGE_ALARM_SETTINGS_KEY = "bus_helper_alarm_settings"
+STORAGE_HOLIDAYS_KEY = "bus_helper_online_holidays"
+STORAGE_HOLIDAY_CHECK_MONTH_KEY = "bus_helper_holiday_check_month"
+HOLIDAY_UPDATE_URL = os.environ.get(
+    "HOLIDAY_UPDATE_URL", "https://bus-helper.onrender.com/api/holidays"
+)
 
 # 🔁 반복 근무 패턴 정의 (버스종사자 근무 유형별 순환 사이클)
 WORK_PATTERNS = {
@@ -74,10 +81,13 @@ HOLIDAYS = {
 }
 
 _HOLIDAY_YEAR_CACHE = {}
+ONLINE_HOLIDAYS = {}
 
 
 def get_holiday_name(date_key):
     """Return a Korean holiday name, including years outside the bundled table."""
+    if date_key in ONLINE_HOLIDAYS:
+        return ONLINE_HOLIDAYS[date_key]
     if date_key in HOLIDAYS:
         return HOLIDAYS[date_key]
     try:
@@ -123,6 +133,7 @@ def status_color(s):
     return STATUS_COLORS.get(s, "#374151")
 
 async def main(page: ft.Page):
+    global ONLINE_HOLIDAYS
     page.title = "버스캘린더"
     page.theme_mode = "light"
 
@@ -173,6 +184,11 @@ async def main(page: ft.Page):
     saved_memos = await page.shared_preferences.get(STORAGE_MEMO_KEY)
     DATE_MEMOS = safe_json_load(saved_memos, dict, {})
     saved_alarm_settings = await page.shared_preferences.get(STORAGE_ALARM_SETTINGS_KEY)
+    saved_online_holidays = await page.shared_preferences.get(STORAGE_HOLIDAYS_KEY)
+    saved_holiday_check_month = await page.shared_preferences.get(
+        STORAGE_HOLIDAY_CHECK_MONTH_KEY
+    )
+    ONLINE_HOLIDAYS = safe_json_load(saved_online_holidays, dict, {})
     alarm_settings_state = AlarmSettings.from_dict(
         safe_json_load(saved_alarm_settings, dict, {})
     ).to_dict()
@@ -221,6 +237,23 @@ async def main(page: ft.Page):
     selected_time_state = {"hour": None, "minute": None}
 
     current_tab = "달력"
+
+    async def sync_online_holidays():
+        nonlocal saved_holiday_check_month
+        check_time = datetime.now(KST)
+        if not should_check_holidays(saved_holiday_check_month, check_time):
+            return
+        try:
+            downloaded = await asyncio.to_thread(download_holidays, HOLIDAY_UPDATE_URL, [check_time.year, check_time.year + 1])
+            if downloaded:
+                ONLINE_HOLIDAYS.update(downloaded)
+                saved_holiday_check_month = check_time.strftime("%Y-%m")
+                await page.shared_preferences.set(STORAGE_HOLIDAYS_KEY, json.dumps(ONLINE_HOLIDAYS, ensure_ascii=False))
+                await page.shared_preferences.set(STORAGE_HOLIDAY_CHECK_MONTH_KEY, saved_holiday_check_month)
+                print(f"[HolidaySync] updated={len(downloaded)} month={saved_holiday_check_month}", flush=True)
+                rebuild_interface()
+        except Exception as exc:
+            print(f"[HolidaySync] skipped: {exc}", flush=True)
 
     # 📱 팝업 카드를 "교대자다3"처럼 화면 좌우 꽉 채운 시트 형태로 만드는 공용 헬퍼
     # inner_content: 카드 안에 들어갈 ft.Column 등 / top: 화면 상단에서부터의 여백(px)
@@ -1992,11 +2025,38 @@ async def main(page: ft.Page):
         rebuild_interface()
 
     change_tab("달력"); rebuild_interface()
+    page.run_task(sync_online_holidays)
     page.on_app_lifecycle_state_change = lambda e: page.run_task(handle_app_lifecycle, e)
 
 if os.environ.get("PORT"):
-    # 🌐 Render 등 웹 서버로 배포될 때 (PORT 환경변수가 있을 때만) 브라우저/포트 지정 방식으로 실행
-    ft.app(target=main, port=int(os.environ.get("PORT")), view=ft.AppView.WEB_BROWSER)
+    import uvicorn
+    import flet.fastapi as flet_fastapi
+    from fastapi import FastAPI, HTTPException
+    from holiday_sync import build_holiday_payload, fetch_official_holidays
+
+    web_app = FastAPI()
+    _server_holiday_cache = {}
+
+    @web_app.get("/api/holidays")
+    async def holiday_api(years: str):
+        try:
+            requested_years = tuple(sorted({int(value) for value in years.split(",") if value.strip()}))
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail="잘못된 연도입니다.") from exc
+        if not requested_years or len(requested_years) > 3:
+            raise HTTPException(status_code=400, detail="연도는 1~3개만 요청할 수 있습니다.")
+        if requested_years not in _server_holiday_cache:
+            try:
+                official = await asyncio.to_thread(fetch_official_holidays, requested_years)
+                _server_holiday_cache[requested_years] = build_holiday_payload(official)
+            except Exception as exc:
+                fallback = {date_key: name for date_key, name in HOLIDAYS.items() if int(date_key[:4]) in requested_years}
+                print(f"[HolidayAPI] fallback: {exc}", flush=True)
+                _server_holiday_cache[requested_years] = build_holiday_payload(fallback, source="bundled")
+        return _server_holiday_cache[requested_years]
+
+    web_app.mount("/", flet_fastapi.app(main, assets_dir=os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets")))
+    uvicorn.run(web_app, host="0.0.0.0", port=int(os.environ["PORT"]))
 else:
     # 📱 APK/네이티브 빌드 또는 로컬 실행 시에는 포트/브라우저 강제 지정 없이 기본 방식으로 실행
     ft.app(target=main)

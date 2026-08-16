@@ -1,0 +1,25 @@
+name: work_alarm
+description: Local Flet work alarm service extension
+version: 0.1.0
+publish_to: none
+
+environment:
+  sdk: '>=3.3.0 <4.0.0'
+  flutter: '>=3.22.0'
+
+dependencies:
+  flet: 0.86.4
+  flutter:
+    sdk: flutter
+
+flutter:
+  plugin:
+    platforms:
+      android:
+        package: com.buscalendar.work_alarm
+        pluginClass: WorkAlarmPlugin
+
+dev_dependencies:
+  flutter_lints: ^5.0.0
+  flutter_test:
+    sdk: flutter

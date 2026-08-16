@@ -1,2 +1,5 @@
 flet==0.86.4
 holidays>=0.65,<1
+korean-lunar-calendar>=0.4,<1
+fastapi>=0.115,<1
+uvicorn>=0.30,<1

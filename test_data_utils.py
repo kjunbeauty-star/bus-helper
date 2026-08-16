@@ -22,7 +22,20 @@ class DataUtilsTests(unittest.TestCase):
             "not-a-date": {"status": "오전"},
             "2026-08-04": {"status": "오후"},
         })
-        self.assertEqual(result, {"2026-08-04": {"status": "오후", "start_time": "", "order_no": ""}})
+        self.assertEqual(result, {"2026-08-04": {
+            "status": "오후", "start_time": "", "order_no": "",
+            "alarm_mode": "", "alarm_offset_minutes": 0, "alarm_time": "",
+        }})
+
+    def test_date_alarm_fields_are_preserved(self):
+        result = normalize_schedules({
+            "2026-08-04": {
+                "status": "오후", "start_time": "16:25", "order_no": "6",
+                "alarm_mode": "relative", "alarm_offset_minutes": 90,
+            }
+        })
+        self.assertEqual(result["2026-08-04"]["alarm_mode"], "relative")
+        self.assertEqual(result["2026-08-04"]["alarm_offset_minutes"], 90)
 
     def test_phone_format_supports_seoul_and_mobile_numbers(self):
         self.assertEqual(format_phone("0212345678"), "02-1234-5678")

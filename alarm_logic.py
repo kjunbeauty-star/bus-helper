@@ -41,6 +41,48 @@ def _trigger_millis(work_date: date, alarm_time: str, timezone: tzinfo) -> int:
     return int(local_dt.timestamp() * 1000)
 
 
+def _date_alarm_trigger(
+    work_date: date,
+    day_info: Mapping[str, Any],
+    timezone: tzinfo,
+) -> int | None:
+    mode = day_info.get("alarm_mode", "")
+    if mode == "off":
+        return None
+    if mode == "direct":
+        alarm_time = day_info.get("alarm_time", "")
+        if not alarm_time:
+            return None
+        return _trigger_millis(work_date, str(alarm_time), timezone)
+    if mode == "relative":
+        start_time = day_info.get("start_time", "")
+        offset = day_info.get("alarm_offset_minutes", 0)
+        if not start_time or not isinstance(offset, int) or offset <= 0:
+            return None
+        start_dt = datetime.combine(
+            work_date, _parse_alarm_time(str(start_time)), tzinfo=timezone,
+        )
+        return int((start_dt - timedelta(minutes=offset)).timestamp() * 1000)
+    return 0
+
+
+def is_expired_date_alarm(
+    *,
+    work_date: date,
+    day_info: Mapping[str, Any],
+    timezone: tzinfo,
+    now: datetime,
+) -> bool:
+    """Return True after an explicit per-date alarm has reached its trigger time."""
+    if day_info.get("alarm_mode", "") not in ("relative", "direct"):
+        return False
+    try:
+        trigger_at = _date_alarm_trigger(work_date, day_info, timezone)
+    except ValueError:
+        return False
+    return bool(trigger_at and trigger_at <= int(now.timestamp() * 1000))
+
+
 def build_desired_alarms(
     *,
     start_date: date,
@@ -67,17 +109,20 @@ def build_desired_alarms(
         shift = STATUS_TO_SHIFT.get(status)
         if shift is None:
             continue
+        date_trigger = _date_alarm_trigger(work_date, day_info, timezone)
+        if date_trigger is None:
+            continue
         if shift == MORNING_SHIFT:
-            if not settings.morning_enabled:
+            if date_trigger == 0 and not settings.morning_enabled:
                 continue
             alarm_time = settings.morning_time
             title, message = "오전근무 알람", "오늘은 오전근무입니다."
         else:
-            if not settings.afternoon_enabled:
+            if date_trigger == 0 and not settings.afternoon_enabled:
                 continue
             alarm_time = settings.afternoon_time
             title, message = "오후근무 알람", "오늘은 오후근무입니다."
-        trigger_at = _trigger_millis(work_date, alarm_time, timezone)
+        trigger_at = date_trigger or _trigger_millis(work_date, alarm_time, timezone)
         if trigger_at <= now_ms:
             continue
         alarms.append(AlarmEntry(
@@ -91,6 +136,8 @@ def build_desired_alarms(
             message=message,
             sound_enabled=settings.sound_enabled,
             vibration_enabled=settings.vibration_enabled,
+            first_trip=str(day_info.get("start_time", "")),
+            memo=str(day_info.get("memo", "")),
         ))
     return alarms
 
@@ -124,4 +171,3 @@ def build_reconcile_plan(
         cancel=tuple(sorted(cancel, key=sort_key)),
         unchanged=tuple(sorted(unchanged, key=sort_key)),
     )
-

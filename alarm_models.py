@@ -75,6 +75,8 @@ class AlarmEntry:
     message: str
     sound_enabled: bool = True
     vibration_enabled: bool = True
+    first_trip: str = ""
+    memo: str = ""
 
     def __post_init__(self) -> None:
         if not self.alarm_id:
@@ -98,6 +100,8 @@ class AlarmEntry:
             "message": self.message,
             "sound_enabled": self.sound_enabled,
             "vibration_enabled": self.vibration_enabled,
+            "first_trip": self.first_trip,
+            "memo": self.memo,
         }
 
     @classmethod
@@ -115,6 +119,8 @@ class AlarmEntry:
             message=str(value.get("message", "")),
             sound_enabled=value.get("sound_enabled", True) is True,
             vibration_enabled=value.get("vibration_enabled", True) is True,
+            first_trip=str(value.get("first_trip", "")),
+            memo=str(value.get("memo", "")),
         )
 
 
@@ -124,4 +130,3 @@ class ReconcilePlan:
     update: tuple[AlarmEntry, ...]
     cancel: tuple[AlarmEntry, ...]
     unchanged: tuple[AlarmEntry, ...]
-

@@ -1,7 +1,7 @@
 import unittest
 from datetime import date, datetime, timedelta, timezone
 
-from alarm_logic import build_desired_alarms, build_reconcile_plan
+from alarm_logic import build_desired_alarms, build_reconcile_plan, is_expired_date_alarm
 from alarm_models import AlarmEntry, AlarmSettings
 
 
@@ -90,6 +90,93 @@ class AlarmLogicTests(unittest.TestCase):
     def test_invalid_time_is_rejected(self):
         with self.assertRaises(ValueError):
             AlarmSettings(enabled=True, morning_time="25:00")
+
+    def test_date_relative_alarm_overrides_shift_default(self):
+        alarms = build_desired_alarms(
+            start_date=date(2026, 8, 4), days=1,
+            get_day_info=lambda key: {
+                "status": "오후", "start_time": "16:25",
+                "alarm_mode": "relative", "alarm_offset_minutes": 90,
+            },
+            settings=AlarmSettings(enabled=True, afternoon_time="12:30"),
+            timezone=KST, now=datetime(2026, 8, 4, 10, 0, tzinfo=KST),
+        )
+        expected = datetime(2026, 8, 4, 14, 55, tzinfo=KST)
+        self.assertEqual(alarms[0].trigger_at, int(expected.timestamp() * 1000))
+
+    def test_relative_alarm_can_fall_on_previous_date(self):
+        alarms = build_desired_alarms(
+            start_date=date(2026, 8, 5), days=1,
+            get_day_info=lambda key: {
+                "status": "오전", "start_time": "01:00",
+                "alarm_mode": "relative", "alarm_offset_minutes": 120,
+            },
+            settings=AlarmSettings(enabled=True), timezone=KST,
+            now=datetime(2026, 8, 4, 20, 0, tzinfo=KST),
+        )
+        expected = datetime(2026, 8, 4, 23, 0, tzinfo=KST)
+        self.assertEqual(alarms[0].trigger_at, int(expected.timestamp() * 1000))
+
+    def test_direct_date_alarm_works_without_first_trip(self):
+        alarms = build_desired_alarms(
+            start_date=date(2026, 8, 5), days=1,
+            get_day_info=lambda key: {
+                "status": "오전", "start_time": "",
+                "alarm_mode": "direct", "alarm_time": "04:40",
+            },
+            settings=AlarmSettings(enabled=True), timezone=KST,
+            now=datetime(2026, 8, 4, 20, 0, tzinfo=KST),
+        )
+        self.assertEqual(len(alarms), 1)
+
+    def test_date_alarm_off_suppresses_global_fallback(self):
+        alarms = build_desired_alarms(
+            start_date=date(2026, 8, 5), days=1,
+            get_day_info=lambda key: {"status": "오전", "alarm_mode": "off"},
+            settings=AlarmSettings(enabled=True), timezone=KST,
+            now=datetime(2026, 8, 4, 20, 0, tzinfo=KST),
+        )
+        self.assertEqual(alarms, [])
+
+    def test_date_alarm_overrides_disabled_shift_default(self):
+        alarms = build_desired_alarms(
+            start_date=date(2026, 8, 5), days=1,
+            get_day_info=lambda key: {
+                "status": "오전", "alarm_mode": "direct", "alarm_time": "04:40",
+            },
+            settings=AlarmSettings(enabled=True, morning_enabled=False), timezone=KST,
+            now=datetime(2026, 8, 4, 20, 0, tzinfo=KST),
+        )
+        self.assertEqual(len(alarms), 1)
+
+
+    def test_direct_date_alarm_expires_at_trigger_time(self):
+        day_info = {"alarm_mode": "direct", "alarm_time": "05:30"}
+        self.assertFalse(is_expired_date_alarm(
+            work_date=date(2026, 8, 5), day_info=day_info, timezone=KST,
+            now=datetime(2026, 8, 5, 5, 29, tzinfo=KST),
+        ))
+        self.assertTrue(is_expired_date_alarm(
+            work_date=date(2026, 8, 5), day_info=day_info, timezone=KST,
+            now=datetime(2026, 8, 5, 5, 30, tzinfo=KST),
+        ))
+
+    def test_relative_date_alarm_expires_even_on_previous_day(self):
+        day_info = {
+            "alarm_mode": "relative", "start_time": "01:00",
+            "alarm_offset_minutes": 120,
+        }
+        self.assertTrue(is_expired_date_alarm(
+            work_date=date(2026, 8, 5), day_info=day_info, timezone=KST,
+            now=datetime(2026, 8, 4, 23, 0, tzinfo=KST),
+        ))
+
+    def test_default_and_disabled_date_alarms_do_not_expire(self):
+        for mode in ("", "off"):
+            self.assertFalse(is_expired_date_alarm(
+                work_date=date(2026, 8, 5), day_info={"alarm_mode": mode},
+                timezone=KST, now=datetime(2026, 8, 6, 0, 0, tzinfo=KST),
+            ))
 
 
 if __name__ == "__main__":
