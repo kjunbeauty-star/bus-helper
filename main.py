@@ -1557,7 +1557,7 @@ async def main(page: ft.Page):
                         # 알람 아이콘이 날짜숫자에 바짝 붙어 보이던 것을 살짝 띄우기 위해 spacing을 3→6으로 확대
                         ([ft.Icon(ft.Icons.ALARM, size=11, color="#2563EB", tooltip="날짜별 알람 설정됨")] if has_date_alarm else []) +
                         ([ft.Column(date_labels, spacing=0, tight=True)] if date_labels else []),
-                        alignment="start", vertical_alignment="center", spacing=4,
+                        alignment="start", vertical_alignment="center", spacing=4, height=20,
                     )
                     # 오늘 날짜 셀만 폭이 좁아져 "오후(6)" 같은 상태문구가 줄바꿈되던 버그 →
                     # 굵은 파란 테두리(2px)를 없애고 모든 셀과 동일한 얇은 회색 테두리로 통일하면서 함께 해결됨
