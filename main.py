@@ -1676,6 +1676,9 @@ async def main(page: ft.Page):
         # 줄에 작은 변경 버튼만 배치한다.
         date_route_row.visible = not single_active_route
         date_route_compact_button.visible = single_active_route
+        date_route_compact_button.content.value = (
+            f"{route['route_number']}번" if single_active_route and route else "노선 변경"
+        )
         if route:
             date_route_text.value = f"현재 노선: {route['route_number']}번"
         elif deleted_route and date_route_state["route_number"]:
