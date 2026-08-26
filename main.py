@@ -10,6 +10,17 @@ from datetime import datetime, timedelta, timezone
 import flet as ft
 import json
 
+from route_models import (
+    DAY_TYPES, day_type_for_date, default_route, empty_times, find_route,
+    find_route_by_number, first_trip_time, fleet_count, normalize_routes_state,
+    valid_time,
+)
+from route_schedule import (
+    DEPOT_ROUTES, SERVICE_SATURDAY, SERVICE_SUNDAY_HOLIDAY, SERVICE_WEEKDAY,
+    company_fleet_count, default_service_for_day_type, lookup_schedule,
+    service_for_date,
+)
+
 from alarm_logic import build_desired_alarms, is_expired_date_alarm
 from alarm_models import AlarmSettings, SCHEMA_VERSION
 
@@ -46,6 +57,7 @@ STORAGE_MEMO_KEY = "bus_helper_date_memos"
 STORAGE_ALARM_SETTINGS_KEY = "bus_helper_alarm_settings"
 STORAGE_HOLIDAYS_KEY = "bus_helper_online_holidays"
 STORAGE_HOLIDAY_CHECK_MONTH_KEY = "bus_helper_holiday_check_month"
+STORAGE_ROUTES_KEY = "bus_helper_routes"
 HOLIDAY_UPDATE_URL = os.environ.get(
     "HOLIDAY_UPDATE_URL", "https://bus-helper.onrender.com/api/holidays"
 )
@@ -172,7 +184,8 @@ async def main(page: ft.Page):
     saved_targets = await page.shared_preferences.get(STORAGE_MANGEUN_KEY)
     saved_input_data = await page.shared_preferences.get(STORAGE_INPUT_DATA_KEY)
     saved_phonebook = await page.shared_preferences.get(STORAGE_PHONEBOOK_KEY)
-    
+    saved_routes = await page.shared_preferences.get(STORAGE_ROUTES_KEY)
+
     saved_emergency = await page.shared_preferences.get(STORAGE_EMERGENCY_KEY)
     EMERGENCY_LIST = safe_json_load(saved_emergency, list, [])
 
@@ -203,10 +216,14 @@ async def main(page: ft.Page):
     }
 
     USER_SCHEDULES = normalize_schedules(safe_json_load(saved_schedules, dict, {}))
+    routes_state = normalize_routes_state(safe_json_load(saved_routes, dict, {}))
+    if routes_state.get("selected_company") not in DEPOT_ROUTES:
+        companies = {c for r in routes_state["routes"] for c, nums in DEPOT_ROUTES.items() if str(r.get("route_number", "")).strip() in nums}
+        routes_state["selected_company"] = next(iter(companies)) if len(companies) == 1 else ""
     MANGEUN_TARGETS = safe_json_load(saved_targets, dict, {})
     PHONEBOOK_LIST = normalize_contacts(safe_json_load(saved_phonebook, list, []))
     EMERGENCY_LIST = normalize_contacts(EMERGENCY_LIST)
-    
+
     # 운행정보(내차/앞차/뒷차) 초기값 세팅
     _loaded_input_data = safe_json_load(saved_input_data, dict, None)
     input_data_state = normalize_input_data(_loaded_input_data)
@@ -223,6 +240,22 @@ async def main(page: ft.Page):
         await page.shared_preferences.set(STORAGE_EMERGENCY_KEY, json.dumps(EMERGENCY_LIST, ensure_ascii=False))
         await page.shared_preferences.set(STORAGE_PATTERN_KEY, json.dumps(pattern_state, ensure_ascii=False))
         await page.shared_preferences.set(STORAGE_MEMO_KEY, json.dumps(DATE_MEMOS, ensure_ascii=False))
+
+    async def save_routes():
+        await page.shared_preferences.set(STORAGE_ROUTES_KEY, json.dumps(routes_state, ensure_ascii=False))
+
+    def sync_input_route_from_default():
+        active_route = default_route(routes_state)
+        if active_route is None:
+            return False
+        route_number = str(active_route.get("route_number", "") or "").strip() or "미입력"
+        if input_data_state.get("route") == route_number:
+            return False
+        input_data_state["route"] = route_number
+        return True
+
+    if sync_input_route_from_default():
+        await save_all_to_client_storage()
 
     async def save_alarm_settings():
         await page.shared_preferences.set(
@@ -266,17 +299,19 @@ async def main(page: ft.Page):
     # 메인 상단 텍스트 레이블 선언
     month_title = ft.Text("", size=20, weight="bold", text_align="center")
     stats_text = ft.Text("", size=13, weight="bold", color="#1E3A8A")
+    morning_count_text = ft.Text("", size=11, weight="normal", color="#1E3A8A", offset=ft.Offset(0, -0.16))
+    afternoon_count_text = ft.Text("", size=11, weight="normal", color="#1E3A8A")
     mangeun_text = ft.Text("", size=13, weight="bold", color="#1E3A8A")
     mangeun_value_text = ft.Text("", size=13, weight="bold", color="#1E3A8A")
     annual_used_text = ft.Text("", size=13, weight="bold", color="#1E3A8A")
     annual_remaining_text = ft.Text("", size=13, weight="bold", color="#1E3A8A")
-    
+
     calendar_grid = ft.Column(spacing=0)
     input_zone_container = ft.Column(spacing=2, visible=False)
     settings_zone_container = ft.Column(spacing=2, visible=False)
-    
-    phonebook_items_column = ft.Column(spacing=6)
-    
+
+    phonebook_items_column = ft.Column(spacing=2)
+
     # [화면 구역] 📞 전화번호부 관리 페이지 레이아웃
     phonebook_zone_container = ft.Container(
         content=ft.Column([
@@ -287,12 +322,17 @@ async def main(page: ft.Page):
                 pb_phone := ft.TextField(cursor_width=1, label="전화번호(숫자만)", label_style=ft.TextStyle(size=11), expand=True, height=38, text_size=13, content_padding=8, keyboard_type=ft.KeyboardType.PHONE),
                 ft.ElevatedButton(content=ft.Text("추가", size=12, weight="bold", color="white"), bgcolor="#2563EB", width=60, height=38, style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=4), padding=0), on_click=lambda e: add_phonebook_item())
             ], spacing=4),
-            ft.Divider(height=1, color="#E2E8F0"),
-            phonebook_items_column
+            ft.Column(
+                [
+                    ft.Divider(height=1, color="#E2E8F0"),
+                    phonebook_items_column,
+                ],
+                spacing=2,
+            )
         ]),
         padding=ft.Padding.symmetric(horizontal=4, vertical=8), visible=False
     )
-    
+
     # 📇 전화번호부는 이제 하단 '연락처' 탭 안에 통합되어 있음 (별도 큰 버튼 제거됨)
 
     # [하단 탭 메뉴 버튼] 기사님 디자인 피드백 반영 (텍스트 이모지 장착 및 한여름의 패딩 제거 버전)
@@ -331,14 +371,14 @@ async def main(page: ft.Page):
                     ], spacing=6, tight=True),
                 ], alignment="spaceBetween", spacing=6)
 
-                phonebook_items_column.controls.append(ft.Container(content=row_content, padding=ft.Padding.only(left=4, right=4, top=8, bottom=8), border=ft.border.Border(bottom=ft.border.BorderSide(0.5, "#E2E8F0"))))
+                phonebook_items_column.controls.append(ft.Container(content=row_content, padding=ft.Padding.only(left=4, right=4, top=6, bottom=6), border=ft.border.Border(bottom=ft.border.BorderSide(0.5, "#E2E8F0"))))
         page.update()
 
     # 🚨 긴급연락처 목록을 화면에 다시 그려주는 함수 (사무실/정비실 최상단 고정 정렬 기능 포함)
     def rebuild_emergency_view(target_column):
         target_column.controls.clear()
         target_column.controls.append(emergency_form_container)
-        
+
         def get_sort_key(item):
             name = item.get("name", "")
             if name == "사무실": return (0, "")
@@ -362,8 +402,8 @@ async def main(page: ft.Page):
                         ft.ElevatedButton(content=ft.Container(ft.Text("수정", size=10, weight="bold", color="white"), alignment=ft.Alignment.CENTER), bgcolor="#2563EB", width=42, height=28, style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=4), padding=0), on_click=lambda e, idx=index: open_contact_edit_dialog("emergency", idx)),
                     ], spacing=6, tight=True),
                 ], alignment="spaceBetween", spacing=6)
-                
-                target_column.controls.append(ft.Container(content=row_content, padding=ft.Padding.only(left=4, right=4, top=8, bottom=8), border=ft.border.Border(bottom=ft.border.BorderSide(0.5, "#E2E8F0"))))
+
+                target_column.controls.append(ft.Container(content=row_content, padding=ft.Padding.only(left=4, right=4, top=6, bottom=6), border=ft.border.Border(bottom=ft.border.BorderSide(0.5, "#E2E8F0"))))
         page.update()
 
     # ⚙️ 설정 화면 - 반복 근무 패턴 선택 (예: 4일오전 4일오후 등 순환근무 자동 채우기)
@@ -833,6 +873,415 @@ async def main(page: ft.Page):
             page.run_task(refresh_alarm_status)
         page.update()
 
+    route_editor_state = {
+        "draft": None,
+        "time_fields": {},
+        "time_values": {},
+        "view": None,
+        "delete_confirm_id": None,
+    }
+    route_message_text = ft.Text("", size=11, color="#D93025")
+    route_number_field = ft.TextField(label="노선번호", height=44, text_size=13)
+    weekday_count_field = ft.TextField(label="평일 운행대수", height=44, text_size=13, keyboard_type=ft.KeyboardType.NUMBER)
+    saturday_count_field = ft.TextField(label="토요일 운행대수", height=44, text_size=13, keyboard_type=ft.KeyboardType.NUMBER)
+    sunday_count_field = ft.TextField(label="일요일(공휴일) 운행대수", height=44, text_size=13, keyboard_type=ft.KeyboardType.NUMBER)
+
+    def close_route_popup(e=None):
+        route_settings_popup_layer.visible = False
+        page.update()
+
+    def is_company_route_number(route_number):
+        number = str(route_number or "").strip()
+        return any(number in route_numbers for route_numbers in DEPOT_ROUTES.values())
+
+    def company_route_label(route_number):
+        number = str(route_number or "").strip()
+        return number if number.startswith("급행") else f"{number}번"
+
+    def register_company_route(depot, route_number):
+        number = str(route_number or "").strip()
+        if number not in DEPOT_ROUTES.get(depot, ()):
+            return
+        selected_company = routes_state.get("selected_company", "")
+        if selected_company in DEPOT_ROUTES and selected_company != depot:
+            return
+        if any(str(route.get("route_number", "")).strip() == number for route in routes_state["routes"]):
+            show_route_list()
+            route_message_text.value = f"{company_route_label(number)} 노선은 이미 등록돼 있습니다."
+            page.update()
+            return
+        route = {
+            "id": f"company-route-{number}-{int(datetime.now(KST).timestamp() * 1000)}",
+            "route_number": number,
+            "fleet_counts": {
+                "weekday": company_fleet_count(number, SERVICE_WEEKDAY),
+                "saturday": company_fleet_count(number, SERVICE_SATURDAY),
+                "sunday": company_fleet_count(number, SERVICE_SUNDAY_HOLIDAY),
+            },
+            "first_trip_times": empty_times(),
+        }
+        routes_state["routes"].append(route)
+        if not routes_state["default_route_id"]:
+            routes_state["default_route_id"] = route["id"]
+        routes_state["selected_company"] = depot
+        sync_input_route_from_default()
+        page.run_task(save_routes)
+        page.run_task(save_all_to_client_storage)
+        rebuild_interface()
+        show_route_list()
+        route_message_text.value = f"{depot} {company_route_label(number)} 노선을 등록했습니다."
+        route_message_text.color = "#137333"
+        page.update()
+
+    def open_company_route_picker(depot):
+        route_editor_state["view"] = "company_routes"
+        buttons = []
+        registered = {
+            str(route.get("route_number", "")).strip()
+            for route in routes_state["routes"]
+        }
+        for number in DEPOT_ROUTES.get(depot, ()):
+            already_registered = number in registered
+            buttons.append(
+                ft.ElevatedButton(
+                    company_route_label(number) + (" · 등록됨" if already_registered else ""),
+                    disabled=already_registered,
+                    bgcolor="#CBD5E1" if already_registered else "#2563EB",
+                    color="white",
+                    height=42,
+                    on_click=lambda e, d=depot, n=number: register_company_route(d, n),
+                )
+            )
+        locked = routes_state.get("selected_company") in DEPOT_ROUTES
+        picker_actions = [ft.ElevatedButton("취소", expand=1, bgcolor="grey", color="white", on_click=close_route_popup)]
+        if not locked:
+            picker_actions.insert(0, ft.ElevatedButton("뒤로가기", expand=1, bgcolor="#64748B", color="white", on_click=open_company_depot_picker))
+        route_settings_popup_layer.content = make_full_width_sheet(
+            ft.Column([
+                ft.Text(f"{depot} 노선 선택", size=16, weight="bold", color="#1E3A8A"),
+                ft.Text("등록할 노선을 선택하세요.", size=12, color="#64748B"),
+                ft.Column(buttons, spacing=8, horizontal_alignment="stretch"),
+                ft.Row(picker_actions, spacing=8),
+            ], spacing=10, tight=True, horizontal_alignment="stretch"),
+            top=90,
+        )
+        route_settings_popup_layer.visible = True
+        page.update()
+
+    def open_company_depot_picker(e=None):
+        route_editor_state["view"] = "company_depot"
+        depot_buttons = [
+            ft.ElevatedButton(
+                depot, bgcolor="#2563EB", color="white", height=46,
+                on_click=lambda e, d=depot: open_company_route_picker(d),
+            )
+            for depot in DEPOT_ROUTES
+        ]
+        route_settings_popup_layer.content = make_full_width_sheet(
+            ft.Column([
+                ft.Text("노선 추가", size=16, weight="bold", color="#1E3A8A"),
+                ft.Text("회사를 선택하세요.", size=12, color="#64748B"),
+                *depot_buttons,
+                ft.ElevatedButton("취소", bgcolor="#64748B", color="white", on_click=close_route_popup),
+            ], spacing=10, tight=True, horizontal_alignment="stretch"),
+            top=110,
+        )
+        route_settings_popup_layer.visible = True
+        page.update()
+
+    def open_company_route_add(e=None):
+        company = routes_state.get("selected_company", "")
+        open_company_route_picker(company) if company in DEPOT_ROUTES else open_company_depot_picker()
+
+    def set_default_route(route_id):
+        routes_state["default_route_id"] = route_id
+        sync_input_route_from_default()
+        page.run_task(save_routes)
+        page.run_task(save_all_to_client_storage)
+        rebuild_interface()
+        show_route_list()
+
+    def delete_route(route_id):
+        used_count = sum(
+            1 for info in USER_SCHEDULES.values()
+            if isinstance(info, dict) and info.get("route_id") == route_id
+        )
+        route = find_route(routes_state, route_id)
+        route_number = route["route_number"] if route else ""
+        history_notice = (
+            f"\n과거 사용 일정 {used_count}건의 노선·순번 기록은 그대로 보존됩니다."
+            if used_count else ""
+        )
+        route_settings_popup_layer.content = make_full_width_sheet(
+            ft.Column(
+                [
+                    ft.Text("노선 삭제", size=16, weight="bold", color="#D93025"),
+                    ft.Text(
+                        f"{route_number}번 노선을 삭제하시겠습니까?{history_notice}",
+                        size=13,
+                        color="black",
+                    ),
+                    ft.Row(
+                        [
+                            ft.ElevatedButton(
+                                "취소",
+                                expand=1,
+                                bgcolor="#64748B",
+                                color="white",
+                                on_click=show_route_list,
+                            ),
+                            ft.ElevatedButton(
+                                "확인",
+                                expand=1,
+                                bgcolor="#D93025",
+                                color="white",
+                                on_click=lambda e, rid=route_id: confirm_delete_route(rid),
+                            ),
+                        ],
+                        spacing=8,
+                    ),
+                ],
+                spacing=14,
+                tight=True,
+                horizontal_alignment="stretch",
+            ),
+            top=120,
+        )
+        route_settings_popup_layer.visible = True
+        page.update()
+
+    def confirm_delete_route(route_id):
+        routes_state["routes"] = [
+            route for route in routes_state["routes"] if route["id"] != route_id
+        ]
+        if routes_state["default_route_id"] == route_id:
+            routes_state["default_route_id"] = (
+                routes_state["routes"][0]["id"] if routes_state["routes"] else ""
+            )
+        if not routes_state["routes"]:
+            routes_state["selected_company"] = ""
+
+        # 삭제일 이전 일정은 노선 스냅샷을 보존하고, 오늘 이후 일정만
+        # 남아 있는 기본 노선으로 안전하게 전환한다.
+        today_key = datetime.now(KST).strftime("%Y-%m-%d")
+        replacement = default_route(routes_state)
+        for date_key, info in USER_SCHEDULES.items():
+            if date_key < today_key or info.get("route_id") != route_id:
+                continue
+            if replacement is None:
+                info["route_id"] = ""
+                info["route_number"] = ""
+                info["start_time_override"] = bool(info.get("start_time"))
+                continue
+            info["route_id"] = replacement["id"]
+            info["route_number"] = replacement["route_number"]
+            day_type = day_type_for_date(date_key, lambda key: bool(get_holiday_name(key)))
+            order = str(info.get("order_no", "") or "")
+            service_type = service_for_date(replacement["route_number"], day_type, "")
+            maximum = company_fleet_count(replacement["route_number"], service_type) or fleet_count(replacement, day_type)
+            if order and (not order.isdigit() or int(order) > maximum):
+                info["order_no"] = ""
+                info["start_time"] = ""
+                info["departure"] = ""
+                info["start_time_override"] = False
+            elif info.get("start_time_override") is not True:
+                company_item = lookup_schedule(
+                    replacement["route_number"], service_type,
+                    info.get("status", ""), order,
+                )
+                info["service_type"] = service_type
+                info["start_time"] = company_item["time"] if company_item else first_trip_time(
+                    replacement, day_type, info.get("status", ""), order
+                )
+                info["departure"] = company_item.get("departure", "") if company_item else ""
+
+        sync_input_route_from_default()
+        page.run_task(save_routes)
+        page.run_task(save_all_to_client_storage)
+        page.run_task(reconcile_alarms, "route_deleted")
+        rebuild_interface()
+        show_route_list()
+
+    def show_route_list(e=None):
+        route_editor_state["view"] = "list"
+        rows = []
+        for route in routes_state["routes"]:
+            is_default = route["id"] == routes_state["default_route_id"]
+            rows.append(ft.Container(content=ft.Column([
+                ft.Row([
+                    ft.Column([ft.Text(f"{route['route_number']}번", size=15, weight="bold"), ft.Text("기본 노선" if is_default else "등록 노선", size=11, color="#2563EB" if is_default else "grey")], spacing=1),
+                    ft.Row([
+                        ft.TextButton("기본지정", disabled=is_default, on_click=lambda e, rid=route["id"]: set_default_route(rid)),
+                        ft.TextButton("수정", visible=not is_company_route_number(route["route_number"]), on_click=lambda e, rid=route["id"]: open_route_form(rid)),
+                        ft.TextButton("삭제", on_click=lambda e, rid=route["id"]: delete_route(rid)),
+                    ], spacing=0),
+                ], alignment="spaceBetween"),
+                ft.Text(f"평일 {route['fleet_counts']['weekday']}대 · 토요일 {route['fleet_counts']['saturday']}대 · 일요일/공휴일 {route['fleet_counts']['sunday']}대", size=11, color="#64748B"),
+            ], spacing=3), padding=10, border=ft.Border.all(1, "#E2E8F0"), border_radius=8))
+        if not rows:
+            rows.append(ft.Text("등록된 노선이 없습니다. 노선을 먼저 등록해 주세요.", size=12, color="grey"))
+        route_message_text.value = ""
+        route_message_text.color = "#D93025"
+        company = routes_state.get("selected_company", "")
+        company_notice = ft.Text(f"현재 선택한 회사는 {company}입니다.", size=12, weight="bold", color="#1E3A8A") if company in DEPOT_ROUTES else ft.Container(height=0)
+        route_settings_popup_layer.content = make_full_width_sheet(ft.Column([
+            ft.Text("🚌 노선지정", size=16, weight="bold", color="#1E3A8A"),
+            company_notice,
+            ft.Column(rows, spacing=6, scroll=ft.ScrollMode.AUTO, height=350),
+            route_message_text,
+            ft.ElevatedButton("노선 추가", icon=ft.Icons.ADD, bgcolor="#2563EB", color="white", on_click=open_company_route_add),
+            ft.ElevatedButton("닫기", bgcolor="#64748B", color="white", on_click=close_route_popup),
+        ], spacing=8, tight=True, horizontal_alignment="stretch"), top=45)
+        route_settings_popup_layer.visible = True
+        page.update()
+
+    def open_route_form(route_id=None):
+        route_editor_state["view"] = "basic"
+        pending_draft = route_editor_state.get("draft")
+        reuse_pending = bool(
+            route_id and pending_draft and pending_draft.get("id") == route_id
+        )
+        if not reuse_pending:
+            route_editor_state["time_values"] = {}
+        existing = pending_draft if reuse_pending else (find_route(routes_state, route_id) if route_id else None)
+        draft = json.loads(json.dumps(existing, ensure_ascii=False)) if existing else {
+            "id": f"route-{int(datetime.now(KST).timestamp() * 1000)}",
+            "route_number": "", "fleet_counts": {"weekday": 0, "saturday": 0, "sunday": 0},
+            "first_trip_times": empty_times(),
+        }
+        route_editor_state["draft"] = draft
+        route_number_field.value = draft["route_number"]
+        weekday_count_field.value = str(draft["fleet_counts"]["weekday"] or "")
+        saturday_count_field.value = str(draft["fleet_counts"]["saturday"] or "")
+        sunday_count_field.value = str(draft["fleet_counts"]["sunday"] or "")
+        route_message_text.value = ""
+        route_settings_popup_layer.content = make_full_width_sheet(ft.Column([
+            ft.Text("노선 기본정보", size=16, weight="bold", color="#1E3A8A"),
+            route_number_field, weekday_count_field, saturday_count_field, sunday_count_field,
+            ft.Text("운행대수를 줄여도 숨겨진 상위 순번 시간은 안전하게 보존됩니다.", size=11, color="#64748B"),
+            route_message_text,
+            ft.Row([
+                ft.ElevatedButton("취소", expand=1, bgcolor="#64748B", color="white", on_click=close_route_popup),
+                ft.ElevatedButton("다음", expand=1, bgcolor="#2563EB", color="white", on_click=open_route_times),
+            ], spacing=8),
+            # 모바일 키보드가 열린 상태에서도 마지막 입력칸과 버튼을
+            # 충분히 위로 올릴 수 있도록 하단 스크롤 여백을 둔다.
+            ft.Container(height=120),
+        ], spacing=8, tight=True, horizontal_alignment="stretch",
+           scroll=ft.ScrollMode.AUTO, height=330), top=12)
+        page.update()
+
+    def format_route_time_input(e):
+        control = e.control
+        raw = (control.value or "").strip()
+        if len(raw) == 4 and raw.isdigit():
+            normalized = valid_time(raw)
+            if normalized:
+                control.value = normalized
+                control.update()
+
+    def back_from_route_times(e=None):
+        # 아직 저장하지 않은 입력 문자열까지 그대로 보존한다.
+        route_editor_state["time_values"] = {
+            key: (control.value or "")
+            for key, control in route_editor_state["time_fields"].items()
+        }
+        draft = route_editor_state.get("draft")
+        open_route_form(draft["id"] if draft else None)
+
+    def open_route_times(e=None):
+        number = (route_number_field.value or "").strip()
+        values = [weekday_count_field.value, saturday_count_field.value, sunday_count_field.value]
+        if not number or any(not str(value or "").isdigit() or int(value) < 1 for value in values):
+            route_message_text.value = "노선번호와 1대 이상의 운행대수를 숫자로 입력해 주세요."
+            page.update()
+            return
+        draft = route_editor_state["draft"]
+        draft["route_number"] = number
+        draft["fleet_counts"] = dict(zip(DAY_TYPES, map(int, values)))
+        route_editor_state["view"] = "times"
+        fields, sections = {}, []
+        labels = {"weekday": "평일", "saturday": "토요일", "sunday": "일요일·공휴일"}
+        for day in DAY_TYPES:
+            controls = []
+            for order in range(1, draft["fleet_counts"][day] + 1):
+                morning_key = (day, "morning", str(order))
+                afternoon_key = (day, "afternoon", str(order))
+                morning = ft.TextField(label="오전", value=route_editor_state["time_values"].get(morning_key, draft["first_trip_times"][day]["morning"].get(str(order), "")), hint_text="HH:MM", width=112, height=40, text_size=12, keyboard_type=ft.KeyboardType.DATETIME, on_change=format_route_time_input)
+                afternoon = ft.TextField(label="오후", value=route_editor_state["time_values"].get(afternoon_key, draft["first_trip_times"][day]["afternoon"].get(str(order), "")), hint_text="HH:MM", width=112, height=40, text_size=12, keyboard_type=ft.KeyboardType.DATETIME, on_change=format_route_time_input)
+                fields[(day, "morning", str(order))], fields[(day, "afternoon", str(order))] = morning, afternoon
+                controls.append(ft.Row([ft.Text(f"{order}번", width=42, size=12, weight="bold"), morning, afternoon], spacing=6))
+            sections.extend([ft.Text(labels[day], size=14, weight="bold", color="#1E3A8A"), ft.Column(controls, spacing=4)])
+        route_editor_state["time_fields"] = fields
+        route_message_text.value = ""
+        route_settings_popup_layer.content = make_full_width_sheet(ft.Column([
+            ft.Text(f"{number}번 순번별 첫탕", size=16, weight="bold", color="#1E3A8A"),
+            ft.Text("시간은 0620 또는 06:20 형식으로 입력하세요.", size=11, color="#64748B"),
+            # 목록과 하단 동작을 같은 스크롤에 넣어 키보드가 열린 상태에서도
+            # 마지막 순번과 저장 버튼까지 위로 끌어올릴 수 있게 한다.
+            ft.Column(sections, spacing=8),
+            route_message_text,
+            ft.Row([
+                ft.ElevatedButton(
+                    content=ft.Container(
+                        ft.Text("뒤로가기", size=11, weight="bold", color="white", no_wrap=True),
+                        alignment=ft.Alignment.CENTER,
+                    ),
+                    expand=1, bgcolor="#64748B", height=40,
+                    style=ft.ButtonStyle(padding=0),
+                    on_click=back_from_route_times,
+                ),
+                ft.ElevatedButton(
+                    content=ft.Text("취소", size=12, weight="bold", color="white", no_wrap=True),
+                    expand=1, bgcolor="grey", height=40,
+                    style=ft.ButtonStyle(padding=0),
+                    on_click=close_route_popup,
+                ),
+                ft.ElevatedButton(
+                    content=ft.Text("저장", size=12, weight="bold", color="white", no_wrap=True),
+                    expand=1, bgcolor="#2563EB", height=40,
+                    style=ft.ButtonStyle(padding=0),
+                    on_click=save_route_editor,
+                ),
+            ], spacing=5),
+            ft.Container(height=160),
+        ], spacing=7, tight=True, horizontal_alignment="stretch",
+           scroll=ft.ScrollMode.AUTO, height=330), top=12)
+        page.update()
+
+    def save_route_editor(e=None):
+        draft = route_editor_state["draft"]
+        for (day, shift, order), control in route_editor_state["time_fields"].items():
+            raw = (control.value or "").strip()
+            normalized = valid_time(raw) if raw else ""
+            if raw and not normalized:
+                route_message_text.value = f"{day} {order}번 시간이 올바르지 않습니다. 예: 0620 또는 06:20"
+                page.update()
+                return
+            if normalized:
+                draft["first_trip_times"][day][shift][order] = normalized
+            else:
+                draft["first_trip_times"][day][shift].pop(order, None)
+        existing_index = next((i for i, route in enumerate(routes_state["routes"]) if route["id"] == draft["id"]), None)
+        if existing_index is None:
+            routes_state["routes"].append(draft)
+            if not routes_state["default_route_id"]:
+                routes_state["default_route_id"] = draft["id"]
+        else:
+            routes_state["routes"][existing_index] = draft
+        for date_key, info in USER_SCHEDULES.items():
+            if info.get("route_id") != draft["id"] or info.get("start_time_override") is True:
+                continue
+            day_type = day_type_for_date(date_key, lambda key: bool(get_holiday_name(key)))
+            info["route_number"] = draft["route_number"]
+            info["start_time"] = first_trip_time(draft, day_type, info.get("status", ""), info.get("order_no", ""))
+        sync_input_route_from_default()
+        page.run_task(save_routes)
+        page.run_task(save_all_to_client_storage)
+        page.run_task(reconcile_alarms, "route_updated")
+        rebuild_interface()
+        show_route_list()
+
     def rebuild_settings_view():
         today_key = datetime.now(KST).strftime("%Y-%m-%d")
         current_month_key = today_key[:7]
@@ -858,12 +1307,26 @@ async def main(page: ft.Page):
                 content=ft.Column([
                     ft.Text("⚙️ 설정", size=16, weight="bold", color="#1E3A8A"),
                     ft.Divider(height=1),
+                    ft.Text(
+                        "※ 본 앱은 현직 76번 기사가 만든 미추홀교통과 제물포교통 기사님들을 위한 캘린더형 근무관리 앱입니다.",
+                        size=11,
+                        color="#64748B",
+                    ),
                     ft.Text("근무형태 (반복 근무 패턴)", size=13, weight="bold", color="black"),
                     pattern_status_text,
                     ft.Text("패턴 선택:", size=12, color="grey"),
                     pattern_select_box,
                 ], spacing=8, tight=True, horizontal_alignment="stretch"),
                 padding=12, bgcolor="#F8FAFC", border_radius=8, border=ft.Border.all(1, "#E2E8F0"),
+            ),
+            ft.Container(
+                content=ft.Row([
+                    ft.Text("🚌 노선지정", size=14, weight="bold", color="#1E3A8A"),
+                    ft.Text(f"{len(routes_state['routes'])}개 등록", size=12, color="#64748B"),
+                    ft.Icon(ft.Icons.CHEVRON_RIGHT, color="#64748B"),
+                ], alignment="spaceBetween"),
+                padding=14, bgcolor="#F8FAFC", border_radius=8,
+                border=ft.Border.all(1, "#E2E8F0"), on_click=show_route_list,
             ),
             ft.Container(
                 content=ft.Row([
@@ -1015,7 +1478,7 @@ async def main(page: ft.Page):
 
     # 📇 연락처 화면 서브탭: 긴급연락처 / 기사연락처 (한 화면에 이어붙이면 위쪽 목록이 길어질 때
     # 아래쪽 '추가' 버튼이 화면 밖으로 밀리는 문제가 있어, 한 번에 하나만 보이게 토글로 전환)
-    contacts_subtab_state = {"value": "긴급"}
+    contacts_subtab_state = {"value": "기사"}
     contacts_swipe_state = {"dx": 0.0}
 
     def switch_contacts_subtab(name):
@@ -1043,10 +1506,10 @@ async def main(page: ft.Page):
     def finish_contacts_swipe(e):
         dx = contacts_swipe_state["dx"]
         contacts_swipe_state["dx"] = 0.0
-        if dx <= -35 and contacts_subtab_state["value"] == "긴급":
-            switch_contacts_subtab("기사")
-        elif dx >= 35 and contacts_subtab_state["value"] == "기사":
+        if dx <= -35 and contacts_subtab_state["value"] == "기사":
             switch_contacts_subtab("긴급")
+        elif dx >= 35 and contacts_subtab_state["value"] == "긴급":
+            switch_contacts_subtab("기사")
 
     btn_contacts_emergency = ft.ElevatedButton(
         content=ft.Container(ft.Text("🚨 긴급연락처", size=13, weight="bold"), alignment=ft.Alignment.CENTER),
@@ -1059,7 +1522,7 @@ async def main(page: ft.Page):
         on_click=lambda e: switch_contacts_subtab("기사"),
     )
     contacts_subtab_bar = ft.Container(
-        content=ft.Row([btn_contacts_emergency, btn_contacts_driver], spacing=6),
+        content=ft.Row([btn_contacts_driver, btn_contacts_emergency], spacing=6),
         padding=ft.Padding.only(left=4, right=4, top=4, bottom=6),
         visible=False,
     )
@@ -1137,9 +1600,236 @@ async def main(page: ft.Page):
 
     # 달력 날짜 클릭 시 튀어나오는 첫탕 근무등록 팝업창 세팅들
     popup_date_title = ft.Text("", size=16, weight="bold", color="black", text_align="center")
-    memo_field = ft.TextField(cursor_width=1, label="메모 (선택 입력)", hint_text="예: 미용실, 병원 예약 등", hint_style=ft.TextStyle(color="#9CA3AF"), height=44, text_size=13, content_padding=ft.Padding.symmetric(vertical=8, horizontal=10))
+    date_route_state = {
+        "route_id": "", "route_number": "", "override": False,
+        "service_type": "", "departure": "",
+    }
+    date_route_text = ft.Text("노선 미지정", size=13, weight="bold", color="#1E3A8A")
+    date_route_change_button = ft.TextButton(
+        content=ft.Text("노선 변경", size=12, weight="bold", no_wrap=True),
+        height=26,
+        style=ft.ButtonStyle(padding=ft.Padding.symmetric(horizontal=5)),
+        on_click=lambda e: open_date_route_picker(e),
+    )
+    date_route_compact_button = ft.TextButton(
+        content=ft.Text("노선 변경", size=12, weight="bold", no_wrap=True),
+        height=26,
+        style=ft.ButtonStyle(padding=ft.Padding.symmetric(horizontal=5)),
+        on_click=lambda e: open_date_route_picker(e),
+        visible=False,
+    )
+    date_route_row = ft.Row(
+        [date_route_text, date_route_change_button],
+        alignment="spaceBetween",
+        height=28,
+    )
+    date_first_trip_text = ft.Text(
+        "첫탕 시간이 설정되지 않았습니다.", size=12, color="#D93025", expand=True
+    )
+    date_first_trip_row = ft.Row(
+        [date_first_trip_text, date_route_compact_button],
+        alignment="spaceBetween",
+        vertical_alignment="center",
+        spacing=4,
+    )
+
+    def selected_date_route():
+        return find_route(routes_state, date_route_state["route_id"])
+
+    def resolve_company_or_user_schedule(route, day_type, status, order_no):
+        route_number = route.get("route_number", "") if route else date_route_state["route_number"]
+        service_type = service_for_date(
+            route_number, day_type, date_route_state.get("service_type", "")
+        )
+        company_item = lookup_schedule(route_number, service_type, status, order_no)
+        if company_item:
+            return company_item, service_type
+        manual_time = first_trip_time(route, day_type, status, order_no)
+        if manual_time:
+            return {"time": manual_time, "departure": ""}, default_service_for_day_type(day_type)
+        return None, service_type or default_service_for_day_type(day_type)
+
+    def selected_route_fleet_count(route, day_type):
+        route_number = route.get("route_number", "") if route else date_route_state["route_number"]
+        service_type = service_for_date(
+            route_number, day_type, date_route_state.get("service_type", "")
+        )
+        company_count = company_fleet_count(route_number, service_type)
+        return company_count or fleet_count(route, day_type)
+
+    def set_time_controls(value):
+        if value and ":" in value:
+            hour, minute = map(int, value.split(":"))
+            selected_time_state["hour"], selected_time_state["minute"] = hour, minute
+            hour_display_box.content.value, minute_display_box.content.value = f"{hour:02d}", f"{minute:02d}"
+            hour_display_box.content.color = minute_display_box.content.color = "black"
+        else:
+            selected_time_state["hour"] = selected_time_state["minute"] = None
+            hour_display_box.content.value, minute_display_box.content.value = "시간", "분"
+            hour_display_box.content.color = minute_display_box.content.color = "grey"
+
+    def refresh_date_first_trip(reset_override=True):
+        route = selected_date_route()
+        deleted_route = bool(date_route_state["route_id"] and route is None)
+        single_active_route = len(routes_state["routes"]) == 1 and not deleted_route
+        # 단일 노선은 별도의 빈 노선 행을 만들지 않고 첫탕 상태와 같은
+        # 줄에 작은 변경 버튼만 배치한다.
+        date_route_row.visible = not single_active_route
+        date_route_compact_button.visible = single_active_route
+        if route:
+            date_route_text.value = f"현재 노선: {route['route_number']}번"
+        elif deleted_route and date_route_state["route_number"]:
+            date_route_text.value = f"삭제된 노선: {date_route_state['route_number']}번"
+        else:
+            date_route_text.value = "현재 노선: 미지정"
+        if reset_override:
+            date_route_state["override"] = False
+        status = pending_status_state["value"]
+        order = order_value_state["value"]
+        day_type = day_type_for_date(current["selected_date"], lambda key: bool(get_holiday_name(key)))
+        schedule_item, service_type = resolve_company_or_user_schedule(
+            route, day_type, status, order
+        )
+        date_route_state["service_type"] = service_type
+        automatic = schedule_item["time"] if schedule_item else ""
+        automatic_departure = schedule_item.get("departure", "") if schedule_item else ""
+        if automatic and not date_route_state["override"]:
+            set_time_controls(automatic)
+            date_route_state["departure"] = automatic_departure
+            departure_summary = f" / 출발: {automatic_departure}" if automatic_departure else ""
+            date_first_trip_text.value = f"자동 첫탕: {automatic}{departure_summary}"
+            date_first_trip_text.color = "#137333"
+        elif date_route_state["override"] and selected_time_state["hour"] is not None:
+            value = f"{selected_time_state['hour']:02d}:{selected_time_state['minute']:02d}"
+            date_first_trip_text.value = f"이 날짜만 직접 수정: {value}"
+            date_first_trip_text.color = "#B45309"
+        elif status not in ("오전", "오후"):
+            set_time_controls("")
+            date_first_trip_text.value = "오전·오후 근무일 때 노선표가 자동 적용됩니다."
+            date_first_trip_text.color = "#64748B"
+        else:
+            set_time_controls("")
+            date_route_state["departure"] = ""
+            date_first_trip_text.value = "첫탕 시간이 설정되지 않았습니다."
+            date_first_trip_text.color = "#D93025"
+
+    def select_date_route(route_id):
+        date_route_state["route_id"] = route_id
+        route = selected_date_route()
+        date_route_state["route_number"] = route["route_number"] if route else ""
+        day_type = day_type_for_date(current["selected_date"], lambda key: bool(get_holiday_name(key)))
+        order = order_value_state["value"]
+        if order and int(order) > selected_route_fleet_count(route, day_type):
+            order_value_state["value"] = ""
+            order_display_box.content.value, order_display_box.content.color = "순번", "grey"
+        route_settings_popup_layer.visible = False
+        refresh_date_first_trip()
+        page.update()
+
+    def open_date_route_picker(e=None):
+        route_editor_state["view"] = "date_picker"
+        if not routes_state["routes"]:
+            route_editor_state["view"] = "notice"
+            route_settings_popup_layer.content = make_full_width_sheet(
+                ft.Column(
+                    [
+                        ft.Text("노선 안내", size=16, weight="bold", color="#1E3A8A"),
+                        ft.Text(
+                            "추가된 노선이 없습니다. 설정에서 노선을 추가해 주세요.",
+                            size=13,
+                            color="#D93025",
+                        ),
+                        ft.ElevatedButton(
+                            "확인",
+                            bgcolor="#2563EB",
+                            color="white",
+                            on_click=close_route_popup,
+                        ),
+                    ],
+                    spacing=14,
+                    tight=True,
+                    horizontal_alignment="stretch",
+                ),
+                top=120,
+            )
+            route_settings_popup_layer.visible = True
+            page.update()
+            return
+        if len(routes_state["routes"]) == 1:
+            route_editor_state["view"] = "notice"
+            route_settings_popup_layer.content = make_full_width_sheet(
+                ft.Column(
+                    [
+                        ft.Text("노선 안내", size=16, weight="bold", color="#1E3A8A"),
+                        ft.Text(
+                            "현재 1개의 노선만 추가돼 있습니다. 노선을 추가하시겠습니까?",
+                            size=13,
+                            color="black",
+                        ),
+                        ft.Row(
+                            [
+                                ft.ElevatedButton(
+                                    "추가",
+                                    expand=1,
+                                    bgcolor="#2563EB",
+                                    color="white",
+                                    on_click=open_company_route_add,
+                                ),
+                                ft.ElevatedButton(
+                                    "취소",
+                                    expand=1,
+                                    bgcolor="#64748B",
+                                    color="white",
+                                    on_click=close_route_popup,
+                                ),
+                            ],
+                            spacing=8,
+                        ),
+                    ],
+                    spacing=14,
+                    tight=True,
+                    horizontal_alignment="stretch",
+                ),
+                top=100,
+            )
+            route_settings_popup_layer.visible = True
+            page.update()
+            return
+
+        buttons = [ft.Container(content=ft.Row([
+            ft.Text(f"{route['route_number']}번", size=15, weight="bold"),
+            ft.Text("기본" if route["id"] == routes_state["default_route_id"] else "", size=11, color="#2563EB"),
+        ], alignment="spaceBetween"), padding=12, bgcolor="#F1F5F9", border_radius=6, on_click=lambda e, rid=route["id"]: select_date_route(rid)) for route in routes_state["routes"]]
+        route_settings_popup_layer.content = make_full_width_sheet(ft.Column([
+            ft.Text("날짜 노선 선택", size=16, weight="bold", color="#1E3A8A"),
+            ft.Column(buttons, spacing=6, scroll=ft.ScrollMode.AUTO, height=300),
+            ft.TextButton("노선 설정으로 이동", on_click=lambda e: show_route_list()),
+            ft.ElevatedButton("취소", bgcolor="#64748B", color="white", on_click=close_route_popup),
+        ], spacing=8, tight=True, horizontal_alignment="stretch"))
+        route_settings_popup_layer.visible = True
+        page.update()
+    memo_field = ft.TextField(
+        cursor_width=1,
+        hint_text="메모 (선택 입력)",
+        hint_style=ft.TextStyle(size=12, color="#9CA3AF"),
+        height=36,
+        text_size=12,
+        dense=True,
+        content_padding=ft.Padding.symmetric(vertical=4, horizontal=10),
+        expand=True,
+    )
     order_value_state = {"value": ""}
     date_alarm_state = {"mode": "", "offset": 0, "time": ""}
+    date_alarm_display_state = {"selected": False}
+    date_alarm_option_labels = {
+        "default": "터치하여 알람 설정",
+        "off": "이 날짜는 알람 사용 안 함",
+        "relative_30": "첫탕 30분 전",
+        "relative_60": "첫탕 1시간 전",
+        "relative_90": "첫탕 1시간 30분 전",
+        "relative_120": "첫탕 2시간 전",
+        "direct": "알람 시간 직접 입력",
+    }
     alarm_validation_text = ft.Text("", size=11, color="#D93025")
 
     def parse_direct_alarm_time(value):
@@ -1158,37 +1848,58 @@ async def main(page: ft.Page):
         update_date_alarm_ui()
 
     def update_date_alarm_ui(e=None):
+        if e is not None:
+            date_alarm_display_state["selected"] = True
         value = date_alarm_dropdown.value or "default"
-        alarm_validation_text.value = ""
+        date_alarm_dropdown.error_text = None
         date_alarm_direct_time.visible = value == "direct"
+        display_text = "터치하여 알람 설정"
+        placeholder = value == "default"
+
+        # Dropdown은 닫혀 있을 때 text보다 선택된 option 문구를 우선 표시하므로
+        # 매번 원래 선택 문구를 복구한 뒤 현재 항목만 실제 표시 문구로 바꾼다.
+        for option in date_alarm_dropdown.options:
+            option.text = date_alarm_option_labels.get(option.key, option.text)
+
         if value.startswith("relative_"):
             if selected_time_state["hour"] is None or selected_time_state["minute"] is None:
-                alarm_validation_text.value = "첫탕 시간을 먼저 선택하거나 직접 시간을 입력하세요."
+                date_alarm_dropdown.error_text = "첫탕 시간을 먼저 설정하세요."
+                display_text = "터치하여 알람 설정"
+                placeholder = True
             else:
                 offset = int(value.split("_", 1)[1])
                 first_trip = datetime(
                     2000, 1, 2, selected_time_state["hour"], selected_time_state["minute"]
                 )
                 alarm_time = first_trip - timedelta(minutes=offset)
-                alarm_validation_text.value = f"알람 예정: {alarm_time.strftime('%H:%M')}"
-                alarm_validation_text.color = "#137333"
-        elif value == "direct" and date_alarm_direct_time.value:
-            try:
-                normalized_time = parse_direct_alarm_time(date_alarm_direct_time.value)
-                alarm_validation_text.value = f"알람 예정: {normalized_time}"
-                alarm_validation_text.color = "#137333"
-            except ValueError:
-                alarm_validation_text.value = "숫자 4자리를 입력하세요. 예: 0530"
-                alarm_validation_text.color = "#D93025"
-        else:
-            alarm_validation_text.color = "#D93025"
+                display_text = f"알람예정: {alarm_time.strftime('%H:%M')}"
+        elif value == "direct":
+            if date_alarm_direct_time.value:
+                try:
+                    normalized_time = parse_direct_alarm_time(date_alarm_direct_time.value)
+                    display_text = f"알람예정: {normalized_time}"
+                except ValueError:
+                    date_alarm_dropdown.error_text = "시간 4자리를 입력하세요. 예: 0530"
+                    display_text = "알람 시간 직접 입력"
+            else:
+                display_text = "알람 시간 직접 입력"
+        elif value == "off":
+            display_text = "알람 사용 안 함"
+
+        for option in date_alarm_dropdown.options:
+            if option.key == value:
+                option.text = display_text
+                break
+        date_alarm_dropdown.text = display_text
+        date_alarm_dropdown.color = "#9CA3AF" if placeholder else "#111827"
         page.update()
 
     date_alarm_dropdown = ft.Dropdown(
-        label="알람 설정", value="default", expand=True, height=44, text_size=12, dense=True,
-        content_padding=ft.Padding.symmetric(vertical=6, horizontal=12),
+        value="default", text="터치하여 알람 설정", expand=True, height=36, text_size=12, dense=True,
+        color="#9CA3AF",
+        content_padding=ft.Padding.symmetric(vertical=4, horizontal=10),
         options=[
-            ft.DropdownOption(key="default", text="기본 오전·오후 알람 사용"),
+            ft.DropdownOption(key="default", text="터치하여 알람 설정"),
             ft.DropdownOption(key="off", text="이 날짜는 알람 사용 안 함"),
             ft.DropdownOption(key="relative_30", text="첫탕 30분 전"),
             ft.DropdownOption(key="relative_60", text="첫탕 1시간 전"),
@@ -1199,11 +1910,10 @@ async def main(page: ft.Page):
         on_select=update_date_alarm_ui,
     )
     date_alarm_direct_time = ft.TextField(
-        label="직접 알람 시간 (숫자 4자리)", hint_text="예: 0530", expand=True, height=44,
-        text_size=12,
-        label_style=ft.TextStyle(size=10, color="#64748B"),
-        hint_style=ft.TextStyle(size=11, color="#94A3B8"),
-        content_padding=ft.Padding.symmetric(vertical=6, horizontal=12),
+        hint_text="직접 알람 시간 예: 0530", expand=True, height=36,
+        text_size=12, dense=True,
+        hint_style=ft.TextStyle(size=12, color="#94A3B8"),
+        content_padding=ft.Padding.symmetric(vertical=4, horizontal=10),
         keyboard_type=ft.KeyboardType.NUMBER, visible=False,
         on_change=update_direct_alarm_input,
     )
@@ -1234,8 +1944,11 @@ async def main(page: ft.Page):
             order_value_state["value"] = value
             order_display_box.content.value = f"{value}번" if value != "" else "순번"
             order_display_box.content.color = "black" if value != "" else "grey"
+            refresh_date_first_trip()
         value_picker_popup_layer.visible = False
         if field in ("hour", "minute"):
+            date_route_state["override"] = True
+            refresh_date_first_trip(reset_override=False)
             update_date_alarm_ui()
         page.update()
 
@@ -1247,7 +1960,18 @@ async def main(page: ft.Page):
         elif field == "mangeun":
             title, items = "만근 기준 선택", [(str(i), str(i)) for i in range(15, 27)]
         else:
-            title, items = "순번 선택", [(str(i), f"{i}번") for i in range(1, 51)]
+            route = selected_date_route()
+            if route is None:
+                open_date_route_picker()
+                return
+            day_type = day_type_for_date(current["selected_date"], lambda key: bool(get_holiday_name(key)))
+            maximum = selected_route_fleet_count(route, day_type)
+            if maximum < 1:
+                show_route_list()
+                route_message_text.value = "이 요일의 운행대수를 먼저 설정해 주세요."
+                page.update()
+                return
+            title, items = "순번 선택", [(str(i), f"{i}번") for i in range(1, maximum + 1)]
         num_btns = [ft.Container(content=ft.Text(label, size=14, weight="bold", color="black"), width=52, height=40, alignment=ft.Alignment.CENTER, border_radius=6, bgcolor="#F1F5F9", on_click=lambda e, v=val: apply_value_selection(field, v)) for val, label in items]
         top_row = [] if field == "mangeun" else [ft.Row([ft.Container(content=ft.Text("선택 안함", size=13, color="grey"), padding=ft.Padding.symmetric(vertical=8, horizontal=14), border_radius=6, bgcolor="#F1F5F9", on_click=lambda e: apply_value_selection(field, ""))], alignment="center")]
         value_picker_popup_layer.content = make_full_width_sheet(ft.Column([
@@ -1273,6 +1997,7 @@ async def main(page: ft.Page):
     status_picker_popup_layer = ft.Container(visible=False, bgcolor="#AA000000", alignment=ft.Alignment(0, 0), expand=True)
     driver_list_popup_layer = ft.Container(visible=False, bgcolor="#AA000000", alignment=ft.Alignment(0, 0), expand=True)
     alarm_settings_popup_layer = ft.Container(visible=False, bgcolor="#AA000000", alignment=ft.Alignment(0, 0), expand=True)
+    route_settings_popup_layer = ft.Container(visible=False, bgcolor="#AA000000", alignment=ft.Alignment(0, 0), expand=True)
     # 매월 유동적으로 변하는 자동 만근 일수 계산 로직
     def get_mangeun_target():
         try:
@@ -1378,12 +2103,28 @@ async def main(page: ft.Page):
 
     def open_info_input_popup(target_type):
         if target_type == "내차":
-            tf_route = ft.TextField(cursor_width=1, label="노선번호", value=input_data_state["route"].replace("미입력",""), keyboard_type=ft.KeyboardType.TEXT, width=260, height=38, text_size=13, content_padding=8)
+            has_registered_routes = bool(routes_state["routes"])
+            sync_input_route_from_default()
+            tf_route = ft.TextField(
+                cursor_width=1,
+                label="노선번호 (자동)" if has_registered_routes else "노선번호",
+                value=input_data_state["route"].replace("미입력", ""),
+                keyboard_type=ft.KeyboardType.TEXT,
+                width=260,
+                height=38,
+                text_size=13,
+                content_padding=8,
+                disabled=has_registered_routes,
+            )
             tf_bus_no = ft.TextField(cursor_width=1, label="내차번호", value=input_data_state["bus_no"].replace("호","").replace("미입력",""), keyboard_type=ft.KeyboardType.NUMBER, width=260, height=38, text_size=13, content_padding=8)
             tf_relief_driver = ft.TextField(cursor_width=1, label="교대자 성함", value=input_data_state["relief_driver"].replace("미입력",""), width=260, height=38, text_size=13, content_padding=8)
             tf_relief_phone = ft.TextField(cursor_width=1, label="교대자 전화번호(숫자만)", value=input_data_state["relief_phone"].replace("-","").replace("미입력",""), keyboard_type=ft.KeyboardType.PHONE, width=260, height=38, text_size=13, content_padding=8)
             def save_my(e):
-                input_data_state["route"], input_data_state["bus_no"] = tf_route.value if tf_route.value else "미입력", f"{tf_bus_no.value}호" if tf_bus_no.value else "미입력"
+                if has_registered_routes:
+                    sync_input_route_from_default()
+                else:
+                    input_data_state["route"] = tf_route.value if tf_route.value else "미입력"
+                input_data_state["bus_no"] = f"{tf_bus_no.value}호" if tf_bus_no.value else "미입력"
                 input_data_state["relief_driver"] = tf_relief_driver.value.strip() if tf_relief_driver.value and tf_relief_driver.value.strip() else "미입력"
                 input_data_state["relief_phone"] = final_format_phone(tf_relief_phone.value) if tf_relief_phone.value else "미입력"
                 page.run_task(save_all_to_client_storage); page.pop_dialog(); page.update(); rebuild_interface()
@@ -1481,10 +2222,14 @@ async def main(page: ft.Page):
         days_in_month = calendar.monthrange(current['year'], current['month'])[1]
         month_effective_statuses = [get_effective_day_info(f"{month_prefix}-{d:02d}").get("status", "") for d in range(1, days_in_month + 1)]
         work_days, off_days = sum(1 for s in month_effective_statuses if s in WORK_STATUSES), sum(1 for s in month_effective_statuses if s in OFF_STATUSES)
+        morning_days = sum(1 for s in month_effective_statuses if s == "오전")
+        afternoon_days = sum(1 for s in month_effective_statuses if s == "오후")
         m_target = get_mangeun_target(); mangeun_display_box.content.value = str(m_target)
         annual_used = sum(1 for date_key, info in USER_SCHEDULES.items() if date_key.startswith(f"{current['year']}-") and isinstance(info, dict) and info.get("status") == "연차")
         annual_remaining = max(0, 15 - annual_used)
         stats_text.value = f"근무: {work_days}"
+        morning_count_text.value = f"오전: {morning_days}"
+        afternoon_count_text.value = f"오후: {afternoon_days}"
         mangeun_text.value, mangeun_value_text.value = f"휴무: {off_days}", f"만근: {m_target}"
         annual_used_text.value = f"연차사용: {annual_used}"
         annual_remaining_text.value = f"남은연차: {annual_remaining}"
@@ -1525,43 +2270,61 @@ async def main(page: ft.Page):
                     bg_color = "#F7F7F7"
                     text_color = status_color(status) if status else "#000000"
                     status_order = str(order_no) if status in ("오전", "오후", "전일", "근무") and order_no else ""
-                    status_display = ft.Row([ft.Text(status, size=10, weight="bold", color=text_color, no_wrap=True)] + ([ft.Text(status_order, size=8, weight="normal", color="#64748B", no_wrap=True)] if status_order else []), alignment="center", vertical_alignment="center", spacing=1, tight=True)
+                    status_display = ft.Row([
+                        ft.Text(status, size=10, weight="bold", color=text_color, no_wrap=True),
+                    ] + ([ft.Text(status_order, size=7, weight="normal", color="#64748B", no_wrap=True)] if status_order else []), alignment="center", vertical_alignment="center", spacing=0, tight=True, height=14)
+                    time_text = ft.Text(start_time, size=10, weight="normal", color=text_color, no_wrap=True) if start_time and status != "휴무" else None
+                    time_display = ft.Row([time_text] if time_text else [], alignment="center", vertical_alignment="center", spacing=0, height=14)
+                    departure = str(day_info.get("departure", "") or "").strip()
+                    departure_display = ft.Row(
+                        [ft.Text(f"출발 {departure}", size=8, color="#475569", no_wrap=True,
+                                 max_lines=1, overflow=ft.TextOverflow.ELLIPSIS)] if departure else [],
+                        alignment="center", vertical_alignment="center", spacing=0,
+                        height=12 if departure else 0,
+                    )
                     holiday_name = get_holiday_name(date_key)
                     lunar_marker = get_lunar_marker(current['year'], current['month'], day)
                     day_number_color = "#D93025" if (weekday == 6 or holiday_name) else ("#1A73E8" if weekday == 5 else "#000000")
                     has_date_alarm = day_info.get("alarm_mode", "") in ("relative", "direct")
-                    time_display = ft.Text(start_time, size=10, weight="bold", color=text_color) if start_time and status != "휴무" else ft.Container()
                     memo_text = DATE_MEMOS.get(date_key, "")
-                    memo_display = ft.Text(memo_text, size=9, color="black", max_lines=1, overflow=ft.TextOverflow.ELLIPSIS) if memo_text else ft.Container()
+                    memo_control = ft.Text(memo_text, size=9, color="black", max_lines=1, overflow=ft.TextOverflow.ELLIPSIS, text_align="center", expand=True) if memo_text else None
+                    memo_display = ft.Row([memo_control] if memo_control else [], alignment="center", vertical_alignment="center", spacing=0, height=12)
+                    is_today = (current['year'] == today_y and current['month'] == today_m and day == today_d)
                     date_labels = []
                     if holiday_name:
-                        date_labels.append(ft.Text(holiday_name, size=7, weight="normal", color="#D93025", no_wrap=True, overflow=ft.TextOverflow.VISIBLE))
+                        date_labels.append(ft.Text(holiday_name, size=7, weight="normal", color="white" if is_today else "#D93025", no_wrap=True, overflow=ft.TextOverflow.VISIBLE))
                     if lunar_marker and not holiday_name:  # 공휴일과 겹치면 공휴일 이름만 표시
-                        date_labels.append(ft.Text(lunar_marker, size=7, color="#64748B", no_wrap=True, overflow=ft.TextOverflow.VISIBLE))
+                        date_labels.append(ft.Text(lunar_marker, size=7, color="white" if is_today else "#64748B", no_wrap=True, overflow=ft.TextOverflow.VISIBLE))
                     # ==========================================================
                     # [UI 개선]
                     # 오늘 날짜 강조 방식을
                     # 파란 테두리 → 숫자 강조 방식으로 변경
                     # ==========================================================
-                    is_today = (current['year'] == today_y and current['month'] == today_m and day == today_d)
-                    day_number_display = (
-                        ft.Container(
-                            content=ft.Text(f"{day}", size=11, weight="normal", italic=True, color="white"),
-                            bgcolor="#2563EB", width=18, height=18, border_radius=9,
-                            # 이탤릭 글씨가 오른쪽으로 기울어져 보이는 착시를 보정하기 위해 살짝 왼쪽으로 정렬
-                            alignment=ft.Alignment(-0.15, 0),
-                        ) if is_today else ft.Text(f"{day}", size=11, weight="normal", italic=True, color=day_number_color)
-                    )
+                    day_number_display = ft.Text(f"{day}", size=10, weight="normal", italic=False, color="white" if is_today else day_number_color, offset=ft.Offset(0, -0.08))
                     day_number_row = ft.Row(
                         [day_number_display] +
                         # 알람 아이콘이 날짜숫자에 바짝 붙어 보이던 것을 살짝 띄우기 위해 spacing을 3→6으로 확대
-                        ([ft.Icon(ft.Icons.ALARM, size=11, color="#2563EB", tooltip="날짜별 알람 설정됨")] if has_date_alarm else []) +
-                        ([ft.Column(date_labels, spacing=0, tight=True)] if date_labels else []),
-                        alignment="start", vertical_alignment="center", spacing=4, height=20,
+                        ([ft.Container(content=ft.Icon(ft.Icons.ALARM, size=10, color="white" if is_today else "#2563EB", tooltip="날짜별 알람 설정됨"), padding=ft.Padding.only(top=2))] if has_date_alarm else []) +
+                        ([ft.Container(content=ft.Column(date_labels, spacing=0, tight=True), padding=ft.Padding.only(top=2))] if date_labels else []),
+                        alignment="start", vertical_alignment="start", spacing=4, height=14,
                     )
                     # 오늘 날짜 셀만 폭이 좁아져 "오후(6)" 같은 상태문구가 줄바꿈되던 버그 →
                     # 굵은 파란 테두리(2px)를 없애고 모든 셀과 동일한 얇은 회색 테두리로 통일하면서 함께 해결됨
-                    day_box = ft.Container(content=ft.Column([day_number_row, status_display, time_display, memo_display], alignment="start", horizontal_alignment="center", spacing=1), bgcolor="#FFF8D6" if is_today else "#FFFFFF", padding=ft.Padding.only(left=3, right=2, top=0), border=ft.Border.all(0.5, CALENDAR_GRID_LINE_COLOR), border_radius=0, height=cell_h, expand=1, on_click=lambda e, dk=date_key: open_input_popup(dk))
+                    day_header = ft.Container(content=day_number_row, left=1, right=1, top=1, height=14)
+                    body_controls = [status_display, time_display]
+                    if departure:
+                        body_controls.append(departure_display)
+                    body_controls.append(memo_display)
+                    day_body = ft.Container(
+                        content=ft.Column(body_controls, alignment="start", horizontal_alignment="center", spacing=1, tight=True),
+                        left=1, right=1, top=16, bottom=0,
+                        padding=ft.Padding.only(top=5), alignment=ft.Alignment.TOP_CENTER,
+                    )
+                    day_box = ft.Container(content=ft.Stack([
+                        ft.Container(bgcolor="#2563EB", height=16, left=0, right=0, top=0) if is_today else ft.Container(),
+                        day_header,
+                        day_body,
+                    ]), bgcolor="#FFF8D6" if is_today else "#FFFFFF", padding=0, border=ft.Border.all(0.5, CALENDAR_GRID_LINE_COLOR), border_radius=0, height=cell_h, expand=1, on_click=lambda e, dk=date_key: open_input_popup(dk))
                     week_row.controls.append(day_box)
             calendar_grid.controls.append(week_row)
         if current_tab == "근무현황": refresh_input_tab_view()
@@ -1582,6 +2345,7 @@ async def main(page: ft.Page):
         pending_status_state["value"] = value
         current_status_display.value = f"현재설정: {value}" if value else "현재설정: 미설정"
         current_status_display.color = status_color(value) if value else "grey"
+        refresh_date_first_trip()
         status_picker_popup_layer.visible = False
         page.update()
 
@@ -1632,6 +2396,48 @@ async def main(page: ft.Page):
         popup_date_title.value = date_key
         day_info = get_effective_day_info(date_key)
         current_time, current_order = day_info.get("start_time", ""), day_info.get("order_no", "")
+        stored_route_id = str(day_info.get("route_id", "") or "")
+        stored_route_number = str(day_info.get("route_number", "") or "").strip()
+        resolved_route = find_route(routes_state, stored_route_id)
+        if resolved_route is None:
+            resolved_route = find_route_by_number(routes_state, stored_route_number)
+
+        fallback_route = (
+            default_route(routes_state)
+            if resolved_route is None
+            and not stored_route_id
+            and not stored_route_number
+            and len(routes_state["routes"]) == 1
+            else None
+        )
+        active_route = resolved_route or fallback_route
+        date_route_state["route_id"] = active_route["id"] if active_route else stored_route_id
+        date_route_state["route_number"] = (
+            active_route["route_number"] if active_route else stored_route_number
+        )
+
+        # 예전 route_id가 저장된 일정은 동일한 노선번호의 현재 노선으로 연결만 복구한다.
+        # 상태·순번·시간·출발지·메모·알람 등 나머지 날짜 정보는 변경하지 않는다.
+        stored_schedule = USER_SCHEDULES.get(date_key)
+        if (
+            resolved_route is not None
+            and isinstance(stored_schedule, dict)
+            and (
+                stored_schedule.get("route_id") != resolved_route["id"]
+                or str(stored_schedule.get("route_number", "") or "").strip()
+                != str(resolved_route["route_number"])
+            )
+        ):
+            stored_schedule["route_id"] = resolved_route["id"]
+            stored_schedule["route_number"] = resolved_route["route_number"]
+            page.run_task(save_all_to_client_storage)
+
+        date_route_state["service_type"] = str(day_info.get("service_type", "") or "")
+        date_route_state["departure"] = str(day_info.get("departure", "") or "")
+        date_route_state["override"] = (
+            day_info.get("start_time_override", False) is True
+            or (bool(current_time) and active_route is None)
+        )
         existing_status = day_info.get("status", "")
         pending_status_state["value"] = existing_status
         current_status_display.value = f"현재설정: {existing_status}" if existing_status else "현재설정: 미설정"
@@ -1657,6 +2463,8 @@ async def main(page: ft.Page):
         else:
             date_alarm_dropdown.value = "default"
         date_alarm_direct_time.value = day_info.get("alarm_time", "")
+        date_alarm_display_state["selected"] = alarm_mode in ("relative", "direct", "off")
+        refresh_date_first_trip(reset_override=False)
         update_date_alarm_ui()
         popup_layer.content, popup_layer.visible = popup_card, True; page.update()
 
@@ -1679,22 +2487,28 @@ async def main(page: ft.Page):
         alarm_mode, alarm_offset, alarm_time = "", 0, ""
         if selection.startswith("relative_"):
             if not final_time:
-                alarm_validation_text.value = "첫탕 시간을 먼저 선택하거나 직접 시간을 입력하세요."
-                alarm_validation_text.color = "#D93025"; page.update(); return
+                date_alarm_dropdown.error_text = "첫탕 시간을 먼저 선택하거나 직접 시간을 입력하세요."
+                page.update(); return
             alarm_mode, alarm_offset = "relative", int(selection.split("_", 1)[1])
         elif selection == "direct":
             candidate = (date_alarm_direct_time.value or "").strip()
             try:
                 alarm_time = parse_direct_alarm_time(candidate)
             except ValueError:
-                alarm_validation_text.value = "직접 알람 시간을 숫자 4자리로 입력하세요. 예: 0530"
-                alarm_validation_text.color = "#D93025"; page.update(); return
+                date_alarm_dropdown.error_text = "직접 알람 시간을 숫자 4자리로 입력하세요. 예: 0530"
+                page.update(); return
             alarm_mode = "direct"
         elif selection == "off":
             alarm_mode = "off"
+        selected_route = selected_date_route()
         USER_SCHEDULES[target_date] = {
             "status": status_value, "start_time": final_time,
             "order_no": "" if status_value == "휴무" else order_value_state["value"],
+            "route_id": selected_route["id"] if selected_route else date_route_state["route_id"],
+            "route_number": selected_route["route_number"] if selected_route else date_route_state["route_number"],
+            "start_time_override": date_route_state["override"],
+            "service_type": date_route_state.get("service_type", ""),
+            "departure": "" if date_route_state["override"] else date_route_state.get("departure", ""),
             "alarm_mode": alarm_mode, "alarm_offset_minutes": alarm_offset,
             "alarm_time": alarm_time,
         }
@@ -1706,7 +2520,8 @@ async def main(page: ft.Page):
             ft.Row([popup_date_title], alignment="center"),
             ft.Row([current_status_display, ft.ElevatedButton(content=ft.Container(ft.Text("근무변경", size=13, weight="bold", color="white"), alignment=ft.Alignment.CENTER), bgcolor="#374151", height=36, style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=6), padding=ft.Padding.symmetric(horizontal=14)), on_click=open_status_picker)], alignment="spaceBetween"),
             ft.Divider(height=1),
-            ft.Text("첫탕 시간을 선택하세요", size=12, weight="bold", color="grey"),
+            date_route_row,
+            date_first_trip_row,
             ft.Row([
                 hour_display_box,
                 ft.Container(content=ft.Text(":", size=18, weight="bold", color="black"), width=24, alignment=ft.Alignment.CENTER),
@@ -1714,25 +2529,26 @@ async def main(page: ft.Page):
                 ft.Container(width=24),
                 order_display_box,
             ], alignment="center", spacing=0),
-            ft.Divider(height=2, color="transparent"),
             ft.Column(
                 [
                     ft.Column(
                         [
                             ft.Row([date_alarm_dropdown], spacing=0),
                             ft.Row([date_alarm_direct_time], spacing=0),
-                            alarm_validation_text,
                         ],
-                        spacing=2,
+                        spacing=1,
                         horizontal_alignment="stretch",
                     ),
-                    memo_field,
+                    ft.Row([memo_field], spacing=0),
                 ],
                 spacing=4,
             ),
-            ft.Row([ft.Container(content=ft.Text("저장", size=14, weight="bold", color="white"), bgcolor="#2563EB", alignment=ft.Alignment(0, 0), width=160, height=38, border_radius=6, on_click=lambda e: select_status_and_save("저장"))], alignment="center"), ft.Divider(height=1, color="transparent"),
-            ft.Row([ft.TextButton("선택취소(삭제)", on_click=lambda e: select_status_and_save("선택취소"), style=ft.ButtonStyle(color="red")), ft.TextButton("닫기", on_click=lambda e: setattr(popup_layer, "visible", False) or page.update())], alignment="spaceBetween")
-        ], spacing=6, tight=True, scroll=ft.ScrollMode.AUTO), top=5) #height=460 이라고 돼 있는 것을 자동으로 보이게 지움
+            ft.Row([ft.Container(content=ft.Text("저장", size=14, weight="bold", color="white"), bgcolor="#2563EB", alignment=ft.Alignment(0, 0), width=145, height=36, border_radius=6, on_click=lambda e: select_status_and_save("저장"))], alignment="center"), ft.Divider(height=1, color="transparent"),
+            ft.Row([ft.TextButton("선택취소(삭제)", on_click=lambda e: select_status_and_save("선택취소"), style=ft.ButtonStyle(color="red")), ft.TextButton("닫기", on_click=lambda e: setattr(popup_layer, "visible", False) or page.update())], alignment="spaceBetween"),
+            # 메모 키보드가 열린 상태에서도 입력 내용과 저장 버튼을
+            # 키보드 위까지 올릴 수 있는 스크롤 여백.
+            ft.Container(height=180),
+        ], spacing=4, tight=True, scroll=ft.ScrollMode.AUTO, height=330), top=12)
 
     # 상단 내비게이션 바 (이전달 / 다음달 이동) 버튼 컴포넌트
     today_month_button = ft.TextButton(
@@ -1751,7 +2567,7 @@ async def main(page: ft.Page):
     ], alignment="start", spacing=14, visible=False)
     # 하단 '달력으로 가기' 버튼은 제거됨 (상단 버튼으로 통일)
     mangeun_setting_row = ft.Row([mangeun_value_text, ft.ElevatedButton("변경", on_click=lambda e: setattr(mangeun_popup_layer, "visible", True) or page.update(), bgcolor="#2563EB", color="white", width=68, height=22, style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=4), text_style=ft.TextStyle(size=11, weight="bold"), padding=0))], alignment="start", vertical_alignment="center", spacing=6, height=22)
-    
+
     mangeun_popup_layer.content = make_full_width_sheet(ft.Column([
             ft.Text("만근 기준 변경", size=16, weight="bold", color="black"),
             ft.Text("탭해서 숫자를 선택하면 바로 적용돼요.", size=12, color="grey"),
@@ -1775,14 +2591,48 @@ async def main(page: ft.Page):
         current["selected_date"] = today.strftime("%Y-%m-%d")
         rebuild_interface()
 
-    def summary_cell(text_control):
-        return ft.Container(content=text_control, expand=1, padding=ft.Padding.symmetric(horizontal=12, vertical=8), alignment=ft.Alignment.CENTER_LEFT)
+    def summary_cell(text_control, expand=1):
+        return ft.Container(content=text_control, expand=expand, padding=ft.Padding.symmetric(horizontal=12, vertical=8), alignment=ft.Alignment.CENTER_LEFT)
+
+    morning_afternoon_cell = ft.Container(
+        content=ft.Column(
+            [
+                ft.Container(
+                    content=morning_count_text,
+                    height=16,
+                    padding=ft.Padding.symmetric(horizontal=10),
+                    alignment=ft.Alignment.CENTER_LEFT,
+                ),
+                ft.Divider(height=1, color="#93C5FD"),
+                ft.Container(
+                    content=afternoon_count_text,
+                    height=16,
+                    padding=ft.Padding.symmetric(horizontal=10),
+                    alignment=ft.Alignment.CENTER_LEFT,
+                ),
+            ],
+            spacing=0,
+            tight=True,
+        ),
+        expand=1,
+        alignment=ft.Alignment.CENTER_LEFT,
+    )
 
     summary_area = ft.Container(
         content=ft.Column([
-            ft.Row([summary_cell(stats_text), ft.Container(width=1, height=32, bgcolor="#93C5FD"), summary_cell(annual_used_text)], spacing=0),
+            ft.Row([
+                summary_cell(stats_text),
+                ft.Container(width=1, height=32, bgcolor="#93C5FD"),
+                morning_afternoon_cell,
+                ft.Container(width=1, height=32, bgcolor="#93C5FD"),
+                summary_cell(annual_used_text, expand=2),
+            ], spacing=0),
             ft.Divider(height=1, color="#93C5FD"),
-            ft.Row([summary_cell(mangeun_text), ft.Container(width=1, height=32, bgcolor="#93C5FD"), summary_cell(annual_remaining_text)], spacing=0),
+            ft.Row([
+                summary_cell(mangeun_text, expand=2),
+                ft.Container(width=1, height=32, bgcolor="#93C5FD"),
+                summary_cell(annual_remaining_text, expand=2),
+            ], spacing=0),
         ], spacing=0, tight=True),
         border=ft.Border.all(1, "#93C5FD"), border_radius=10,
         margin=ft.Margin.only(bottom=8),
@@ -1822,9 +2672,9 @@ async def main(page: ft.Page):
         ft.Container(content=ft.Text("💡 날짜를 터치하여 근무를 입력 또는 수정하세요.", size=10, color="#666666"), padding=ft.Padding.only(left=8, bottom=0), expand=1),
         ft.TextButton(content=ft.Text("🗑️ 리셋", size=11, weight="bold", color="#D93025"), on_click=open_reset_popup, style=ft.ButtonStyle(padding=0)),
     ], alignment="spaceBetween", height=28)
-   
+
     # 긴급연락처 신규 등록 폼 컴포넌트
-    emergency_form_container = ft.Container(content=ft.Column([ft.Row([ft.Text("🚨 긴급연락처", size=16, weight="bold", color="#1E3A8A")]), ft.Divider(height=1), ft.Row([em_name := ft.TextField(cursor_width=1, label="이름/서비스명", label_style=ft.TextStyle(size=11), width=100, height=38, text_size=13, content_padding=8), em_phone := ft.TextField(cursor_width=1, label="전화번호(숫자만)", label_style=ft.TextStyle(size=11), expand=True, height=38, text_size=13, content_padding=8, keyboard_type=ft.KeyboardType.PHONE), ft.ElevatedButton(content=ft.Text("등록", size=12, weight="bold", color="white"), bgcolor="#2563EB", width=60, height=38, style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=4), padding=0), on_click=lambda e: add_emergency_item())], spacing=4), ft.Divider(height=1, color="#E2E8F0")]))
+    emergency_form_container = ft.Container(padding=ft.Padding.only(top=8), content=ft.Column([ft.Row([ft.Text("🚨 긴급연락처", size=16, weight="bold", color="#1E3A8A")]), ft.Divider(height=1), ft.Row([em_name := ft.TextField(cursor_width=1, label="이름/서비스명", label_style=ft.TextStyle(size=11), width=100, height=38, text_size=13, content_padding=8), em_phone := ft.TextField(cursor_width=1, label="전화번호(숫자만)", label_style=ft.TextStyle(size=11), expand=True, height=38, text_size=13, content_padding=8, keyboard_type=ft.KeyboardType.PHONE), ft.ElevatedButton(content=ft.Text("등록", size=12, weight="bold", color="white"), bgcolor="#2563EB", width=60, height=38, style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=4), padding=0), on_click=lambda e: add_emergency_item())], spacing=4), ft.Divider(height=1, color="#E2E8F0")]))
 
     contacts_content_host = ft.Container(visible=False)
 
@@ -1964,17 +2814,31 @@ async def main(page: ft.Page):
                 exit_confirm_popup_layer,
                 driver_list_popup_layer,
                 alarm_settings_popup_layer,
+                route_settings_popup_layer,
             ],
             expand=True,
         )
     )
-    
+
     # 📱 Android 뒤로가기 처리
     # Flet의 root View pop을 막고, 현재 화면에 따라 직접 처리한다.
     # - 하위 화면: pop 취소 후 달력으로 이동
     # - 달력 화면: pop을 보류하고 종료 확인 팝업 표시
     async def on_root_view_confirm_pop(e):
         root_view = e.control
+
+        # 노선 시간 편집에서는 휴대폰 뒤로가기도 화면의 뒤로가기와
+        # 동일하게 동작시켜 저장 전 입력값을 잃지 않는다.
+        if route_settings_popup_layer.visible:
+            if route_editor_state.get("view") == "times":
+                back_from_route_times()
+            elif route_editor_state.get("view") == "basic":
+                show_route_list()
+            else:
+                route_settings_popup_layer.visible = False
+                page.update()
+            await root_view.confirm_pop(False)
+            return
 
         # 🔧 날짜 편집/피커 등 모달 팝업이 열려있으면, 뒤로가기는 "그 팝업을 닫는 것"이 최우선.
         # 이걸 안 하면 팝업이 떠 있어도 current_tab이 여전히 "달력"이라서

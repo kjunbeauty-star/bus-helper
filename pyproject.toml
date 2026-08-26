@@ -1,6 +1,12 @@
 [tool.flet]
 product = "버스캘린더"
+artifact = "BusCalendar_MJSE"
+build_number = 20
 dev_packages = { work-alarm = "extensions/work_alarm" }
+
+[project]
+name = "busdrivehelper"
+version = "1.1.1"
 
 [tool.flet.android]
 dependencies = [

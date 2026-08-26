@@ -54,6 +54,14 @@ def normalize_schedules(value):
             "alarm_offset_minutes": alarm_offset_minutes if isinstance(alarm_offset_minutes, int) else 0,
             "alarm_time": alarm_time if isinstance(alarm_time, str) else "",
         }
+        if "route_id" in item or "route_number" in item or "start_time_override" in item:
+            result[date_key].update({
+                "route_id": str(item.get("route_id", "") or ""),
+                "route_number": str(item.get("route_number", "") or ""),
+                "start_time_override": item.get("start_time_override", False) is True,
+                "service_type": str(item.get("service_type", "") or ""),
+                "departure": str(item.get("departure", "") or ""),
+            })
     return result
 
 
