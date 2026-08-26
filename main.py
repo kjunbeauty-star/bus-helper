@@ -2407,7 +2407,6 @@ async def main(page: ft.Page):
             if resolved_route is None
             and not stored_route_id
             and not stored_route_number
-            and len(routes_state["routes"]) == 1
             else None
         )
         active_route = resolved_route or fallback_route
@@ -2436,7 +2435,7 @@ async def main(page: ft.Page):
         date_route_state["departure"] = str(day_info.get("departure", "") or "")
         date_route_state["override"] = (
             day_info.get("start_time_override", False) is True
-            or (bool(current_time) and active_route is None)
+            or (bool(current_time) and resolved_route is None)
         )
         existing_status = day_info.get("status", "")
         pending_status_state["value"] = existing_status
