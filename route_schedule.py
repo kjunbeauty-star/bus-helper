@@ -272,7 +272,7 @@ ROUTE_SCHEDULES = {
                 "5": {
                     "morning": {
                         "time": "05:15",
-                        "departure": ""
+                        "departure": "계양역"
                     },
                     "afternoon": {
                         "time": "13:10",
@@ -282,7 +282,7 @@ ROUTE_SCHEDULES = {
                 "6": {
                     "morning": {
                         "time": "05:35",
-                        "departure": ""
+                        "departure": "계양역"
                     },
                     "afternoon": {
                         "time": "13:40",
@@ -328,7 +328,7 @@ ROUTE_SCHEDULES = {
                 "4": {
                     "morning": {
                         "time": "05:15",
-                        "departure": ""
+                        "departure": "계양역"
                     },
                     "afternoon": {
                         "time": "13:10",
@@ -338,7 +338,7 @@ ROUTE_SCHEDULES = {
                 "5": {
                     "morning": {
                         "time": "05:40",
-                        "departure": ""
+                        "departure": "계양역"
                     },
                     "afternoon": {
                         "time": "13:50",
@@ -384,7 +384,7 @@ ROUTE_SCHEDULES = {
                 "4": {
                     "morning": {
                         "time": "05:15",
-                        "departure": ""
+                        "departure": "계양역"
                     },
                     "afternoon": {
                         "time": "13:10",
@@ -394,7 +394,7 @@ ROUTE_SCHEDULES = {
                 "5": {
                     "morning": {
                         "time": "05:40",
-                        "departure": ""
+                        "departure": "계양역"
                     },
                     "afternoon": {
                         "time": "13:50",
@@ -682,7 +682,7 @@ ROUTE_SCHEDULES = {
                 "1": {
                     "morning": {
                         "time": "04:50",
-                        "departure": "루원↓"
+                        "departure": "루원하"
                     },
                     "afternoon": {
                         "time": "12:00",
@@ -692,7 +692,7 @@ ROUTE_SCHEDULES = {
                 "2": {
                     "morning": {
                         "time": "04:56",
-                        "departure": "루원↓"
+                        "departure": "루원하"
                     },
                     "afternoon": {
                         "time": "12:10",
@@ -702,7 +702,7 @@ ROUTE_SCHEDULES = {
                 "3": {
                     "morning": {
                         "time": "05:02",
-                        "departure": "루원↓"
+                        "departure": "루원하"
                     },
                     "afternoon": {
                         "time": "12:20",
@@ -712,7 +712,7 @@ ROUTE_SCHEDULES = {
                 "4": {
                     "morning": {
                         "time": "05:08",
-                        "departure": "루원↓"
+                        "departure": "루원하"
                     },
                     "afternoon": {
                         "time": "12:30",
@@ -722,7 +722,7 @@ ROUTE_SCHEDULES = {
                 "5": {
                     "morning": {
                         "time": "05:14",
-                        "departure": "루원↓"
+                        "departure": "루원하"
                     },
                     "afternoon": {
                         "time": "12:40",
@@ -732,7 +732,7 @@ ROUTE_SCHEDULES = {
                 "6": {
                     "morning": {
                         "time": "05:20",
-                        "departure": "루원↓"
+                        "departure": "루원하"
                     },
                     "afternoon": {
                         "time": "12:50",
@@ -742,7 +742,7 @@ ROUTE_SCHEDULES = {
                 "7": {
                     "morning": {
                         "time": "05:26",
-                        "departure": "루원↓"
+                        "departure": "루원하"
                     },
                     "afternoon": {
                         "time": "13:00",
@@ -752,7 +752,7 @@ ROUTE_SCHEDULES = {
                 "8": {
                     "morning": {
                         "time": "05:32",
-                        "departure": "루원↓"
+                        "departure": "루원하"
                     },
                     "afternoon": {
                         "time": "13:10",
@@ -762,7 +762,7 @@ ROUTE_SCHEDULES = {
                 "9": {
                     "morning": {
                         "time": "05:38",
-                        "departure": "루원↓"
+                        "departure": "루원하"
                     },
                     "afternoon": {
                         "time": "13:20",
@@ -862,7 +862,7 @@ ROUTE_SCHEDULES = {
                 "19": {
                     "morning": {
                         "time": "05:00",
-                        "departure": "루원↑"
+                        "departure": "루원상"
                     },
                     "afternoon": {
                         "time": "14:54",
@@ -1018,7 +1018,7 @@ ROUTE_SCHEDULES = {
                 "1": {
                     "morning": {
                         "time": "04:50",
-                        "departure": "루원↓"
+                        "departure": "루원하"
                     },
                     "afternoon": {
                         "time": "12:13",
@@ -1028,7 +1028,7 @@ ROUTE_SCHEDULES = {
                 "2": {
                     "morning": {
                         "time": "04:59",
-                        "departure": "루원↓"
+                        "departure": "루원하"
                     },
                     "afternoon": {
                         "time": "12:24",
@@ -1038,7 +1038,7 @@ ROUTE_SCHEDULES = {
                 "3": {
                     "morning": {
                         "time": "05:08",
-                        "departure": "루원↓"
+                        "departure": "루원하"
                     },
                     "afternoon": {
                         "time": "12:35",
@@ -1048,7 +1048,7 @@ ROUTE_SCHEDULES = {
                 "4": {
                     "morning": {
                         "time": "05:17",
-                        "departure": "루원↓"
+                        "departure": "루원하"
                     },
                     "afternoon": {
                         "time": "12:46",
@@ -1058,7 +1058,7 @@ ROUTE_SCHEDULES = {
                 "5": {
                     "morning": {
                         "time": "05:26",
-                        "departure": "루원↓"
+                        "departure": "루원하"
                     },
                     "afternoon": {
                         "time": "12:57",
@@ -1068,7 +1068,7 @@ ROUTE_SCHEDULES = {
                 "6": {
                     "morning": {
                         "time": "05:35",
-                        "departure": "루원↓"
+                        "departure": "루원하"
                     },
                     "afternoon": {
                         "time": "13:09",
@@ -1138,7 +1138,7 @@ ROUTE_SCHEDULES = {
                 "13": {
                     "morning": {
                         "time": "05:00",
-                        "departure": "루원↑"
+                        "departure": "루원상"
                     },
                     "afternoon": {
                         "time": "14:36",
@@ -1274,7 +1274,7 @@ ROUTE_SCHEDULES = {
                 "1": {
                     "morning": {
                         "time": "04:50",
-                        "departure": "루원↓"
+                        "departure": "루원하"
                     },
                     "afternoon": {
                         "time": "12:13",
@@ -1284,7 +1284,7 @@ ROUTE_SCHEDULES = {
                 "2": {
                     "morning": {
                         "time": "05:01",
-                        "departure": "루원↓"
+                        "departure": "루원하"
                     },
                     "afternoon": {
                         "time": "12:24",
@@ -1294,7 +1294,7 @@ ROUTE_SCHEDULES = {
                 "3": {
                     "morning": {
                         "time": "05:12",
-                        "departure": "루원↓"
+                        "departure": "루원하"
                     },
                     "afternoon": {
                         "time": "12:35",
@@ -1304,7 +1304,7 @@ ROUTE_SCHEDULES = {
                 "4": {
                     "morning": {
                         "time": "05:23",
-                        "departure": "루원↓"
+                        "departure": "루원하"
                     },
                     "afternoon": {
                         "time": "12:46",
@@ -1314,7 +1314,7 @@ ROUTE_SCHEDULES = {
                 "5": {
                     "morning": {
                         "time": "05:34",
-                        "departure": "루원↓"
+                        "departure": "루원하"
                     },
                     "afternoon": {
                         "time": "12:57",
@@ -1374,7 +1374,7 @@ ROUTE_SCHEDULES = {
                 "11": {
                     "morning": {
                         "time": "05:00",
-                        "departure": "루원↑"
+                        "departure": "루원상"
                     },
                     "afternoon": {
                         "time": "14:36",

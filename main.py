@@ -2277,7 +2277,7 @@ async def main(page: ft.Page):
                     time_display = ft.Row([time_text] if time_text else [], alignment="center", vertical_alignment="center", spacing=0, height=14)
                     departure = str(day_info.get("departure", "") or "").strip()
                     departure_display = ft.Row(
-                        [ft.Text(f"출발 {departure}", size=8, color="#475569", no_wrap=True,
+                        [ft.Text(departure, size=8, color="#475569", no_wrap=True,
                                  max_lines=1, overflow=ft.TextOverflow.ELLIPSIS)] if departure else [],
                         alignment="center", vertical_alignment="center", spacing=0,
                         height=12 if departure else 0,
