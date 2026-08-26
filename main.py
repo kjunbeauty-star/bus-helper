@@ -1671,14 +1671,9 @@ async def main(page: ft.Page):
     def refresh_date_first_trip(reset_override=True):
         route = selected_date_route()
         deleted_route = bool(date_route_state["route_id"] and route is None)
-        single_active_route = len(routes_state["routes"]) == 1 and not deleted_route
-        # 단일 노선은 별도의 빈 노선 행을 만들지 않고 첫탕 상태와 같은
-        # 줄에 작은 변경 버튼만 배치한다.
-        date_route_row.visible = not single_active_route
-        date_route_compact_button.visible = single_active_route
-        date_route_compact_button.content.value = (
-            f"{route['route_number']}번" if single_active_route and route else "노선 변경"
-        )
+        # 단일 노선도 다중 노선과 동일하게 현재 노선 행과 변경 버튼을 표시한다.
+        date_route_row.visible = True
+        date_route_compact_button.visible = False
         if route:
             date_route_text.value = f"현재 노선: {route['route_number']}번"
         elif deleted_route and date_route_state["route_number"]:
@@ -2544,6 +2539,7 @@ async def main(page: ft.Page):
                     ft.Row([memo_field], spacing=0),
                 ],
                 spacing=4,
+                horizontal_alignment="stretch",
             ),
             ft.Row([ft.Container(content=ft.Text("저장", size=14, weight="bold", color="white"), bgcolor="#2563EB", alignment=ft.Alignment(0, 0), width=145, height=36, border_radius=6, on_click=lambda e: select_status_and_save("저장"))], alignment="center"), ft.Divider(height=1, color="transparent"),
             ft.Row([ft.TextButton("선택취소(삭제)", on_click=lambda e: select_status_and_save("선택취소"), style=ft.ButtonStyle(color="red")), ft.TextButton("닫기", on_click=lambda e: setattr(popup_layer, "visible", False) or page.update())], alignment="spaceBetween"),
