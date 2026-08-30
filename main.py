@@ -66,6 +66,7 @@ HOLIDAY_UPDATE_URL = os.environ.get(
 WORK_PATTERNS = {
     "4일오전 4일오후": ["오전", "오전", "오전", "오전", "휴무", "오후", "오후", "오후", "오후", "휴무"],
     "5일오전 5일오후": ["오전", "오전", "오전", "오전", "오전", "휴무", "오후", "오후", "오후", "오후", "오후", "휴무"],
+    "평일근무": ["근무"],
     "격일제": ["근무", "휴무"],
     "복격일": ["근무", "근무", "휴무"],
 }
@@ -524,6 +525,31 @@ async def main(page: ft.Page):
                     ft.ElevatedButton(content=ft.Text("다음 달부터 적용", size=14, weight="bold"), height=42, bgcolor="#1E3A8A", color="white", on_click=apply_pattern_next_month),
                     ft.ElevatedButton(content=ft.Text("취소", size=14, weight="bold"), height=38, bgcolor="grey", color="white", on_click=back_to_slot_list),
                 ], spacing=10, tight=True, horizontal_alignment="stretch"))
+            return
+        if pending_pattern_name["value"] == "평일근무":
+            pattern_popup_layer.content = make_full_width_sheet(ft.Column([
+                    ft.Text("평일근무 적용", size=15, weight="bold", color="black"),
+                    ft.Text(
+                        "월요일부터 금요일까지는 근무, 토요일과 일요일은 휴무로 자동 설정됩니다.\n날짜별 오전·오후와 순번 입력은 기존처럼 사용할 수 있습니다.",
+                        size=12,
+                        color="grey",
+                        text_align="center",
+                    ),
+                    ft.Row([
+                        ft.ElevatedButton(
+                            content=ft.Container(ft.Text("적용", size=14, weight="bold", color="white"), alignment=ft.Alignment.CENTER),
+                            bgcolor="#2563EB", expand=1, height=40,
+                            style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=6), padding=0),
+                            on_click=lambda e: request_pattern_apply(0),
+                        ),
+                        ft.ElevatedButton(
+                            content=ft.Container(ft.Text("닫기", size=14, weight="bold", color="white"), alignment=ft.Alignment.CENTER),
+                            bgcolor="grey", expand=1, height=40,
+                            style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=6), padding=0),
+                            on_click=close_pattern_popup,
+                        ),
+                    ], spacing=8),
+                ], spacing=14, tight=True, horizontal_alignment="stretch"))
             return
         if pending_pattern_name["value"] == "격일제":
             # 🔁 격일제는 근무/휴무 2가지뿐이라 "몇 번째 근무"를 물어볼 필요가 없음
@@ -1337,6 +1363,11 @@ async def main(page: ft.Page):
                 padding=14, bgcolor="#F8FAFC", border_radius=8,
                 border=ft.Border.all(1, "#E2E8F0"), on_click=open_alarm_settings_popup,
             ),
+            ft.Container(
+                content=ft.Text("by wjlee", size=10, color="#94A3B8", text_align="center"),
+                alignment=ft.Alignment.CENTER,
+                padding=ft.Padding.only(top=8, bottom=4),
+            ),
         ])
         refresh_alarm_controls()
         page.update()
@@ -1619,8 +1650,8 @@ async def main(page: ft.Page):
         visible=False,
     )
     date_route_row = ft.Row(
-        [date_route_text, date_route_change_button],
-        alignment="spaceBetween",
+        [date_route_text],
+        alignment="start",
         height=28,
     )
     date_first_trip_text = ft.Text(
@@ -1711,7 +1742,7 @@ async def main(page: ft.Page):
             date_first_trip_text.value = "첫탕 시간이 설정되지 않았습니다."
             date_first_trip_text.color = "#D93025"
 
-    def select_date_route(route_id):
+    def select_date_route(route_id, continue_to_order=False):
         date_route_state["route_id"] = route_id
         route = selected_date_route()
         date_route_state["route_number"] = route["route_number"] if route else ""
@@ -1722,9 +1753,12 @@ async def main(page: ft.Page):
             order_display_box.content.value, order_display_box.content.color = "순번", "grey"
         route_settings_popup_layer.visible = False
         refresh_date_first_trip()
+        if continue_to_order:
+            open_value_picker("order", route_already_selected=True)
+            return
         page.update()
 
-    def open_date_route_picker(e=None):
+    def open_date_route_picker(e=None, continue_to_order=False):
         route_editor_state["view"] = "date_picker"
         if not routes_state["routes"]:
             route_editor_state["view"] = "notice"
@@ -1797,7 +1831,7 @@ async def main(page: ft.Page):
         buttons = [ft.Container(content=ft.Row([
             ft.Text(f"{route['route_number']}번", size=15, weight="bold"),
             ft.Text("기본" if route["id"] == routes_state["default_route_id"] else "", size=11, color="#2563EB"),
-        ], alignment="spaceBetween"), padding=12, bgcolor="#F1F5F9", border_radius=6, on_click=lambda e, rid=route["id"]: select_date_route(rid)) for route in routes_state["routes"]]
+        ], alignment="spaceBetween"), padding=12, bgcolor="#F1F5F9", border_radius=6, on_click=lambda e, rid=route["id"], next_order=continue_to_order: select_date_route(rid, next_order)) for route in routes_state["routes"]]
         route_settings_popup_layer.content = make_full_width_sheet(ft.Column([
             ft.Text("날짜 노선 선택", size=16, weight="bold", color="#1E3A8A"),
             ft.Column(buttons, spacing=6, scroll=ft.ScrollMode.AUTO, height=300),
@@ -1950,7 +1984,7 @@ async def main(page: ft.Page):
             update_date_alarm_ui()
         page.update()
 
-    def open_value_picker(field):
+    def open_value_picker(field, route_already_selected=False):
         if field == "hour":
             title, items = "시간 선택", [(f"{i:02d}", f"{i:02d}") for i in range(24)]
         elif field == "minute":
@@ -1958,6 +1992,9 @@ async def main(page: ft.Page):
         elif field == "mangeun":
             title, items = "만근 기준 선택", [(str(i), str(i)) for i in range(15, 27)]
         else:
+            if len(routes_state["routes"]) > 1 and not route_already_selected:
+                open_date_route_picker(continue_to_order=True)
+                return
             route = selected_date_route()
             if route is None:
                 open_date_route_picker()
