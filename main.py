@@ -66,7 +66,9 @@ HOLIDAY_UPDATE_URL = os.environ.get(
 WORK_PATTERNS = {
     "4일오전 4일오후": ["오전", "오전", "오전", "오전", "휴무", "오후", "오후", "오후", "오후", "휴무"],
     "5일오전 5일오후": ["오전", "오전", "오전", "오전", "오전", "휴무", "오후", "오후", "오후", "오후", "오후", "휴무"],
-    "평일근무": ["근무"],
+    # 요일 판정 보조 로직에 의존하지 않아도 월~금 근무, 토~일 휴무가
+    # 그대로 유지되도록 1주 단위 패턴으로 저장한다.
+    "평일근무": ["근무", "근무", "근무", "근무", "근무", "휴무", "휴무"],
     "격일제": ["근무", "휴무"],
     "복격일": ["근무", "근무", "휴무"],
 }
@@ -540,7 +542,8 @@ async def main(page: ft.Page):
                             content=ft.Container(ft.Text("적용", size=14, weight="bold", color="white"), alignment=ft.Alignment.CENTER),
                             bgcolor="#2563EB", expand=1, height=40,
                             style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=6), padding=0),
-                            on_click=lambda e: request_pattern_apply(0),
+                            # 7일 패턴의 기준 칸을 오늘 요일에 맞춰 적용한다.
+                            on_click=lambda e: request_pattern_apply(datetime.now(KST).weekday()),
                         ),
                         ft.ElevatedButton(
                             content=ft.Container(ft.Text("닫기", size=14, weight="bold", color="white"), alignment=ft.Alignment.CENTER),
@@ -2305,11 +2308,16 @@ async def main(page: ft.Page):
                     bg_color = "#F7F7F7"
                     text_color = status_color(status) if status else "#000000"
                     status_order = str(order_no) if status in ("오전", "오후", "전일", "근무") and order_no else ""
+                    # Android의 화면 폭/시스템 글꼴 배율이 큰 기기에서도 글자 하단이
+                    # 잘리지 않도록 좁은 화면에서는 한 단계 축소하고 행 높이는 여유 있게 둔다.
+                    compact_calendar_text = (page.width or 400) < 380
+                    calendar_status_size = 9 if compact_calendar_text else 10
+                    calendar_order_size = 6.5 if compact_calendar_text else 7
                     status_display = ft.Row([
-                        ft.Text(status, size=10, weight="bold", color=text_color, no_wrap=True),
-                    ] + ([ft.Text(status_order, size=7, weight="normal", color="#64748B", no_wrap=True)] if status_order else []), alignment="center", vertical_alignment="center", spacing=0, tight=True, height=14)
-                    time_text = ft.Text(start_time, size=10, weight="normal", color=text_color, no_wrap=True) if start_time and status != "휴무" else None
-                    time_display = ft.Row([time_text] if time_text else [], alignment="center", vertical_alignment="center", spacing=0, height=14)
+                        ft.Text(status, size=calendar_status_size, weight="bold", color=text_color, no_wrap=True),
+                    ] + ([ft.Text(status_order, size=calendar_order_size, weight="normal", color="#64748B", no_wrap=True)] if status_order else []), alignment="center", vertical_alignment="center", spacing=0, tight=True, height=17)
+                    time_text = ft.Text(start_time, size=calendar_status_size, weight="normal", color=text_color, no_wrap=True) if start_time and status != "휴무" else None
+                    time_display = ft.Row([time_text] if time_text else [], alignment="center", vertical_alignment="center", spacing=0, height=17)
                     departure = str(day_info.get("departure", "") or "").strip()
                     departure_display = ft.Row(
                         [ft.Text(departure, size=8, color="#475569", no_wrap=True,
@@ -2335,28 +2343,29 @@ async def main(page: ft.Page):
                     # 오늘 날짜 강조 방식을
                     # 파란 테두리 → 숫자 강조 방식으로 변경
                     # ==========================================================
-                    day_number_display = ft.Text(f"{day}", size=10, weight="normal", italic=False, color="white" if is_today else day_number_color, offset=ft.Offset(0, -0.08))
+                    day_number_size = 9 if compact_calendar_text else 10
+                    day_number_display = ft.Text(f"{day}", size=day_number_size, weight="normal", italic=False, color="white" if is_today else day_number_color)
                     day_number_row = ft.Row(
                         [day_number_display] +
                         # 알람 아이콘이 날짜숫자에 바짝 붙어 보이던 것을 살짝 띄우기 위해 spacing을 3→6으로 확대
                         ([ft.Container(content=ft.Icon(ft.Icons.ALARM, size=10, color="white" if is_today else "#2563EB", tooltip="날짜별 알람 설정됨"), padding=ft.Padding.only(top=2))] if has_date_alarm else []) +
                         ([ft.Container(content=ft.Column(date_labels, spacing=0, tight=True), padding=ft.Padding.only(top=2))] if date_labels else []),
-                        alignment="start", vertical_alignment="start", spacing=4, height=14,
+                        alignment="start", vertical_alignment="center", spacing=4, height=18,
                     )
                     # 오늘 날짜 셀만 폭이 좁아져 "오후(6)" 같은 상태문구가 줄바꿈되던 버그 →
                     # 굵은 파란 테두리(2px)를 없애고 모든 셀과 동일한 얇은 회색 테두리로 통일하면서 함께 해결됨
-                    day_header = ft.Container(content=day_number_row, left=1, right=1, top=1, height=14)
+                    day_header = ft.Container(content=day_number_row, left=1, right=1, top=1, height=18)
                     body_controls = [status_display, time_display]
                     if departure:
                         body_controls.append(departure_display)
                     body_controls.append(memo_display)
                     day_body = ft.Container(
                         content=ft.Column(body_controls, alignment="start", horizontal_alignment="center", spacing=1, tight=True),
-                        left=1, right=1, top=16, bottom=0,
-                        padding=ft.Padding.only(top=5), alignment=ft.Alignment.TOP_CENTER,
+                        left=1, right=1, top=19, bottom=0,
+                        padding=ft.Padding.only(top=3), alignment=ft.Alignment.TOP_CENTER,
                     )
                     day_box = ft.Container(content=ft.Stack([
-                        ft.Container(bgcolor="#2563EB", height=16, left=0, right=0, top=0) if is_today else ft.Container(),
+                        ft.Container(bgcolor="#2563EB", height=19, left=0, right=0, top=0) if is_today else ft.Container(),
                         day_header,
                         day_body,
                     ]), bgcolor="#FFF8D6" if is_today else "#FFFFFF", padding=0, border=ft.Border.all(0.5, CALENDAR_GRID_LINE_COLOR), border_radius=0, height=cell_h, expand=1, on_click=lambda e, dk=date_key: open_input_popup(dk))
@@ -2703,10 +2712,22 @@ async def main(page: ft.Page):
         reset_confirm_popup_layer.visible = True
         page.update()
 
+    guide_font_size = 8 if (page.width or 400) < 360 else (9 if (page.width or 400) < 420 else 10)
     guide_text = ft.Row([
-        ft.Container(content=ft.Text("💡 날짜를 터치하여 근무를 입력 또는 수정하세요.", size=10, color="#666666"), padding=ft.Padding.only(left=8, bottom=0), expand=1),
-        ft.TextButton(content=ft.Text("🗑️ 리셋", size=11, weight="bold", color="#D93025"), on_click=open_reset_popup, style=ft.ButtonStyle(padding=0)),
-    ], alignment="spaceBetween", height=28)
+        ft.Container(
+            content=ft.Text(
+                "💡 날짜를 터치하여 근무를 입력 또는 수정하세요.",
+                size=guide_font_size,
+                color="#666666",
+                no_wrap=True,
+                max_lines=1,
+                overflow=ft.TextOverflow.ELLIPSIS,
+            ),
+            padding=ft.Padding.only(left=4, bottom=0),
+            expand=1,
+        ),
+        ft.TextButton(content=ft.Text("🗑️ 리셋", size=10, weight="bold", color="#D93025", no_wrap=True), on_click=open_reset_popup, style=ft.ButtonStyle(padding=0)),
+    ], alignment="spaceBetween", vertical_alignment="center", spacing=2, height=28)
 
     # 긴급연락처 신규 등록 폼 컴포넌트
     emergency_form_container = ft.Container(padding=ft.Padding.only(top=8), content=ft.Column([ft.Row([ft.Text("🚨 긴급연락처", size=16, weight="bold", color="#1E3A8A")]), ft.Divider(height=1), ft.Row([em_name := ft.TextField(cursor_width=1, label="이름/서비스명", label_style=ft.TextStyle(size=11), width=100, height=38, text_size=13, content_padding=8), em_phone := ft.TextField(cursor_width=1, label="전화번호(숫자만)", label_style=ft.TextStyle(size=11), expand=True, height=38, text_size=13, content_padding=8, keyboard_type=ft.KeyboardType.PHONE), ft.ElevatedButton(content=ft.Text("등록", size=12, weight="bold", color="white"), bgcolor="#2563EB", width=60, height=38, style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=4), padding=0), on_click=lambda e: add_emergency_item())], spacing=4), ft.Divider(height=1, color="#E2E8F0")]))
