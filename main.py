@@ -1417,7 +1417,7 @@ async def main(page: ft.Page):
             ft.TextButton("저장", style=ft.ButtonStyle(color="#2563EB"), on_click=lambda e: page.run_task(save_join_date)),
         ])
 
-        join_date_dialog.actions_alignment = ft.MainAxisAlignment.END
+        join_date_dialog.actions_alignment = ft.MainAxisAlignment.SPACE_BETWEEN
         page.show_dialog(join_date_dialog)
 
     def rebuild_settings_view():
