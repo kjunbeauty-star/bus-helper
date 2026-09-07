@@ -1371,6 +1371,16 @@ async def main(page: ft.Page):
         rebuild_settings_view()
         rebuild_interface()
 
+    async def delete_join_date(e=None):
+        await page.shared_preferences.remove(STORAGE_JOIN_DATE_KEY)
+        join_date_state["value"] = ""
+        join_date_field.value = ""
+        join_date_field.error_text = None
+        join_date_message.value = "입사일을 삭제했습니다."
+        page.pop_dialog()
+        rebuild_settings_view()
+        rebuild_interface()
+
     def open_join_date_dialog(e=None):
         current_value = join_date_state["value"]
         join_date_field.value = current_value.replace("-", "") if current_value else ""
@@ -1386,10 +1396,27 @@ async def main(page: ft.Page):
             ], spacing=8, tight=True),
             width=270,
         )
-        join_date_dialog.actions = [
+        ##join_date_dialog.actions = [
+        ##    ft.TextButton("취소", style=ft.ButtonStyle(color="#64748B"), on_click=close_join_date_dialog),
+        ##    ft.TextButton("저장", style=ft.ButtonStyle(color="#2563EB"), on_click=lambda e: page.run_task(save_join_date)),
+        ##]
+
+        join_date_dialog.actions = []
+
+        if current_value:
+            join_date_dialog.actions.append(
+                ft.TextButton(
+                    "삭제",
+                    style=ft.ButtonStyle(color="#D93025"),
+                    on_click=lambda e: page.run_task(delete_join_date),
+                )
+            )
+
+        join_date_dialog.actions.extend([
             ft.TextButton("취소", style=ft.ButtonStyle(color="#64748B"), on_click=close_join_date_dialog),
             ft.TextButton("저장", style=ft.ButtonStyle(color="#2563EB"), on_click=lambda e: page.run_task(save_join_date)),
-        ]
+        ])
+
         join_date_dialog.actions_alignment = ft.MainAxisAlignment.END
         page.show_dialog(join_date_dialog)
 
