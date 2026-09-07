@@ -9,6 +9,8 @@ import asyncio
 from datetime import datetime, timedelta, timezone
 import flet as ft
 import json
+from annual_leave import calculate_annual_leave, calculate_pay_grade, parse_join_date
+from app_update import check_for_update
 
 from route_models import (
     DAY_TYPES, day_type_for_date, default_route, empty_times, find_route,
@@ -58,6 +60,7 @@ STORAGE_ALARM_SETTINGS_KEY = "bus_helper_alarm_settings"
 STORAGE_HOLIDAYS_KEY = "bus_helper_online_holidays"
 STORAGE_HOLIDAY_CHECK_MONTH_KEY = "bus_helper_holiday_check_month"
 STORAGE_ROUTES_KEY = "bus_helper_routes"
+STORAGE_JOIN_DATE_KEY = "bus_helper_join_date"
 HOLIDAY_UPDATE_URL = os.environ.get(
     "HOLIDAY_UPDATE_URL", "https://bus-helper.onrender.com/api/holidays"
 )
@@ -188,6 +191,11 @@ async def main(page: ft.Page):
     saved_input_data = await page.shared_preferences.get(STORAGE_INPUT_DATA_KEY)
     saved_phonebook = await page.shared_preferences.get(STORAGE_PHONEBOOK_KEY)
     saved_routes = await page.shared_preferences.get(STORAGE_ROUTES_KEY)
+    saved_join_date = await page.shared_preferences.get(STORAGE_JOIN_DATE_KEY)
+    try:
+        join_date_state = {"value": parse_join_date(saved_join_date).isoformat()}
+    except ValueError:
+        join_date_state = {"value": ""}
 
     saved_emergency = await page.shared_preferences.get(STORAGE_EMERGENCY_KEY)
     EMERGENCY_LIST = safe_json_load(saved_emergency, list, [])
@@ -302,12 +310,13 @@ async def main(page: ft.Page):
     # 메인 상단 텍스트 레이블 선언
     month_title = ft.Text("", size=20, weight="bold", text_align="center")
     stats_text = ft.Text("", size=13, weight="bold", color="#1E3A8A")
-    morning_count_text = ft.Text("", size=11, weight="normal", color="#1E3A8A", offset=ft.Offset(0, -0.16))
+    morning_count_text = ft.Text("", size=11, weight="normal", color="#1E3A8A")
     afternoon_count_text = ft.Text("", size=11, weight="normal", color="#1E3A8A")
     mangeun_text = ft.Text("", size=13, weight="bold", color="#1E3A8A")
     mangeun_value_text = ft.Text("", size=13, weight="bold", color="#1E3A8A")
     annual_used_text = ft.Text("", size=13, weight="bold", color="#1E3A8A")
     annual_remaining_text = ft.Text("", size=13, weight="bold", color="#1E3A8A")
+    join_date_text = ft.Text("", size=9.5, weight="bold", color="#1E3A8A", no_wrap=True, max_lines=1, overflow=ft.TextOverflow.ELLIPSIS)
 
     calendar_grid = ft.Column(spacing=0)
     input_zone_container = ft.Column(spacing=2, visible=False)
@@ -1311,6 +1320,79 @@ async def main(page: ft.Page):
         rebuild_interface()
         show_route_list()
 
+    # 입사일은 설정 화면에 입력란을 상시 노출하지 않고, 입력/수정 버튼으로 여는 Dialog에서 관리한다.
+    join_date_field = ft.TextField(
+        label="입사일 (숫자 8자리)", hint_text="YYYYMMDD  예: 20200501",
+        value="", text_size=14, width=260, height=50,
+        keyboard_type=ft.KeyboardType.NUMBER,
+    )
+    join_date_message = ft.Text("", size=11, color="#137333")
+    join_date_dialog = ft.AlertDialog(modal=True)
+
+    def sanitize_join_date_input(e=None):
+        digits = "".join(ch for ch in (join_date_field.value or "") if ch.isdigit())[:8]
+        if join_date_field.value != digits:
+            join_date_field.value = digits
+            join_date_field.update()
+
+    join_date_field.on_change = sanitize_join_date_input
+
+    def close_join_date_dialog(e=None):
+        page.pop_dialog()
+
+    async def save_join_date(e=None):
+        raw = "".join(ch for ch in (join_date_field.value or "") if ch.isdigit())
+        if len(raw) != 8:
+            join_date_field.error_text = "입사일을 숫자 8자리(YYYYMMDD)로 입력하세요."
+            page.update()
+            return
+
+        value = f"{raw[:4]}-{raw[4:6]}-{raw[6:8]}"
+        try:
+            parsed = parse_join_date(value)
+            if parsed > datetime.now(KST).date():
+                raise ValueError("입사일은 오늘 이후로 설정할 수 없습니다.")
+        except ValueError as error:
+            join_date_field.error_text = str(error)
+            page.update()
+            return
+
+        try:
+            await page.shared_preferences.set(STORAGE_JOIN_DATE_KEY, value)
+        except Exception:
+            join_date_field.error_text = "저장하지 못했습니다. 다시 시도해 주세요."
+            page.update()
+            return
+
+        join_date_state["value"] = value
+        join_date_field.error_text = None
+        join_date_message.value = "입사일을 저장했습니다."
+        page.pop_dialog()
+        rebuild_settings_view()
+        rebuild_interface()
+
+    def open_join_date_dialog(e=None):
+        current_value = join_date_state["value"]
+        join_date_field.value = current_value.replace("-", "") if current_value else ""
+        join_date_field.error_text = None
+        join_date_dialog.title = ft.Text(
+            "입사일 수정" if current_value else "입사일 입력",
+            size=16, weight="bold", color="#1E3A8A",
+        )
+        join_date_dialog.content = ft.Container(
+            content=ft.Column([
+                join_date_field,
+                ft.Text("하이픈 없이 숫자 8자리만 입력하세요.  예: 20200501", size=11, color="#64748B"),
+            ], spacing=8, tight=True),
+            width=270,
+        )
+        join_date_dialog.actions = [
+            ft.TextButton("취소", style=ft.ButtonStyle(color="#64748B"), on_click=close_join_date_dialog),
+            ft.TextButton("저장", style=ft.ButtonStyle(color="#2563EB"), on_click=lambda e: page.run_task(save_join_date)),
+        ]
+        join_date_dialog.actions_alignment = ft.MainAxisAlignment.END
+        page.show_dialog(join_date_dialog)
+
     def rebuild_settings_view():
         today_key = datetime.now(KST).strftime("%Y-%m-%d")
         current_month_key = today_key[:7]
@@ -1365,6 +1447,28 @@ async def main(page: ft.Page):
                 ], alignment="spaceBetween"),
                 padding=14, bgcolor="#F8FAFC", border_radius=8,
                 border=ft.Border.all(1, "#E2E8F0"), on_click=open_alarm_settings_popup,
+            ),
+            ft.Container(
+                content=ft.Column([
+                    ft.Text("연차 계산 · 입사일", size=14, weight="bold", color="#1E3A8A"),
+                    ft.Row([
+                        ft.Text(
+                            f"입사일: {join_date_state['value'].replace('-', '.') if join_date_state['value'] else '미설정'}",
+                            size=13, weight="bold", color="black", expand=True, no_wrap=True,
+                            overflow=ft.TextOverflow.ELLIPSIS,
+                        ),
+                        ft.ElevatedButton(
+                            "수정" if join_date_state["value"] else "입력",
+                            on_click=open_join_date_dialog, bgcolor="#2563EB", color="white",
+                            width=64, height=32,
+                            style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=5), padding=0),
+                        ),
+                    ], alignment="spaceBetween", vertical_alignment="center", spacing=8),
+                    ft.Text("입사일 기준 자동 계산 · 미설정 시 기본 15일", size=10, color="#64748B"),
+                    join_date_message,
+                ], spacing=8, tight=True, horizontal_alignment="stretch"),
+                padding=12, bgcolor="#F8FAFC", border_radius=8,
+                border=ft.Border.all(1, "#E2E8F0"),
             ),
             ft.Container(
                 content=ft.Text("by wjlee", size=10, color="#94A3B8", text_align="center"),
@@ -2264,7 +2368,11 @@ async def main(page: ft.Page):
         afternoon_days = sum(1 for s in month_effective_statuses if s == "오후")
         m_target = get_mangeun_target(); mangeun_display_box.content.value = str(m_target)
         annual_used = sum(1 for date_key, info in USER_SCHEDULES.items() if date_key.startswith(f"{current['year']}-") and isinstance(info, dict) and info.get("status") == "연차")
-        annual_remaining = max(0, 15 - annual_used)
+        annual_total = calculate_annual_leave(join_date_state["value"], today.date())
+        annual_remaining = max(0, annual_total - annual_used)
+        pay_grade = calculate_pay_grade(join_date_state["value"], today.date())
+        join_date_display = join_date_state["value"].replace("-", ".") or "미설정"
+        join_date_text.value = f"입사일: {join_date_display}" + (f" ({pay_grade})" if pay_grade else "")
         stats_text.value = f"근무: {work_days}"
         morning_count_text.value = f"오전: {morning_days}"
         afternoon_count_text.value = f"오후: {afternoon_days}"
@@ -2313,9 +2421,35 @@ async def main(page: ft.Page):
                     compact_calendar_text = (page.width or 400) < 380
                     calendar_status_size = 9 if compact_calendar_text else 10
                     calendar_order_size = 6.5 if compact_calendar_text else 7
-                    status_display = ft.Row([
-                        ft.Text(status, size=calendar_status_size, weight="bold", color=text_color, no_wrap=True),
-                    ] + ([ft.Text(status_order, size=calendar_order_size, weight="normal", color="#64748B", no_wrap=True)] if status_order else []), alignment="center", vertical_alignment="center", spacing=0, tight=True, height=17)
+                    calendar_route_number = ""
+                    if len(routes_state["routes"]) >= 2 and status in ("오전", "오후"):
+                        stored_number = str(day_info.get("route_number", "") or "").strip()
+                        stored_id = day_info.get("route_id", "")
+                        calendar_route = find_route(routes_state, stored_id) or find_route_by_number(routes_state, stored_number)
+                        if calendar_route is None and not stored_id and not stored_number:
+                            calendar_route = default_route(routes_state)
+                        number = str(calendar_route["route_number"] if calendar_route else stored_number).strip()
+                        calendar_route_number = number.removeprefix("급행").strip()
+                    route_font_size = 7 if compact_calendar_text else 8
+                    status_font_size = calendar_status_size
+                    order_font_size = calendar_order_size
+                    if calendar_route_number:
+                        # 셀의 여유 폭을 기준으로 상태줄만 함께 축소한다. 시간 크기는 유지한다.
+                        available_width = max(1, ((page.width or 400) - 24) / 7 - 4)
+                        estimated_width = (len(calendar_route_number) * route_font_size * 0.75
+                                           + len(status) * status_font_size * 1.15
+                                           + len(status_order) * order_font_size * 0.75 + 2)
+                        fit_ratio = min(1.0, available_width / estimated_width)
+                        route_font_size *= fit_ratio
+                        status_font_size *= fit_ratio
+                        order_font_size *= fit_ratio
+                    route_prefix = ([ft.Text(
+                        calendar_route_number, size=route_font_size,
+                        weight="bold", color="#D93025", no_wrap=True,
+                    ), ft.Container(width=1)] if calendar_route_number else [])
+                    status_display = ft.Row(route_prefix + [
+                        ft.Text(status, size=status_font_size, weight="bold", color=text_color, no_wrap=True),
+                    ] + ([ft.Text(status_order, size=order_font_size, weight="normal", color="#64748B", no_wrap=True)] if status_order else []), alignment="center", vertical_alignment="center", spacing=0, tight=True, height=17)
                     time_text = ft.Text(start_time, size=calendar_status_size, weight="normal", color=text_color, no_wrap=True) if start_time and status != "휴무" else None
                     time_display = ft.Row([time_text] if time_text else [], alignment="center", vertical_alignment="center", spacing=0, height=17)
                     departure = str(day_info.get("departure", "") or "").strip()
@@ -2635,50 +2769,85 @@ async def main(page: ft.Page):
         current["selected_date"] = today.strftime("%Y-%m-%d")
         rebuild_interface()
 
-    def summary_cell(text_control, expand=1):
-        return ft.Container(content=text_control, expand=expand, padding=ft.Padding.symmetric(horizontal=12, vertical=8), alignment=ft.Alignment.CENTER_LEFT)
+    # 근무현황 상단은 좌/우 모두 같은 3행 기준(28px x 3 = 84px)으로 맞춘다.
+    # 왼쪽의 상단 2행은 '근무 + 오전/오후' 영역이 차지하고, 3행째는 휴무다.
+    # 따라서 휴무 상단선과 오른쪽 입사일 상단선이 구조적으로 같은 Y 좌표(56px)에 놓인다.
+    SUMMARY_ROW_H = 28
+    SUMMARY_TOTAL_H = SUMMARY_ROW_H * 3
+    SUMMARY_LINE = "#93C5FD"
+
+    def fixed_summary_cell(text_control, height, expand=1, bottom_border=False, horizontal_padding=10):
+        return ft.Container(
+            content=text_control,
+            height=height,
+            expand=expand,
+            padding=ft.Padding.symmetric(horizontal=horizontal_padding),
+            alignment=ft.Alignment.CENTER_LEFT,
+            border=ft.Border(bottom=ft.BorderSide(1, SUMMARY_LINE)) if bottom_border else None,
+        )
 
     morning_afternoon_cell = ft.Container(
-        content=ft.Column(
-            [
-                ft.Container(
-                    content=morning_count_text,
-                    height=16,
-                    padding=ft.Padding.symmetric(horizontal=10),
-                    alignment=ft.Alignment.CENTER_LEFT,
-                ),
-                ft.Divider(height=1, color="#93C5FD"),
-                ft.Container(
-                    content=afternoon_count_text,
-                    height=16,
-                    padding=ft.Padding.symmetric(horizontal=10),
-                    alignment=ft.Alignment.CENTER_LEFT,
-                ),
-            ],
-            spacing=0,
-            tight=True,
-        ),
+        content=ft.Column([
+            fixed_summary_cell(morning_count_text, SUMMARY_ROW_H, bottom_border=True),
+            fixed_summary_cell(afternoon_count_text, SUMMARY_ROW_H),
+        ], spacing=0, tight=True),
+        height=SUMMARY_ROW_H * 2,
         expand=1,
-        alignment=ft.Alignment.CENTER_LEFT,
     )
 
-    summary_area = ft.Container(
+    left_top_summary = ft.Container(
+        content=ft.Row([
+            fixed_summary_cell(stats_text, SUMMARY_ROW_H * 2),
+            ft.Container(width=1, height=SUMMARY_ROW_H * 2, bgcolor=SUMMARY_LINE),
+            morning_afternoon_cell,
+        ], spacing=0, vertical_alignment="center"),
+        height=SUMMARY_ROW_H * 2,
+        border=ft.Border(bottom=ft.BorderSide(1, SUMMARY_LINE)),
+    )
+
+    left_summary = ft.Container(
         content=ft.Column([
-            ft.Row([
-                summary_cell(stats_text),
-                ft.Container(width=1, height=32, bgcolor="#93C5FD"),
-                morning_afternoon_cell,
-                ft.Container(width=1, height=32, bgcolor="#93C5FD"),
-                summary_cell(annual_used_text, expand=2),
-            ], spacing=0),
-            ft.Divider(height=1, color="#93C5FD"),
-            ft.Row([
-                summary_cell(mangeun_text, expand=2),
-                ft.Container(width=1, height=32, bgcolor="#93C5FD"),
-                summary_cell(annual_remaining_text, expand=2),
-            ], spacing=0),
+            left_top_summary,
+            fixed_summary_cell(mangeun_text, SUMMARY_ROW_H),
         ], spacing=0, tight=True),
-        border=ft.Border.all(1, "#93C5FD"), border_radius=10,
+        height=SUMMARY_TOTAL_H,
+        expand=1,
+    )
+
+    ##right_summary = ft.Container(
+    ##    content=ft.Column([
+    ##        fixed_summary_cell(annual_used_text, SUMMARY_ROW_H, bottom_border=True),
+    ##        fixed_summary_cell(annual_remaining_text, SUMMARY_ROW_H, bottom_border=True),
+    ##        fixed_summary_cell(join_date_text, SUMMARY_ROW_H),
+    ##    ], spacing=0, tight=True),
+    ##    height=SUMMARY_TOTAL_H,
+    ##    expand=1,
+    ##)
+    right_summary = ft.Container(
+        content=ft.Column([
+            ft.Container(
+                content=ft.Column([
+                    fixed_summary_cell(annual_used_text, SUMMARY_ROW_H, bottom_border=True),
+                    fixed_summary_cell(annual_remaining_text, SUMMARY_ROW_H),
+                ], spacing=0, tight=True),
+                height=SUMMARY_ROW_H * 2,
+                border=ft.Border(bottom=ft.BorderSide(1, SUMMARY_LINE)),
+            ),
+            fixed_summary_cell(join_date_text, SUMMARY_ROW_H),
+        ], spacing=0, tight=True),
+        height=SUMMARY_TOTAL_H,
+        expand=1,
+    )
+
+
+    summary_area = ft.Container(
+        content=ft.Row([
+            left_summary,
+            ft.Container(width=1, height=SUMMARY_TOTAL_H, bgcolor=SUMMARY_LINE),
+            right_summary,
+        ], spacing=0, vertical_alignment="center"),
+        height=SUMMARY_TOTAL_H,
+        border=ft.Border.all(1, SUMMARY_LINE), border_radius=10,
         margin=ft.Margin.only(bottom=8),
     )
     summary_area_holder = ft.Column([], spacing=0, tight=True)
@@ -2946,6 +3115,8 @@ async def main(page: ft.Page):
 
     change_tab("달력"); rebuild_interface()
     page.run_task(sync_online_holidays)
+    if is_native_android:
+        page.run_task(check_for_update, page, url_launcher)
     page.on_app_lifecycle_state_change = lambda e: page.run_task(handle_app_lifecycle, e)
 
 if os.environ.get("PORT"):
