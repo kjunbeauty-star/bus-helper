@@ -1396,15 +1396,11 @@ async def main(page: ft.Page):
             ], spacing=8, tight=True),
             width=270,
         )
-        ##join_date_dialog.actions = [
-        ##    ft.TextButton("취소", style=ft.ButtonStyle(color="#64748B"), on_click=close_join_date_dialog),
-        ##    ft.TextButton("저장", style=ft.ButtonStyle(color="#2563EB"), on_click=lambda e: page.run_task(save_join_date)),
-        ##]
-
-        join_date_dialog.actions = []
+        
+        buttons = []
 
         if current_value:
-            join_date_dialog.actions.append(
+            buttons.append(
                 ft.TextButton(
                     "삭제",
                     style=ft.ButtonStyle(color="#D93025"),
@@ -1412,12 +1408,28 @@ async def main(page: ft.Page):
                 )
             )
 
-        join_date_dialog.actions.extend([
-            ft.TextButton("취소", style=ft.ButtonStyle(color="#64748B"), on_click=close_join_date_dialog),
-            ft.TextButton("저장", style=ft.ButtonStyle(color="#2563EB"), on_click=lambda e: page.run_task(save_join_date)),
+        buttons.extend([
+            ft.TextButton(
+                "취소",
+                style=ft.ButtonStyle(color="#64748B"),
+                on_click=close_join_date_dialog,
+            ),
+            ft.TextButton(
+                "저장",
+                style=ft.ButtonStyle(color="#2563EB"),
+                on_click=lambda e: page.run_task(save_join_date),
+            ),
         ])
 
-        join_date_dialog.actions_alignment = ft.MainAxisAlignment.SPACE_BETWEEN
+        join_date_dialog.actions = [
+            ft.Row(
+                controls=buttons,
+                alignment=ft.MainAxisAlignment.END,
+                spacing=8,
+            )
+        ]
+
+        ##join_date_dialog.actions_alignment = ft.MainAxisAlignment.SPACE_BETWEEN
         page.show_dialog(join_date_dialog)
 
     def rebuild_settings_view():
